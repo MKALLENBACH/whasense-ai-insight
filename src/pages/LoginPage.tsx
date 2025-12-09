@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate, Navigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,26 +10,33 @@ import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const LoginPage = () => {
-  const { login, isAuthenticated, user, isLoading: authLoading } = useAuth();
+  const { login, isAuthenticated, logout, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  if (authLoading) {
+  // Force logout when accessing /login directly
+  useEffect(() => {
+    if (isAuthenticated && !isLoggingOut) {
+      setIsLoggingOut(true);
+      logout().finally(() => {
+        setIsLoggingOut(false);
+      });
+    }
+  }, [isAuthenticated, logout, isLoggingOut]);
+
+  if (authLoading || isLoggingOut) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-sidebar via-sidebar to-primary/20 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-sidebar-foreground/60">Carregando...</p>
+          <p className="text-sidebar-foreground/60">{isLoggingOut ? "Saindo..." : "Carregando..."}</p>
         </div>
       </div>
     );
-  }
-
-  if (isAuthenticated && user) {
-    return <Navigate to={user.role === "gestor" ? "/dashboard" : "/conversas"} replace />;
   }
 
   const handleLogin = async (e: React.FormEvent) => {
