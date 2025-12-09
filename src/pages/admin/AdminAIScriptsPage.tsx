@@ -249,18 +249,12 @@ const AdminAIScriptsPage = () => {
     if (!confirm("Tem certeza que deseja excluir este script?")) return;
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-scripts/delete?id=${scriptId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-        }
-      );
+      const { data, error } = await supabase.functions.invoke("ai-scripts/delete", {
+        body: { id: scriptId },
+      });
 
-      const result = await response.json();
-      if (result.error) throw new Error(result.error);
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast.success("Script excluído");
       setSelectedScript(null);

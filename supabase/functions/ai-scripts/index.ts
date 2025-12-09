@@ -283,9 +283,21 @@ serve(async (req) => {
       );
     }
 
-    // DELETE /ai-scripts/delete?id=XXX - Delete script
-    if (action === "delete" && req.method === "DELETE") {
-      const id = url.searchParams.get("id");
+    // POST /ai-scripts/delete - Delete script (accepts POST with body or DELETE with query)
+    if (action === "delete") {
+      let id: string | null = null;
+      
+      if (req.method === "POST") {
+        const body = await req.json();
+        id = body.id;
+      } else if (req.method === "DELETE") {
+        id = url.searchParams.get("id");
+      } else {
+        return new Response(
+          JSON.stringify({ error: "Method not allowed" }),
+          { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       if (!id) {
         return new Response(
