@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import ConversationsPage from "./pages/ConversationsPage";
 import ChatPage from "./pages/ChatPage";
@@ -24,11 +25,51 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/conversas" element={<ConversationsPage />} />
-            <Route path="/chat/:id" element={<ChatPage />} />
-            <Route path="/alertas" element={<AlertsPage />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/historico" element={<HistoryPage />} />
+            
+            {/* Seller routes */}
+            <Route 
+              path="/conversas" 
+              element={
+                <ProtectedRoute>
+                  <ConversationsPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chat/:id" 
+              element={
+                <ProtectedRoute>
+                  <ChatPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/alertas" 
+              element={
+                <ProtectedRoute>
+                  <AlertsPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Manager routes */}
+            <Route 
+              path="/dashboard" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <DashboardPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/historico" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <HistoryPage />
+                </ProtectedRoute>
+              } 
+            />
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

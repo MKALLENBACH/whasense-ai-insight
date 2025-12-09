@@ -8,6 +8,7 @@ interface AuthUser {
   name: string;
   email: string;
   role: UserRole;
+  companyId: string | null;
 }
 
 interface AuthContextType {
@@ -18,6 +19,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isManager: boolean;
+  isSeller: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,16 +43,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (error) {
       console.error("Error fetching user role:", error);
-      return "vendedor"; // Default role
+      return "vendedor";
     }
 
     return mapDbRoleToAppRole(data?.role || "seller");
   };
 
-  const fetchUserProfile = async (userId: string): Promise<{ name: string; email: string } | null> => {
+  const fetchUserProfile = async (userId: string): Promise<{ name: string; email: string; companyId: string | null } | null> => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("name, email")
+      .select("name, email, company_id")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -58,7 +61,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return null;
     }
 
-    return data;
+    return data ? { name: data.name, email: data.email, companyId: data.company_id } : null;
   };
 
   const updateAuthUser = async (supabaseUser: User) => {
@@ -72,17 +75,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       name: profile?.name || supabaseUser.email?.split("@")[0] || "Usuário",
       email: profile?.email || supabaseUser.email || "",
       role,
+      companyId: profile?.companyId || null,
     });
   };
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         
         if (session?.user) {
-          // Defer Supabase calls with setTimeout
           setTimeout(() => {
             updateAuthUser(session.user);
           }, 0);
@@ -93,7 +95,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     );
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
@@ -123,7 +124,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const role = await fetchUserRole(data.user.id);
-    return { role }; // Already mapped to app role
+    return { role };
   };
 
   const signup = async (email: string, password: string, name: string, role: UserRole) => {
@@ -151,10 +152,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       throw new Error("Erro ao criar conta");
     }
 
-    // Map role to database enum
     const dbRole = role === "gestor" ? "manager" : "seller";
 
-    // Insert user role
     const { error: roleError } = await supabase
       .from("user_roles")
       .insert({
@@ -187,6 +186,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         logout,
         isAuthenticated: !!session,
         isLoading,
+        isManager: user?.role === "gestor",
+        isSeller: user?.role === "vendedor",
       }}
     >
       {children}

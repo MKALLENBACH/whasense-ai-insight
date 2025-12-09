@@ -14,8 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      companies: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
+          company_id: string | null
           created_at: string
           email: string | null
           id: string
@@ -24,6 +46,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          company_id?: string | null
           created_at?: string
           email?: string | null
           id?: string
@@ -32,6 +55,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          company_id?: string | null
           created_at?: string
           email?: string | null
           id?: string
@@ -39,7 +63,15 @@ export type Database = {
           phone?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "customers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       insights: {
         Row: {
@@ -122,6 +154,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          company_id: string | null
           created_at: string
           email: string
           id: string
@@ -130,6 +163,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          company_id?: string | null
           created_at?: string
           email: string
           id?: string
@@ -138,6 +172,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          company_id?: string | null
           created_at?: string
           email?: string
           id?: string
@@ -145,10 +180,19 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sales: {
         Row: {
+          company_id: string | null
           created_at: string
           customer_id: string
           id: string
@@ -157,6 +201,7 @@ export type Database = {
           status: Database["public"]["Enums"]["sale_status"]
         }
         Insert: {
+          company_id?: string | null
           created_at?: string
           customer_id: string
           id?: string
@@ -165,6 +210,7 @@ export type Database = {
           status: Database["public"]["Enums"]["sale_status"]
         }
         Update: {
+          company_id?: string | null
           created_at?: string
           customer_id?: string
           id?: string
@@ -173,6 +219,13 @@ export type Database = {
           status?: Database["public"]["Enums"]["sale_status"]
         }
         Relationships: [
+          {
+            foreignKeyName: "sales_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sales_customer_id_fkey"
             columns: ["customer_id"]
@@ -208,6 +261,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_user_company: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
