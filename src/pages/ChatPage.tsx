@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,7 +28,8 @@ import {
   Copy,
   RefreshCw,
   Trophy,
-  XCircle
+  XCircle,
+  Bot
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import LeadTemperatureBadge from "@/components/LeadTemperatureBadge";
 import SaleRegistrationModal from "@/components/sale/SaleRegistrationModal";
+import { useCustomerSimulation } from "@/hooks/useCustomerSimulation";
 
 interface Message {
   id: string;
@@ -97,6 +99,23 @@ const ChatPage = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [showSaleModal, setShowSaleModal] = useState(false);
+  const [simulationEnabled, setSimulationEnabled] = useState(true);
+  const [isSimulatingResponse, setIsSimulatingResponse] = useState(false);
+
+  // AI Customer Simulation
+  const {
+    isSimulating,
+    triggerResponseAfterSellerMessage,
+    startContinuousSimulation,
+    stopContinuousSimulation,
+    updateHistory,
+  } = useCustomerSimulation({
+    customerId: id || "",
+    sellerId: user?.id || "",
+    enabled: simulationEnabled,
+    minDelay: 20000, // 20 seconds
+    maxDelay: 60000, // 60 seconds
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -192,14 +211,17 @@ const ChatPage = () => {
     e.preventDefault();
     if (!newMessage.trim() || !id || !user || isSending) return;
 
+    const messageContent = newMessage.trim();
     setIsSending(true);
+    setNewMessage("");
+    
     try {
       const { data, error } = await supabase
         .from("messages")
         .insert({
           seller_id: user.id,
           customer_id: id,
-          content: newMessage.trim(),
+          content: messageContent,
           direction: "outgoing",
         })
         .select()
@@ -208,8 +230,27 @@ const ChatPage = () => {
       if (error) throw error;
 
       setMessages((prev) => [...prev, data]);
-      setNewMessage("");
-      toast.success("Mensagem enviada");
+
+      // Trigger AI customer response after seller sends a message
+      if (simulationEnabled) {
+        setIsSimulatingResponse(true);
+        const response = await triggerResponseAfterSellerMessage(messageContent);
+        if (response) {
+          // Fetch the new message from the database
+          const { data: newMsg } = await supabase
+            .from("messages")
+            .select("id, content, direction, timestamp")
+            .eq("id", response.messageId)
+            .single();
+          
+          if (newMsg) {
+            setMessages((prev) => [...prev, newMsg]);
+            // Trigger analysis for the new customer message
+            await analyzeMessage(response.message, response.messageId);
+          }
+        }
+        setIsSimulatingResponse(false);
+      }
     } catch (error) {
       console.error("Error sending message:", error);
       toast.error("Erro ao enviar mensagem");
@@ -219,42 +260,57 @@ const ChatPage = () => {
   };
 
   const simulateIncomingMessage = async () => {
-    if (!id || !user) return;
+    if (!id || !user || isSimulatingResponse) return;
 
-    // For demo purposes - simulate an incoming message
-    const demoMessages = [
-      "Qual o preço do plano Pro?",
-      "Vocês parcelam em quantas vezes?",
-      "Achei caro, tem desconto?",
-      "Quanto tempo demora para ativar?",
-      "Posso testar antes de comprar?",
-    ];
-
-    const randomMessage = demoMessages[Math.floor(Math.random() * demoMessages.length)];
-
+    setIsSimulatingResponse(true);
     try {
-      const { data, error } = await supabase
-        .from("messages")
-        .insert({
-          seller_id: user.id,
-          customer_id: id,
-          content: randomMessage,
-          direction: "incoming",
-        })
-        .select()
-        .single();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
-      if (error) throw error;
+      // Use AI to generate customer response
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/simulate-customer`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            customerId: id,
+            sellerId: user.id,
+            conversationHistory: messages.map(m => ({ direction: m.direction, content: m.content })),
+          }),
+        }
+      );
 
-      setMessages((prev) => [...prev, data]);
+      const data = await response.json();
       
-      // Automatically analyze the incoming message
-      await analyzeMessage(randomMessage, data.id);
+      if (data.success) {
+        // Fetch the new message
+        const { data: newMsg } = await supabase
+          .from("messages")
+          .select("id, content, direction, timestamp")
+          .eq("id", data.messageId)
+          .single();
+        
+        if (newMsg) {
+          setMessages((prev) => [...prev, newMsg]);
+          await analyzeMessage(data.message, data.messageId);
+        }
+      }
     } catch (error) {
       console.error("Error simulating message:", error);
       toast.error("Erro ao simular mensagem");
+    } finally {
+      setIsSimulatingResponse(false);
     }
   };
+
+  // Update simulation history when messages change
+  useEffect(() => {
+    updateHistory(messages.map(m => ({ direction: m.direction, content: m.content })));
+  }, [messages, updateHistory]);
 
   const useSuggestion = () => {
     if (aiAnalysis?.suggestion) {
