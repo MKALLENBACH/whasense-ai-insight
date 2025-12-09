@@ -17,11 +17,24 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const wasAuthenticatedOnMount = useRef<boolean | null>(null);
   const logoutAttempted = useRef(false);
 
-  // Force logout when accessing /login directly - only once
+  // Capture initial auth state on mount
   useEffect(() => {
-    if (isAuthenticated && !logoutAttempted.current) {
+    if (wasAuthenticatedOnMount.current === null) {
+      wasAuthenticatedOnMount.current = isAuthenticated;
+    }
+  }, [isAuthenticated]);
+
+  // Force logout ONLY if user was already authenticated when they navigated to /login
+  // This prevents logging out after a successful login
+  useEffect(() => {
+    if (
+      wasAuthenticatedOnMount.current === true &&
+      isAuthenticated &&
+      !logoutAttempted.current
+    ) {
       logoutAttempted.current = true;
       setIsLoggingOut(true);
       logout().finally(() => {
