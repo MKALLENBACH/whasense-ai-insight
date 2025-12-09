@@ -19,6 +19,7 @@ export type Database = {
           alert_type: string
           created_at: string
           customer_id: string
+          cycle_id: string | null
           id: string
           message: string
           metadata: Json | null
@@ -30,6 +31,7 @@ export type Database = {
           alert_type: string
           created_at?: string
           customer_id: string
+          cycle_id?: string | null
           id?: string
           message: string
           metadata?: Json | null
@@ -41,6 +43,7 @@ export type Database = {
           alert_type?: string
           created_at?: string
           customer_id?: string
+          cycle_id?: string | null
           id?: string
           message?: string
           metadata?: Json | null
@@ -54,6 +57,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerts_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "sale_cycles"
             referencedColumns: ["id"]
           },
         ]
