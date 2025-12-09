@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Zap, Loader2, Mail, Lock, AlertCircle, Dumbbell, Users } from "lucide-react";
+import { Zap, Loader2, Mail, Lock, AlertCircle, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -14,12 +13,10 @@ const LoginPage = () => {
   const { login, isAuthenticated, user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
-  const [isSeedingDemo, setIsSeedingDemo] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  // Show loading while checking auth state
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-sidebar via-sidebar to-primary/20 flex items-center justify-center">
@@ -31,7 +28,6 @@ const LoginPage = () => {
     );
   }
 
-  // Redirect if already authenticated
   if (isAuthenticated && user) {
     return <Navigate to={user.role === "gestor" ? "/dashboard" : "/conversas"} replace />;
   }
@@ -54,7 +50,6 @@ const LoginPage = () => {
     try {
       const { role } = await login(email, password);
       toast.success("Login realizado com sucesso!");
-      // Use role returned from login, not user state (which may not be updated yet)
       navigate(role === "gestor" ? "/dashboard" : "/conversas", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao fazer login");
@@ -63,34 +58,8 @@ const LoginPage = () => {
     }
   };
 
-  const handleSeedDemo = async () => {
-    setIsSeedingDemo(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('seed-demo-data');
-      
-      if (error) throw error;
-
-      toast.success("Ambiente de testes criado!", {
-        description: "Use as credenciais abaixo para acessar",
-        duration: 8000,
-      });
-
-      // Auto-fill with demo credentials
-      setEmail("vendedor1@exercit.com");
-      setPassword("123456");
-
-      console.log("Demo data seeded:", data);
-    } catch (err) {
-      console.error("Error seeding demo:", err);
-      toast.error("Erro ao criar ambiente de testes");
-    } finally {
-      setIsSeedingDemo(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-sidebar via-sidebar to-primary/20 flex items-center justify-center p-4">
-      {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/20 rounded-full blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
@@ -98,7 +67,6 @@ const LoginPage = () => {
       </div>
 
       <div className="relative w-full max-w-md">
-        {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary shadow-glow">
             <Zap className="h-8 w-8 text-primary-foreground" />
@@ -109,7 +77,6 @@ const LoginPage = () => {
           </div>
         </div>
 
-        {/* Login Card */}
         <Card className="border-none shadow-2xl backdrop-blur-sm bg-card/95">
           <CardHeader className="text-center space-y-1 pb-4">
             <CardTitle className="text-2xl font-bold">Acessar conta</CardTitle>
@@ -195,29 +162,7 @@ const LoginPage = () => {
             </button>
 
             <div className="w-full border-t border-border pt-4 mt-2">
-              <p className="text-xs text-muted-foreground text-center mb-3">
-                Ambiente de testes Exercit Esportes
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full gap-2"
-                onClick={handleSeedDemo}
-                disabled={isSeedingDemo}
-              >
-                {isSeedingDemo ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Criando ambiente...
-                  </>
-                ) : (
-                  <>
-                    <Dumbbell className="h-4 w-4" />
-                    Criar Demo Exercit Esportes
-                  </>
-                )}
-              </Button>
-              <div className="mt-3 p-3 bg-muted/50 rounded-lg text-xs">
+              <div className="p-3 bg-muted/50 rounded-lg text-xs">
                 <p className="font-medium flex items-center gap-2 mb-2">
                   <Users className="h-3 w-3" />
                   Credenciais de teste:
@@ -231,7 +176,6 @@ const LoginPage = () => {
           </CardFooter>
         </Card>
 
-        {/* Footer */}
         <p className="text-xs text-center text-sidebar-foreground/40 mt-6">
           © 2024 Whasense. Todos os direitos reservados.
         </p>
