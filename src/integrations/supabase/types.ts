@@ -14,16 +14,214 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      customers: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      insights: {
+        Row: {
+          created_at: string
+          id: string
+          intention: string | null
+          message_id: string
+          objection: string | null
+          sentiment: string | null
+          suggestion: string | null
+          temperature: Database["public"]["Enums"]["lead_temperature"] | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          intention?: string | null
+          message_id: string
+          objection?: string | null
+          sentiment?: string | null
+          suggestion?: string | null
+          temperature?: Database["public"]["Enums"]["lead_temperature"] | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          intention?: string | null
+          message_id?: string
+          objection?: string | null
+          sentiment?: string | null
+          suggestion?: string | null
+          temperature?: Database["public"]["Enums"]["lead_temperature"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insights_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          content: string
+          customer_id: string
+          direction: Database["public"]["Enums"]["message_direction"]
+          id: string
+          seller_id: string
+          timestamp: string
+        }
+        Insert: {
+          content: string
+          customer_id: string
+          direction: Database["public"]["Enums"]["message_direction"]
+          id?: string
+          seller_id: string
+          timestamp?: string
+        }
+        Update: {
+          content?: string
+          customer_id?: string
+          direction?: Database["public"]["Enums"]["message_direction"]
+          id?: string
+          seller_id?: string
+          timestamp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sales: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          reason: string | null
+          seller_id: string
+          status: Database["public"]["Enums"]["sale_status"]
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          reason?: string | null
+          seller_id: string
+          status: Database["public"]["Enums"]["sale_status"]
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          reason?: string | null
+          seller_id?: string
+          status?: Database["public"]["Enums"]["sale_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "seller" | "manager"
+      lead_temperature: "hot" | "warm" | "cold"
+      message_direction: "incoming" | "outgoing"
+      sale_status: "won" | "lost"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +348,11 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["seller", "manager"],
+      lead_temperature: ["hot", "warm", "cold"],
+      message_direction: ["incoming", "outgoing"],
+      sale_status: ["won", "lost"],
+    },
   },
 } as const
