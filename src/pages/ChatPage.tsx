@@ -38,6 +38,7 @@ import { ptBR } from "date-fns/locale";
 import LeadTemperatureBadge from "@/components/LeadTemperatureBadge";
 import SaleRegistrationModal from "@/components/sale/SaleRegistrationModal";
 import { useCustomerSimulation } from "@/hooks/useCustomerSimulation";
+import ManagerInsightsPanel from "@/components/manager/ManagerInsightsPanel";
 
 interface Message {
   id: string;
@@ -491,83 +492,85 @@ const ChatPage = () => {
           )}
         </div>
 
-        {/* AI Insights Panel */}
-        <div className="w-80 flex-shrink-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-border">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              {isManager ? "Resumo da Conversa" : "Insights da IA"}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              {isManager ? "Visão geral para gestores" : "Análise automática em tempo real"}
-            </p>
-          </div>
+        {/* Insights Panel - Different for Manager vs Seller */}
+        {isManager ? (
+          <ManagerInsightsPanel customerId={id || ""} />
+        ) : (
+          <div className="w-80 flex-shrink-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-border">
+              <h3 className="font-semibold flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                Insights da IA
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Análise automática em tempo real
+              </p>
+            </div>
 
-          <ScrollArea className="flex-1 p-4">
-            {isAnalyzing ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Analisando mensagem...</p>
+            <ScrollArea className="flex-1 p-4">
+              {isAnalyzing ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">Analisando mensagem...</p>
+                  </div>
                 </div>
-              </div>
-            ) : aiAnalysis ? (
-              <div className="space-y-4">
-                {/* Sentiment - Visible to both */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <SentimentIcon className={cn("h-4 w-4", sentimentInfo.color)} />
-                      Emoção do Cliente
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Badge variant="outline" className={sentimentInfo.color}>
-                      {sentimentInfo.label}
-                    </Badge>
-                  </CardContent>
-                </Card>
+              ) : aiAnalysis ? (
+                <div className="space-y-4">
+                  {/* Sentiment */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <SentimentIcon className={cn("h-4 w-4", sentimentInfo.color)} />
+                        Emoção do Cliente
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Badge variant="outline" className={sentimentInfo.color}>
+                        {sentimentInfo.label}
+                      </Badge>
+                    </CardContent>
+                  </Card>
 
-                {/* Purchase Intent - Visible to both */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Target className="h-4 w-4 text-primary" />
-                      Intenção de Compra
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-primary transition-all duration-500"
-                          style={{ width: `${aiAnalysis.intention}%` }}
-                        />
+                  {/* Purchase Intent */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Target className="h-4 w-4 text-primary" />
+                        Intenção de Compra
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary transition-all duration-500"
+                            style={{ width: `${aiAnalysis.intention}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-semibold">{aiAnalysis.intention}%</span>
                       </div>
-                      <span className="text-sm font-semibold">{aiAnalysis.intention}%</span>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
 
-                {/* Objection - Visible to both */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-warning" />
-                      Objeção Detectada
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Badge 
-                      variant={aiAnalysis.objection === "none" ? "secondary" : "destructive"}
-                    >
-                      {objectionLabels[aiAnalysis.objection] || aiAnalysis.objection}
-                    </Badge>
-                  </CardContent>
-                </Card>
+                  {/* Objection */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-warning" />
+                        Objeção Detectada
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Badge 
+                        variant={aiAnalysis.objection === "none" ? "secondary" : "destructive"}
+                      >
+                        {objectionLabels[aiAnalysis.objection] || aiAnalysis.objection}
+                      </Badge>
+                    </CardContent>
+                  </Card>
 
-                {/* Temperature - Only for sellers */}
-                {isSeller && (
+                  {/* Temperature */}
                   <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm flex items-center gap-2">
@@ -581,61 +584,56 @@ const ChatPage = () => {
                       </Badge>
                     </CardContent>
                   </Card>
-                )}
 
-                {/* Separator and Suggestion - Only for sellers */}
-                {isSeller && (
-                  <>
-                    <Separator />
+                  <Separator />
 
-                    {/* Suggestion */}
-                    <Card className="border-primary/30 bg-primary/5">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <Lightbulb className="h-4 w-4 text-primary" />
-                          Sugestão de Resposta
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <p className="text-sm">{aiAnalysis.suggestion}</p>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={useSuggestion}
-                          className="w-full gap-2"
-                        >
-                          <Copy className="h-4 w-4" />
-                          Usar sugestão da IA
-                        </Button>
-                      </CardContent>
-                    </Card>
+                  {/* Suggestion */}
+                  <Card className="border-primary/30 bg-primary/5">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Lightbulb className="h-4 w-4 text-primary" />
+                        Sugestão de Resposta
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <p className="text-sm">{aiAnalysis.suggestion}</p>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={useSuggestion}
+                        className="w-full gap-2"
+                      >
+                        <Copy className="h-4 w-4" />
+                        Usar sugestão da IA
+                      </Button>
+                    </CardContent>
+                  </Card>
 
-                    {/* Next Action */}
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <ArrowRight className="h-4 w-4 text-success" />
-                          Próxima Ação
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground">{aiAnalysis.next_action}</p>
-                      </CardContent>
-                    </Card>
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center justify-center py-8 text-muted-foreground">
-                <div className="text-center">
-                  <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">{isManager ? "Nenhuma análise disponível" : "Aguardando mensagem do cliente"}</p>
-                  <p className="text-xs mt-1">{isManager ? "Esta conversa ainda não possui insights" : "Os insights aparecerão automaticamente"}</p>
+                  {/* Next Action */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <ArrowRight className="h-4 w-4 text-success" />
+                        Próxima Ação
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">{aiAnalysis.next_action}</p>
+                    </CardContent>
+                  </Card>
                 </div>
-              </div>
-            )}
-          </ScrollArea>
-        </div>
+              ) : (
+                <div className="flex items-center justify-center py-8 text-muted-foreground">
+                  <div className="text-center">
+                    <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Aguardando mensagem do cliente</p>
+                    <p className="text-xs mt-1">Os insights aparecerão automaticamente</p>
+                  </div>
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        )}
       </div>
 
       {/* Sale Registration Modal */}
