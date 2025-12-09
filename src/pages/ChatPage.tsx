@@ -26,13 +26,16 @@ import {
   Lightbulb,
   ArrowRight,
   Copy,
-  RefreshCw
+  RefreshCw,
+  Trophy,
+  XCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import LeadTemperatureBadge from "@/components/LeadTemperatureBadge";
+import SaleRegistrationModal from "@/components/sale/SaleRegistrationModal";
 
 interface Message {
   id: string;
@@ -93,6 +96,7 @@ const ChatPage = () => {
   const [isSending, setIsSending] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
+  const [showSaleModal, setShowSaleModal] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -324,7 +328,27 @@ const ChatPage = () => {
               className="gap-2"
             >
               <RefreshCw className="h-4 w-4" />
-              Simular mensagem
+              Simular
+            </Button>
+
+            {/* Sale registration buttons */}
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setShowSaleModal(true)}
+              className="gap-2 bg-success hover:bg-success/90"
+            >
+              <Trophy className="h-4 w-4" />
+              Venda
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSaleModal(true)}
+              className="gap-2"
+            >
+              <XCircle className="h-4 w-4" />
+              Perda
             </Button>
           </div>
 
@@ -535,6 +559,20 @@ const ChatPage = () => {
           </ScrollArea>
         </div>
       </div>
+
+      {/* Sale Registration Modal */}
+      {customer && user && (
+        <SaleRegistrationModal
+          open={showSaleModal}
+          onOpenChange={setShowSaleModal}
+          customerId={customer.id}
+          sellerId={user.id}
+          customerName={customer.name}
+          onSuccess={() => {
+            toast.success("Resultado registrado!");
+          }}
+        />
+      )}
     </AppLayout>
   );
 };

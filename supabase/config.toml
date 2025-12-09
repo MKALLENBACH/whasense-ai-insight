@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.list-conversations]
 verify_jwt = false
+
+[functions.loss-reason]
+verify_jwt = false
+
+[functions.register-sale]
+verify_jwt = false
