@@ -127,8 +127,10 @@ const DashboardPage = () => {
         }
       });
 
+      // Count temperatures - customers without insights default to 'cold'
       const temperatureCounts = { hot: 0, warm: 0, cold: 0 };
-      customerTemperatures.forEach(temp => {
+      customerIds.forEach(customerId => {
+        const temp = customerTemperatures.get(customerId) || 'cold';
         if (temp === 'hot') temperatureCounts.hot++;
         else if (temp === 'warm') temperatureCounts.warm++;
         else temperatureCounts.cold++;
