@@ -32,7 +32,10 @@ import {
   Loader2,
   Users,
   UserCog,
+  Power,
+  PowerOff,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -43,6 +46,7 @@ interface Company {
   name: string;
   segment: string | null;
   created_at: string;
+  is_active: boolean;
   managerName?: string;
   managerEmail?: string;
   sellerCount: number;
@@ -112,6 +116,7 @@ const AdminCompaniesPage = () => {
 
         return {
           ...company,
+          is_active: company.is_active ?? true,
           managerName: managerProfile?.name,
           managerEmail: managerProfile?.email,
           sellerCount,
@@ -187,6 +192,32 @@ const AdminCompaniesPage = () => {
     setManagerName("");
     setManagerEmail("");
     setManagerPassword("");
+  };
+
+  const toggleCompanyStatus = async (companyId: string, currentStatus: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("companies")
+        .update({ is_active: !currentStatus })
+        .eq("id", companyId);
+
+      if (error) throw error;
+
+      setCompanies((prev) =>
+        prev.map((c) =>
+          c.id === companyId ? { ...c, is_active: !currentStatus } : c
+        )
+      );
+
+      toast.success(
+        currentStatus
+          ? "Empresa desativada com sucesso"
+          : "Empresa ativada com sucesso"
+      );
+    } catch (error) {
+      console.error("Error toggling company status:", error);
+      toast.error("Erro ao alterar status da empresa");
+    }
   };
 
   const filteredCompanies = companies.filter(
@@ -337,6 +368,7 @@ const AdminCompaniesPage = () => {
                 <TableHeader>
                   <TableRow className="border-slate-700 hover:bg-transparent">
                     <TableHead className="text-slate-400">Empresa</TableHead>
+                    <TableHead className="text-slate-400">Status</TableHead>
                     <TableHead className="text-slate-400">Gestor</TableHead>
                     <TableHead className="text-slate-400 text-center">Vendedores</TableHead>
                     <TableHead className="text-slate-400 text-center">Leads</TableHead>
@@ -346,11 +378,11 @@ const AdminCompaniesPage = () => {
                 </TableHeader>
                 <TableBody>
                   {filteredCompanies.map((company) => (
-                    <TableRow key={company.id} className="border-slate-700">
+                    <TableRow key={company.id} className={`border-slate-700 ${!company.is_active ? 'opacity-60' : ''}`}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                            <Building2 className="h-4 w-4 text-orange-500" />
+                          <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${company.is_active ? 'bg-orange-500/10' : 'bg-slate-700'}`}>
+                            <Building2 className={`h-4 w-4 ${company.is_active ? 'text-orange-500' : 'text-slate-500'}`} />
                           </div>
                           <div>
                             <p className="font-medium text-white">{company.name}</p>
@@ -360,6 +392,20 @@ const AdminCompaniesPage = () => {
                               </Badge>
                             )}
                           </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={company.is_active}
+                            onCheckedChange={() => toggleCompanyStatus(company.id, company.is_active)}
+                          />
+                          <Badge 
+                            variant={company.is_active ? "default" : "secondary"}
+                            className={company.is_active ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-700 text-slate-400"}
+                          >
+                            {company.is_active ? "Ativa" : "Inativa"}
+                          </Badge>
                         </div>
                       </TableCell>
                       <TableCell>
