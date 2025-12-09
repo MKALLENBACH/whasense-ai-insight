@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ const navItems = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Empresas", href: "/admin/empresas", icon: Building2 },
   { label: "Gestores", href: "/admin/gestores", icon: UserCog },
+  { label: "AI Scripts", href: "/admin/ai", icon: Bot },
 ];
 
 const AdminLayout = ({ children }: AdminLayoutProps) => {

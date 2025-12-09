@@ -41,3 +41,9 @@ verify_jwt = false
 
 [functions.auto-simulate]
 verify_jwt = false
+
+[functions.admin-operations]
+verify_jwt = false
+
+[functions.ai-scripts]
+verify_jwt = false
