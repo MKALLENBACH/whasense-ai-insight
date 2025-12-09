@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -17,16 +17,18 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const logoutAttempted = useRef(false);
 
-  // Force logout when accessing /login directly
+  // Force logout when accessing /login directly - only once
   useEffect(() => {
-    if (isAuthenticated && !isLoggingOut) {
+    if (isAuthenticated && !logoutAttempted.current) {
+      logoutAttempted.current = true;
       setIsLoggingOut(true);
       logout().finally(() => {
         setIsLoggingOut(false);
       });
     }
-  }, [isAuthenticated, logout, isLoggingOut]);
+  }, [isAuthenticated, logout]);
 
   if (authLoading || isLoggingOut) {
     return (
