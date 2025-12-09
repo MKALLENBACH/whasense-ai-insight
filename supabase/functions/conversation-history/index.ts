@@ -12,11 +12,11 @@ serve(async (req) => {
   }
 
   try {
+    const startTime = Date.now();
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // Get the authorization header to identify the user
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
       return new Response(
@@ -25,7 +25,6 @@ serve(async (req) => {
       );
     }
 
-    // Use anon client to validate the user's token
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -40,17 +39,26 @@ serve(async (req) => {
       );
     }
 
-    // Use service role for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('Fetching conversation history for user:', user.id);
 
-    // Get user's profile to find their company
-    const { data: userProfile } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    // Parallel fetch: user profile and role
+    const [profileResult, roleResult] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+      supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .maybeSingle()
+    ]);
+
+    const userProfile = profileResult.data;
+    const roleData = roleResult.data;
 
     if (!userProfile?.company_id) {
       return new Response(
@@ -59,23 +67,15 @@ serve(async (req) => {
       );
     }
 
-    // Get user's role
-    const { data: roleData } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
     const isManager = roleData?.role === 'manager';
 
     // Get customers based on role
     let customersQuery = supabase
       .from('customers')
-      .select('*')
+      .select('id, name, phone, email, seller_id, lead_status')
       .eq('company_id', userProfile.company_id)
       .order('updated_at', { ascending: false });
 
-    // If seller, only show their customers
     if (!isManager) {
       customersQuery = customersQuery.eq('seller_id', user.id);
     }
@@ -87,64 +87,115 @@ serve(async (req) => {
       throw customersError;
     }
 
+    if (!customers || customers.length === 0) {
+      console.log('No customers found');
+      return new Response(
+        JSON.stringify({ conversations: [] }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const customerIds = customers.map(c => c.id);
+    const sellerIds = [...new Set(customers.map(c => c.seller_id).filter(Boolean))];
+
+    // Parallel batch queries for all data
+    const [messagesResult, sellerProfilesResult, salesResult] = await Promise.all([
+      // Get all messages for all customers (with row number to get latest per customer)
+      supabase
+        .from('messages')
+        .select('id, content, direction, timestamp, customer_id, seller_id')
+        .in('customer_id', customerIds)
+        .order('timestamp', { ascending: false }),
+      
+      // Get all seller profiles in one query
+      supabase
+        .from('profiles')
+        .select('user_id, name, email')
+        .in('user_id', sellerIds),
+      
+      // Get all sales for all customers
+      supabase
+        .from('sales')
+        .select('id, status, reason, created_at, customer_id')
+        .in('customer_id', customerIds)
+        .order('created_at', { ascending: false })
+    ]);
+
+    const allMessages = messagesResult.data || [];
+    const sellerProfiles = sellerProfilesResult.data || [];
+    const allSales = salesResult.data || [];
+
+    // Get message IDs for insights query
+    const messageIds = allMessages.map(m => m.id);
+    
+    // Get all insights in one query
+    const { data: allInsights } = await supabase
+      .from('insights')
+      .select('id, message_id, sentiment, intention, objection, temperature, suggestion, next_action, created_at')
+      .in('message_id', messageIds)
+      .order('created_at', { ascending: false });
+
+    // Create lookup maps for O(1) access
+    const sellerProfileMap = new Map(sellerProfiles.map(p => [p.user_id, p]));
+    
+    // Group messages by customer
+    const messagesByCustomer = new Map<string, typeof allMessages>();
+    for (const msg of allMessages) {
+      if (!messagesByCustomer.has(msg.customer_id)) {
+        messagesByCustomer.set(msg.customer_id, []);
+      }
+      messagesByCustomer.get(msg.customer_id)!.push(msg);
+    }
+
+    // Group sales by customer (get latest)
+    const salesByCustomer = new Map<string, typeof allSales[0]>();
+    for (const sale of allSales) {
+      if (!salesByCustomer.has(sale.customer_id)) {
+        salesByCustomer.set(sale.customer_id, sale);
+      }
+    }
+
+    // Define insight type
+    type InsightData = {
+      id: string;
+      message_id: string;
+      sentiment: string | null;
+      intention: string | null;
+      objection: string | null;
+      temperature: string | null;
+      suggestion: string | null;
+      next_action: string | null;
+      created_at: string;
+    };
+
+    // Group insights by message_id
+    const insightsByMessage = new Map<string, InsightData>();
+    for (const insight of (allInsights || []) as InsightData[]) {
+      if (!insightsByMessage.has(insight.message_id)) {
+        insightsByMessage.set(insight.message_id, insight);
+      }
+    }
+
+    // Build conversation history
     const conversationHistory = [];
 
-    for (const customer of customers || []) {
-      // Get latest message for this customer
-      const { data: latestMessage } = await supabase
-        .from('messages')
-        .select('id, content, direction, timestamp, seller_id')
-        .eq('customer_id', customer.id)
-        .order('timestamp', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    for (const customer of customers) {
+      const customerMessages = messagesByCustomer.get(customer.id) || [];
+      if (customerMessages.length === 0) continue;
 
-      if (!latestMessage) continue;
+      const latestMessage = customerMessages[0]; // Already sorted by timestamp desc
+      const sellerProfile = customer.seller_id ? sellerProfileMap.get(customer.seller_id) : null;
+      const sale = salesByCustomer.get(customer.id) || null;
 
-      // Get seller profile
-      const { data: sellerProfile } = await supabase
-        .from('profiles')
-        .select('name, email')
-        .eq('user_id', latestMessage.seller_id)
-        .maybeSingle();
-
-      // Get all message IDs for this customer to find the latest insight
-      const { data: customerMessages } = await supabase
-        .from('messages')
-        .select('id')
-        .eq('customer_id', customer.id)
-        .order('timestamp', { ascending: false });
-
-      // Get latest insight for any message in this conversation
+      // Find latest insight from any message in this conversation
       let latestInsight = null;
-      if (customerMessages && customerMessages.length > 0) {
-        const messageIds = customerMessages.map(m => m.id);
-        const { data: insights } = await supabase
-          .from('insights')
-          .select('*')
-          .in('message_id', messageIds)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        
-        if (insights && insights.length > 0) {
-          latestInsight = insights[0];
+      for (const msg of customerMessages) {
+        const insight = insightsByMessage.get(msg.id);
+        if (insight) {
+          latestInsight = insight;
+          break; // First one is latest due to sorting
         }
       }
-
-      // Get sale result if exists
-      const { data: sale } = await supabase
-        .from('sales')
-        .select('*')
-        .eq('customer_id', customer.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      // Get message count
-      const { count: messageCount } = await supabase
-        .from('messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('customer_id', customer.id);
 
       conversationHistory.push({
         id: customer.id,
@@ -160,7 +211,7 @@ serve(async (req) => {
         } : null,
         lastMessage: latestMessage.content,
         lastMessageTime: latestMessage.timestamp,
-        messageCount: messageCount || 0,
+        messageCount: customerMessages.length,
         insight: latestInsight ? {
           sentiment: latestInsight.sentiment,
           intention: latestInsight.intention,
@@ -178,7 +229,8 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Found ${conversationHistory.length} conversations`);
+    const duration = Date.now() - startTime;
+    console.log(`Found ${conversationHistory.length} conversations in ${duration}ms`);
 
     return new Response(
       JSON.stringify({ conversations: conversationHistory }),
