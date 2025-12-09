@@ -1,43 +1,192 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
-import { User, UserRole } from "@/types";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { User, Session } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
+import { UserRole } from "@/types";
+
+interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+}
 
 interface AuthContextType {
-  user: User | null;
-  login: (email: string, password: string, role: UserRole) => Promise<void>;
-  logout: () => void;
+  user: AuthUser | null;
+  session: Session | null;
+  login: (email: string, password: string) => Promise<{ role: UserRole }>;
+  signup: (email: string, password: string, name: string, role: UserRole) => Promise<void>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const login = async (email: string, password: string, role: UserRole) => {
-    // Mock login - in production, this would call the backend
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    
-    const mockUser: User = {
-      id: "user1",
-      name: role === "vendedor" ? "Lucas Vendedor" : "Amanda Gestora",
-      email,
-      role,
-    };
-    
-    setUser(mockUser);
+  const mapDbRoleToAppRole = (dbRole: string): UserRole => {
+    return dbRole === "manager" ? "gestor" : "vendedor";
   };
 
-  const logout = () => {
+  const fetchUserRole = async (userId: string): Promise<UserRole> => {
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error fetching user role:", error);
+      return "vendedor"; // Default role
+    }
+
+    return mapDbRoleToAppRole(data?.role || "seller");
+  };
+
+  const fetchUserProfile = async (userId: string): Promise<{ name: string; email: string } | null> => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("name, email")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error fetching user profile:", error);
+      return null;
+    }
+
+    return data;
+  };
+
+  const updateAuthUser = async (supabaseUser: User) => {
+    const [role, profile] = await Promise.all([
+      fetchUserRole(supabaseUser.id),
+      fetchUserProfile(supabaseUser.id),
+    ]);
+
+    setUser({
+      id: supabaseUser.id,
+      name: profile?.name || supabaseUser.email?.split("@")[0] || "Usuário",
+      email: profile?.email || supabaseUser.email || "",
+      role,
+    });
+  };
+
+  useEffect(() => {
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        
+        if (session?.user) {
+          // Defer Supabase calls with setTimeout
+          setTimeout(() => {
+            updateAuthUser(session.user);
+          }, 0);
+        } else {
+          setUser(null);
+        }
+        setIsLoading(false);
+      }
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        updateAuthUser(session.user);
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = async (email: string, password: string): Promise<{ role: UserRole }> => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      if (error.message.includes("Invalid login credentials")) {
+        throw new Error("Email ou senha incorretos");
+      }
+      throw new Error(error.message);
+    }
+
+    if (!data.user) {
+      throw new Error("Erro ao fazer login");
+    }
+
+    const role = await fetchUserRole(data.user.id);
+    return { role }; // Already mapped to app role
+  };
+
+  const signup = async (email: string, password: string, name: string, role: UserRole) => {
+    const redirectUrl = `${window.location.origin}/`;
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          name,
+        },
+      },
+    });
+
+    if (error) {
+      if (error.message.includes("User already registered")) {
+        throw new Error("Este email já está cadastrado");
+      }
+      throw new Error(error.message);
+    }
+
+    if (!data.user) {
+      throw new Error("Erro ao criar conta");
+    }
+
+    // Map role to database enum
+    const dbRole = role === "gestor" ? "manager" : "seller";
+
+    // Insert user role
+    const { error: roleError } = await supabase
+      .from("user_roles")
+      .insert({
+        user_id: data.user.id,
+        role: dbRole,
+      });
+
+    if (roleError) {
+      console.error("Error inserting user role:", roleError);
+      throw new Error("Erro ao configurar perfil");
+    }
+  };
+
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      throw new Error(error.message);
+    }
     setUser(null);
+    setSession(null);
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        session,
         login,
+        signup,
         logout,
-        isAuthenticated: !!user,
+        isAuthenticated: !!session,
+        isLoading,
       }}
     >
       {children}
