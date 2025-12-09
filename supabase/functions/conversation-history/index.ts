@@ -13,8 +13,8 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get the authorization header to identify the user
     const authHeader = req.headers.get('authorization');
@@ -25,16 +25,23 @@ serve(async (req) => {
       );
     }
 
-    // Verify the JWT and get user
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    // Use anon client to validate the user's token
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
 
     if (authError || !user) {
+      console.error('Auth error:', authError);
       return new Response(
         JSON.stringify({ error: 'Invalid or expired token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Use service role for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('Fetching conversation history for user:', user.id);
 
@@ -101,12 +108,28 @@ serve(async (req) => {
         .eq('user_id', latestMessage.seller_id)
         .maybeSingle();
 
-      // Get latest insight for this conversation
-      const { data: latestInsight } = await supabase
-        .from('insights')
-        .select('*')
-        .eq('message_id', latestMessage.id)
-        .maybeSingle();
+      // Get all message IDs for this customer to find the latest insight
+      const { data: customerMessages } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('customer_id', customer.id)
+        .order('timestamp', { ascending: false });
+
+      // Get latest insight for any message in this conversation
+      let latestInsight = null;
+      if (customerMessages && customerMessages.length > 0) {
+        const messageIds = customerMessages.map(m => m.id);
+        const { data: insights } = await supabase
+          .from('insights')
+          .select('*')
+          .in('message_id', messageIds)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        if (insights && insights.length > 0) {
+          latestInsight = insights[0];
+        }
+      }
 
       // Get sale result if exists
       const { data: sale } = await supabase

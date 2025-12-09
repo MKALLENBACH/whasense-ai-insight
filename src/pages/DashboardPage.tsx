@@ -62,7 +62,11 @@ const DashboardPage = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchDashboardData = async () => {
-    if (!user?.companyId) return;
+    if (!user?.companyId) {
+      console.log('No company ID found for user');
+      setIsLoading(false);
+      return;
+    }
 
     try {
       // Fetch sellers count
@@ -91,35 +95,51 @@ const DashboardPage = () => {
       const wonSales = sales?.filter(s => s.status === "won").length || 0;
       const lostSales = sales?.filter(s => s.status === "lost").length || 0;
 
-      // Fetch insights to get lead temperatures
+      // Fetch all messages for these customers to get insight IDs
+      const { data: messagesData } = await supabase
+        .from("messages")
+        .select("id, customer_id")
+        .in("customer_id", customerIds.length > 0 ? customerIds : ['']);
+
+      const messageIds = messagesData?.map(m => m.id) || [];
+
+      // Fetch insights for these messages
       const { data: insights } = await supabase
         .from("insights")
-        .select("temperature, message_id");
+        .select("temperature, message_id, created_at")
+        .in("message_id", messageIds.length > 0 ? messageIds : [''])
+        .order("created_at", { ascending: false });
 
-      // Get unique temperatures per customer (latest insight)
-      const temperatureCounts = { hot: 0, warm: 0, cold: 0 };
+      // Get the latest temperature per customer
+      const customerTemperatures = new Map<string, string>();
+      const messageToCustomer = new Map<string, string>();
       
-      if (insights && insights.length > 0) {
-        // Count temperatures
-        const tempMap = new Map<string, string>();
-        insights.forEach(insight => {
-          if (insight.temperature) {
-            tempMap.set(insight.message_id, insight.temperature);
+      messagesData?.forEach(m => {
+        messageToCustomer.set(m.id, m.customer_id);
+      });
+
+      insights?.forEach(insight => {
+        if (insight.temperature) {
+          const customerId = messageToCustomer.get(insight.message_id);
+          if (customerId && !customerTemperatures.has(customerId)) {
+            customerTemperatures.set(customerId, insight.temperature);
           }
-        });
-        
-        tempMap.forEach(temp => {
-          if (temp === 'hot') temperatureCounts.hot++;
-          else if (temp === 'warm') temperatureCounts.warm++;
-          else temperatureCounts.cold++;
-        });
-      }
+        }
+      });
+
+      const temperatureCounts = { hot: 0, warm: 0, cold: 0 };
+      customerTemperatures.forEach(temp => {
+        if (temp === 'hot') temperatureCounts.hot++;
+        else if (temp === 'warm') temperatureCounts.warm++;
+        else temperatureCounts.cold++;
+      });
 
       // Count active conversations (customers with messages in last 24h)
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: recentMessages } = await supabase
         .from("messages")
         .select("customer_id")
+        .in("customer_id", customerIds.length > 0 ? customerIds : [''])
         .gte("timestamp", oneDayAgo);
 
       const activeCustomers = new Set(recentMessages?.map(m => m.customer_id) || []);
@@ -132,7 +152,7 @@ const DashboardPage = () => {
         hotLeads: temperatureCounts.hot,
         warmLeads: temperatureCounts.warm,
         coldLeads: temperatureCounts.cold,
-        totalSellers: sellerIds.length - 1, // Exclude manager
+        totalSellers: Math.max(0, sellerIds.length - 1), // Exclude manager
         avgResponseTime: 3, // Would need message timestamp analysis
       });
 
