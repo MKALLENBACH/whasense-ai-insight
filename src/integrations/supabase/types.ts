@@ -154,6 +154,101 @@ export type Database = {
           },
         ]
       }
+      buyers: {
+        Row: {
+          client_id: string
+          company_id: string
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          role: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          company_id: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          company_id?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "buyers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "buyers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          cnpj: string | null
+          company_id: string
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          segment: string | null
+          updated_at: string
+        }
+        Insert: {
+          cnpj?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          segment?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cnpj?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          segment?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           allow_followups: boolean
@@ -238,6 +333,8 @@ export type Database = {
       }
       customers: {
         Row: {
+          buyer_id: string | null
+          client_id: string | null
           company_id: string | null
           created_at: string
           email: string | null
@@ -250,6 +347,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          buyer_id?: string | null
+          client_id?: string | null
           company_id?: string | null
           created_at?: string
           email?: string | null
@@ -262,6 +361,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          buyer_id?: string | null
+          client_id?: string | null
           company_id?: string | null
           created_at?: string
           email?: string | null
@@ -274,6 +375,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "customers_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "buyers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "customers_company_id_fkey"
             columns: ["company_id"]
@@ -551,6 +666,8 @@ export type Database = {
       }
       messages: {
         Row: {
+          buyer_id: string | null
+          client_id: string | null
           content: string
           customer_id: string
           cycle_id: string | null
@@ -560,6 +677,8 @@ export type Database = {
           timestamp: string
         }
         Insert: {
+          buyer_id?: string | null
+          client_id?: string | null
           content: string
           customer_id: string
           cycle_id?: string | null
@@ -569,6 +688,8 @@ export type Database = {
           timestamp?: string
         }
         Update: {
+          buyer_id?: string | null
+          client_id?: string | null
           content?: string
           customer_id?: string
           cycle_id?: string | null
@@ -578,6 +699,20 @@ export type Database = {
           timestamp?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "buyers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_customer_id_fkey"
             columns: ["customer_id"]
@@ -673,6 +808,8 @@ export type Database = {
       }
       sale_cycles: {
         Row: {
+          buyer_id: string | null
+          client_id: string | null
           closed_at: string | null
           created_at: string
           customer_id: string
@@ -684,6 +821,8 @@ export type Database = {
           won_summary: string | null
         }
         Insert: {
+          buyer_id?: string | null
+          client_id?: string | null
           closed_at?: string | null
           created_at?: string
           customer_id: string
@@ -695,6 +834,8 @@ export type Database = {
           won_summary?: string | null
         }
         Update: {
+          buyer_id?: string | null
+          client_id?: string | null
           closed_at?: string | null
           created_at?: string
           customer_id?: string
@@ -706,6 +847,20 @@ export type Database = {
           won_summary?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sale_cycles_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "buyers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_cycles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sale_cycles_customer_id_fkey"
             columns: ["customer_id"]
