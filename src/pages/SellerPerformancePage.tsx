@@ -5,9 +5,10 @@ import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, Target, Trophy, Medal, TrendingUp, Crown, Award, Flame, Zap, Star, Sparkles } from "lucide-react";
+import { Loader2, Target, Trophy, Medal, TrendingUp, Crown, Award, Flame, Zap, Star, Sparkles, Bot, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -45,6 +46,27 @@ interface PointsHistory {
   created_at: string;
 }
 
+interface AIInsights {
+  vendorName: string;
+  stats: {
+    wonSales: number;
+    lostSales: number;
+    conversionRate: string;
+    totalPoints: number;
+    rankingPosition: number | null;
+  };
+  activeGoals: {
+    type: string;
+    target: number;
+    current: number;
+    progress: number;
+    remaining: number;
+    endDate: string;
+  }[];
+  hotLeadsCount: number;
+  aiInsights: string;
+}
+
 const GOAL_TYPES = {
   vendas: "Vendas",
   faturamento: "Faturamento",
@@ -74,12 +96,33 @@ const SellerPerformancePage = () => {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [pointsHistory, setPointsHistory] = useState<PointsHistory[]>([]);
   const [companyLeaderboard, setCompanyLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [aiInsights, setAiInsights] = useState<AIInsights | null>(null);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
       fetchData();
     }
   }, [user?.id]);
+
+  const fetchAIInsights = async () => {
+    if (!user?.id || !user?.companyId) return;
+    setIsLoadingAI(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("seller-performance-insights", {
+        body: { vendor_id: user.id, company_id: user.companyId },
+      });
+
+      if (error) throw error;
+      setAiInsights(data);
+    } catch (error) {
+      console.error("Error fetching AI insights:", error);
+      toast.error("Erro ao carregar sugestões da IA");
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
 
   const fetchData = async () => {
     if (!user?.id || !user?.companyId) return;
@@ -278,12 +321,132 @@ const SellerPerformancePage = () => {
           </Card>
         </div>
 
-        <Tabs defaultValue="ranking" className="space-y-4">
+        <Tabs defaultValue="ai-coach" className="space-y-4">
           <TabsList>
+            <TabsTrigger value="ai-coach">
+              <Bot className="h-4 w-4 mr-1" />
+              Coach IA
+            </TabsTrigger>
             <TabsTrigger value="ranking">Ranking</TabsTrigger>
             <TabsTrigger value="badges">Minhas Conquistas</TabsTrigger>
             <TabsTrigger value="history">Histórico de Pontos</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="ai-coach">
+            <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Bot className="h-5 w-5 text-primary" />
+                      Sugestões da IA para Bater Metas
+                    </CardTitle>
+                    <CardDescription>
+                      Análise personalizada do seu desempenho com dicas práticas
+                    </CardDescription>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={fetchAIInsights}
+                    disabled={isLoadingAI}
+                  >
+                    {isLoadingAI ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-1" />
+                        Atualizar
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {!aiInsights && !isLoadingAI ? (
+                  <div className="text-center py-8">
+                    <Bot className="h-16 w-16 text-primary/40 mx-auto mb-4" />
+                    <p className="text-muted-foreground mb-4">
+                      Clique no botão acima para gerar sugestões personalizadas da IA
+                    </p>
+                    <Button onClick={fetchAIInsights}>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Gerar Sugestões
+                    </Button>
+                  </div>
+                ) : isLoadingAI ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                    <p className="text-muted-foreground">Analisando seu desempenho...</p>
+                  </div>
+                ) : aiInsights ? (
+                  <div className="space-y-6">
+                    {/* Stats summary */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="bg-background/50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-green-500">{aiInsights.stats.wonSales}</p>
+                        <p className="text-xs text-muted-foreground">Vendas (30 dias)</p>
+                      </div>
+                      <div className="bg-background/50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-primary">{aiInsights.stats.conversionRate}%</p>
+                        <p className="text-xs text-muted-foreground">Taxa Conversão</p>
+                      </div>
+                      <div className="bg-background/50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-orange-500">{aiInsights.hotLeadsCount}</p>
+                        <p className="text-xs text-muted-foreground">Leads Quentes</p>
+                      </div>
+                      <div className="bg-background/50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-purple-500">
+                          {aiInsights.stats.rankingPosition ? `#${aiInsights.stats.rankingPosition}` : "-"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">No Ranking</p>
+                      </div>
+                    </div>
+
+                    {/* AI Insights */}
+                    <div className="bg-background rounded-lg p-4 border">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-primary/10 rounded-full">
+                          <Sparkles className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex-1 prose prose-sm dark:prose-invert max-w-none">
+                          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                            {aiInsights.aiInsights}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Active goals reminder */}
+                    {aiInsights.activeGoals.length > 0 && (
+                      <div className="bg-background/50 rounded-lg p-4">
+                        <h4 className="font-medium mb-3 flex items-center gap-2">
+                          <Target className="h-4 w-4 text-primary" />
+                          Suas Metas Ativas
+                        </h4>
+                        <div className="space-y-2">
+                          {aiInsights.activeGoals.map((goal, i) => (
+                            <div key={i} className="flex items-center justify-between text-sm">
+                              <span>{GOAL_TYPES[goal.type as keyof typeof GOAL_TYPES] || goal.type}</span>
+                              <div className="flex items-center gap-2">
+                                <Progress value={goal.progress} className="w-20 h-2" />
+                                <span className="text-xs font-medium">{goal.progress?.toFixed(0)}%</span>
+                                {goal.remaining > 0 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    Faltam {goal.remaining}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="ranking">
             <Card>
