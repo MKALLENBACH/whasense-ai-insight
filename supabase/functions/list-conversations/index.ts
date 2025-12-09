@@ -13,8 +13,8 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get the authorization header to identify the user
     const authHeader = req.headers.get('authorization');
@@ -25,16 +25,23 @@ serve(async (req) => {
       );
     }
 
-    // Verify the JWT and get user
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    // Use anon client to validate the user's token
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
 
     if (authError || !user) {
+      console.error('Auth error:', authError);
       return new Response(
         JSON.stringify({ error: 'Invalid or expired token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Use service role for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('Fetching conversations for seller:', user.id);
 
@@ -62,39 +69,67 @@ serve(async (req) => {
       throw messagesError;
     }
 
-    // Group messages by customer and get the latest insight for each
+    // Get all sales for this seller
+    const { data: sales } = await supabase
+      .from('sales')
+      .select('customer_id, status')
+      .eq('seller_id', user.id);
+
+    const salesMap = new Map();
+    for (const sale of sales || []) {
+      salesMap.set(sale.customer_id, sale.status);
+    }
+
+    // Group messages by customer
     const conversationsMap = new Map();
+    const customerMessageIds = new Map<string, string[]>();
 
     for (const message of messages || []) {
       const customerId = message.customer_id;
       
       if (!conversationsMap.has(customerId)) {
-        // Get the latest insight for this customer's messages
-        const { data: insight } = await supabase
-          .from('insights')
-          .select('*')
-          .eq('message_id', message.id)
-          .maybeSingle();
-
         conversationsMap.set(customerId, {
           id: customerId,
           customer: message.customers,
           lastMessage: message.content,
           lastMessageTime: message.timestamp,
           lastMessageDirection: message.direction,
-          insight: insight ? {
-            sentiment: insight.sentiment,
-            intention: insight.intention,
-            objection: insight.objection,
-            temperature: insight.temperature,
-            suggestion: insight.suggestion,
-            next_action: insight.next_action,
-          } : null,
+          insight: null,
           messageCount: 1,
-          hasRisk: insight?.sentiment === 'angry' || insight?.sentiment === 'negative' || insight?.objection !== 'none',
+          hasRisk: false,
+          saleStatus: salesMap.get(customerId) || null,
         });
+        customerMessageIds.set(customerId, [message.id]);
       } else {
         conversationsMap.get(customerId).messageCount++;
+        customerMessageIds.get(customerId)?.push(message.id);
+      }
+    }
+
+    // Get the latest insight for each conversation (from incoming messages)
+    for (const [customerId, messageIds] of customerMessageIds.entries()) {
+      // Get the most recent insight from any message in this conversation
+      const { data: insights } = await supabase
+        .from('insights')
+        .select('*')
+        .in('message_id', messageIds)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (insights && insights.length > 0) {
+        const insight = insights[0];
+        const conv = conversationsMap.get(customerId);
+        conv.insight = {
+          sentiment: insight.sentiment,
+          intention: insight.intention,
+          objection: insight.objection,
+          temperature: insight.temperature,
+          suggestion: insight.suggestion,
+          next_action: insight.next_action,
+        };
+        conv.hasRisk = insight.sentiment === 'angry' || 
+                       insight.sentiment === 'negative' || 
+                       (insight.objection && insight.objection !== 'none');
       }
     }
 
