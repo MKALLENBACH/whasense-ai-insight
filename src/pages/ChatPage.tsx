@@ -61,6 +61,13 @@ interface Customer {
   name: string;
   phone: string | null;
   email: string | null;
+  seller_id: string | null;
+}
+
+interface ExistingSale {
+  id: string;
+  status: "won" | "lost";
+  reason: string | null;
 }
 
 const sentimentConfig: Record<string, { icon: typeof Smile; label: string; color: string }> = {
@@ -102,6 +109,7 @@ const ChatPage = () => {
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [simulationEnabled, setSimulationEnabled] = useState(true);
   const [isSimulatingResponse, setIsSimulatingResponse] = useState(false);
+  const [existingSale, setExistingSale] = useState<ExistingSale | null>(null);
 
   // AI Customer Simulation
   const {
@@ -187,6 +195,25 @@ const ChatPage = () => {
             });
           }
         }
+      }
+
+      // Fetch existing sale for this customer
+      const { data: saleData } = await supabase
+        .from("sales")
+        .select("id, status, reason")
+        .eq("customer_id", id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (saleData) {
+        setExistingSale({
+          id: saleData.id,
+          status: saleData.status as "won" | "lost",
+          reason: saleData.reason,
+        });
+      } else {
+        setExistingSale(null);
       }
     } catch (error) {
       console.error("Error fetching conversation:", error);
@@ -397,8 +424,8 @@ const ChatPage = () => {
               </Button>
             )}
 
-            {/* Sale registration buttons - Only for sellers */}
-            {isSeller && (
+            {/* Sale registration buttons - Only for sellers when no existing sale */}
+            {isSeller && !existingSale && (
               <>
                 <Button
                   variant="default"
@@ -419,6 +446,26 @@ const ChatPage = () => {
                   Perda
                 </Button>
               </>
+            )}
+
+            {/* Show status badge for sellers when sale exists */}
+            {isSeller && existingSale && (
+              <Badge className={existingSale.status === "won" ? "bg-success" : "bg-destructive"}>
+                {existingSale.status === "won" ? "Venda Ganha" : "Venda Perdida"}
+              </Badge>
+            )}
+
+            {/* Edit button - Only for managers when sale exists */}
+            {isManager && existingSale && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSaleModal(true)}
+                className="gap-2"
+              >
+                <Trophy className="h-4 w-4" />
+                Editar Status
+              </Button>
             )}
           </div>
 
@@ -642,10 +689,14 @@ const ChatPage = () => {
           open={showSaleModal}
           onOpenChange={setShowSaleModal}
           customerId={customer.id}
-          sellerId={user.id}
+          sellerId={existingSale ? customer.seller_id || user.id : user.id}
           customerName={customer.name}
+          isEditMode={isManager && !!existingSale}
+          existingSaleId={existingSale?.id}
+          existingStatus={existingSale?.status}
+          existingReason={existingSale?.reason || undefined}
           onSuccess={() => {
-            toast.success("Resultado registrado!");
+            fetchConversation();
           }}
         />
       )}

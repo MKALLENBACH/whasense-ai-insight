@@ -35,6 +35,10 @@ interface SaleRegistrationModalProps {
   sellerId: string;
   customerName: string;
   onSuccess?: () => void;
+  isEditMode?: boolean;
+  existingSaleId?: string;
+  existingStatus?: "won" | "lost";
+  existingReason?: string;
 }
 
 const lossReasons = [
@@ -60,6 +64,10 @@ const SaleRegistrationModal = ({
   sellerId,
   customerName,
   onSuccess,
+  isEditMode = false,
+  existingSaleId,
+  existingStatus,
+  existingReason,
 }: SaleRegistrationModalProps) => {
   const [activeTab, setActiveTab] = useState<"won" | "lost">("won");
   const [selectedReason, setSelectedReason] = useState<string>("");
@@ -81,12 +89,17 @@ const SaleRegistrationModal = ({
   // Reset state when modal opens
   useEffect(() => {
     if (open) {
-      setActiveTab("won");
-      setSelectedReason("");
+      if (isEditMode && existingStatus) {
+        setActiveTab(existingStatus);
+        setSelectedReason(existingReason || "");
+      } else {
+        setActiveTab("won");
+        setSelectedReason("");
+      }
       setDescription("");
       setAiSuggestion(null);
     }
-  }, [open]);
+  }, [open, isEditMode, existingStatus, existingReason]);
 
   const fetchLossReasonSuggestion = async () => {
     setIsLoadingSuggestion(true);
@@ -117,29 +130,45 @@ const SaleRegistrationModal = ({
 
     setIsSubmitting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("register-sale", {
-        body: {
-          seller_id: sellerId,
-          customer_id: customerId,
-          status: activeTab,
-          reason: activeTab === "lost" ? selectedReason : null,
-          description: activeTab === "lost" ? description : null,
-        },
-      });
+      if (isEditMode && existingSaleId) {
+        // Update existing sale (manager only)
+        const { error } = await supabase
+          .from("sales")
+          .update({
+            status: activeTab,
+            reason: activeTab === "lost" ? selectedReason : null,
+          })
+          .eq("id", existingSaleId);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      toast.success(
-        activeTab === "won" 
-          ? "🎉 Venda registrada com sucesso!" 
-          : "Perda registrada com sucesso"
-      );
+        toast.success("Status atualizado com sucesso!");
+      } else {
+        // Create new sale
+        const { data, error } = await supabase.functions.invoke("register-sale", {
+          body: {
+            seller_id: sellerId,
+            customer_id: customerId,
+            status: activeTab,
+            reason: activeTab === "lost" ? selectedReason : null,
+            description: activeTab === "lost" ? description : null,
+          },
+        });
+
+        if (error) throw error;
+
+        toast.success(
+          activeTab === "won" 
+            ? "🎉 Venda registrada com sucesso!" 
+            : "Perda registrada com sucesso"
+        );
+      }
       
       onOpenChange(false);
       onSuccess?.();
     } catch (error) {
       console.error("Error registering sale:", error);
-      toast.error("Erro ao registrar venda");
+      toast.error(isEditMode ? "Erro ao atualizar status" : "Erro ao registrar venda");
     } finally {
       setIsSubmitting(false);
     }
@@ -150,7 +179,7 @@ const SaleRegistrationModal = ({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            Registrar Resultado
+            {isEditMode ? "Editar Status" : "Registrar Resultado"}
             <Badge variant="outline">{customerName}</Badge>
           </DialogTitle>
         </DialogHeader>
