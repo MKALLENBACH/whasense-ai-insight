@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { action, companyName, companySegment, managerName, managerEmail, managerPassword } = body;
+    const { action, companyName, companyCnpj, companySegment, managerName, managerEmail, managerPassword } = body;
 
     if (action === "create_company_with_manager") {
       console.log("Creating company:", companyName);
@@ -68,6 +68,7 @@ Deno.serve(async (req) => {
         .from("companies")
         .insert({
           name: companyName,
+          cnpj: companyCnpj || null,
           segment: companySegment || null,
         })
         .select()
