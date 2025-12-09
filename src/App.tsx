@@ -17,6 +17,7 @@ import WhatsAppStatusPage from "./pages/WhatsAppStatusPage";
 import SellersPage from "./pages/SellersPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import FollowupsSettingsPage from "./pages/FollowupsSettingsPage";
 import NotFound from "./pages/NotFound";
 
 // Admin pages
@@ -126,6 +127,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="gestor">
                   <SellersPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/gestor/followups" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <FollowupsSettingsPage />
                 </ProtectedRoute>
               } 
             />

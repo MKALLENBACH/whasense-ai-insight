@@ -135,6 +135,7 @@ export type Database = {
       }
       companies: {
         Row: {
+          allow_followups: boolean
           cnpj: string | null
           created_at: string
           description: string | null
@@ -146,6 +147,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allow_followups?: boolean
           cnpj?: string | null
           created_at?: string
           description?: string | null
@@ -157,6 +159,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allow_followups?: boolean
           cnpj?: string | null
           created_at?: string
           description?: string | null
@@ -173,6 +176,41 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_settings: {
+        Row: {
+          company_id: string
+          created_at: string
+          followup_delay_hours: number
+          followups_enabled: boolean
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          followup_delay_hours?: number
+          followups_enabled?: boolean
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          followup_delay_hours?: number
+          followups_enabled?: boolean
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -407,6 +445,7 @@ export type Database = {
           email: string
           id: string
           name: string
+          seller_followups_enabled: boolean
           updated_at: string
           user_id: string
         }
@@ -416,6 +455,7 @@ export type Database = {
           email: string
           id?: string
           name: string
+          seller_followups_enabled?: boolean
           updated_at?: string
           user_id: string
         }
@@ -425,6 +465,7 @@ export type Database = {
           email?: string
           id?: string
           name?: string
+          seller_followups_enabled?: boolean
           updated_at?: string
           user_id?: string
         }
