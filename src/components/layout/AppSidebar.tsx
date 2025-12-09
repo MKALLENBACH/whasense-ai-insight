@@ -3,13 +3,51 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { mockAlerts } from "@/data/mockData";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 const AppSidebar = () => {
   const { user, logout } = useAuth();
-  const unreadAlerts = mockAlerts.filter((a) => !a.isRead).length;
+  const [alertCount, setAlertCount] = useState(0);
 
-interface NavLinkItem {
+  useEffect(() => {
+    const fetchAlertCount = async () => {
+      if (!user?.id) return;
+      
+      const { count, error } = await supabase
+        .from('alerts')
+        .select('*', { count: 'exact', head: true })
+        .eq('seller_id', user.id);
+      
+      if (!error && count !== null) {
+        setAlertCount(count);
+      }
+    };
+
+    fetchAlertCount();
+
+    // Subscribe to realtime changes
+    const channel = supabase
+      .channel('sidebar-alerts')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'alerts'
+        },
+        () => {
+          fetchAlertCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  interface NavLinkItem {
     to: string;
     icon: typeof MessageSquare;
     label: string;
@@ -18,7 +56,7 @@ interface NavLinkItem {
 
   const vendedorLinks: NavLinkItem[] = [
     { to: "/conversas", icon: MessageSquare, label: "Conversas" },
-    { to: "/alertas", icon: Bell, label: "Alertas", badge: unreadAlerts },
+    { to: "/alertas", icon: Bell, label: "Alertas", badge: alertCount },
     { to: "/whatsapp-connect", icon: Smartphone, label: "WhatsApp" },
   ];
 
@@ -60,7 +98,7 @@ interface NavLinkItem {
           >
             <link.icon className="h-5 w-5" />
             {link.label}
-            {link.badge && link.badge > 0 && (
+            {link.badge !== undefined && link.badge > 0 && (
               <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-xs font-semibold text-destructive-foreground">
                 {link.badge}
               </span>
