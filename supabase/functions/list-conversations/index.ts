@@ -45,8 +45,25 @@ serve(async (req) => {
 
     console.log('Fetching conversations for seller:', user.id);
 
-    // Get all customers that have messages with this seller
-    const { data: messages, error: messagesError } = await supabase
+    // Get user role and company
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const isManager = roleData?.role === 'manager';
+
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const companyId = profileData?.company_id;
+
+    // Get all customers that have messages with this seller (or all for manager)
+    let messagesQuery = supabase
       .from('messages')
       .select(`
         id,
@@ -54,15 +71,23 @@ serve(async (req) => {
         direction,
         timestamp,
         customer_id,
+        seller_id,
         customers (
           id,
           name,
           phone,
-          email
+          email,
+          lead_status,
+          seller_id
         )
       `)
-      .eq('seller_id', user.id)
       .order('timestamp', { ascending: false });
+
+    if (!isManager) {
+      messagesQuery = messagesQuery.eq('seller_id', user.id);
+    }
+
+    const { data: messages, error: messagesError } = await messagesQuery;
 
     if (messagesError) {
       console.error('Error fetching messages:', messagesError);
@@ -86,24 +111,47 @@ serve(async (req) => {
 
     for (const message of messages || []) {
       const customerId = message.customer_id;
+      const customer = message.customers as any;
+      
+      // Skip if no customer data
+      if (!customer) continue;
       
       if (!conversationsMap.has(customerId)) {
         conversationsMap.set(customerId, {
           id: customerId,
-          customer: message.customers,
+          customer: {
+            ...customer,
+            lead_status: customer.lead_status || 'pending',
+          },
           lastMessage: message.content,
           lastMessageTime: message.timestamp,
           lastMessageDirection: message.direction,
+          sellerId: message.seller_id,
           insight: null,
           messageCount: 1,
           hasRisk: false,
           saleStatus: salesMap.get(customerId) || null,
+          leadStatus: customer.lead_status || 'pending',
         });
         customerMessageIds.set(customerId, [message.id]);
       } else {
         conversationsMap.get(customerId).messageCount++;
         customerMessageIds.get(customerId)?.push(message.id);
       }
+    }
+
+    // Filter by company for manager
+    let filteredConversations = Array.from(conversationsMap.values());
+    
+    if (isManager && companyId) {
+      // For managers, we need to filter by company - get customers with company_id
+      const { data: companyCustomers } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('company_id', companyId);
+      
+      const companyCustomerIds = new Set(companyCustomers?.map(c => c.id) || []);
+      filteredConversations = filteredConversations.filter(c => companyCustomerIds.has(c.id));
     }
 
     // Get the latest insight for each conversation (from incoming messages)
@@ -133,12 +181,26 @@ serve(async (req) => {
       }
     }
 
-    const conversations = Array.from(conversationsMap.values());
+    // Get seller names for manager view
+    if (isManager) {
+      const sellerIds = [...new Set(filteredConversations.map(c => c.sellerId))];
+      const { data: sellers } = await supabase
+        .from('profiles')
+        .select('user_id, name')
+        .in('user_id', sellerIds);
 
-    console.log(`Found ${conversations.length} conversations`);
+      const sellerMap = new Map(sellers?.map(s => [s.user_id, s.name]) || []);
+      
+      filteredConversations = filteredConversations.map(c => ({
+        ...c,
+        sellerName: sellerMap.get(c.sellerId) || 'Vendedor',
+      }));
+    }
+
+    console.log(`Found ${filteredConversations.length} conversations`);
 
     return new Response(
-      JSON.stringify({ conversations }),
+      JSON.stringify({ conversations: filteredConversations }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

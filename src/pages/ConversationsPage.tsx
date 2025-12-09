@@ -1,12 +1,33 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
-import ConversationList from "@/components/conversation/ConversationList";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Conversation, AIInsight, LeadTemperature } from "@/types";
-import { MessageSquare, Loader2, RefreshCw } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  MessageSquare, 
+  Loader2, 
+  RefreshCw, 
+  Clock, 
+  Flame, 
+  ThermometerSun, 
+  Snowflake,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Search,
+  User,
+  Building2,
+} from "lucide-react";
 import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 interface ConversationData {
   id: string;
@@ -15,10 +36,13 @@ interface ConversationData {
     name: string;
     phone: string | null;
     email: string | null;
+    lead_status: string;
   };
   lastMessage: string;
   lastMessageTime: string;
   lastMessageDirection: string;
+  sellerId?: string;
+  sellerName?: string;
   insight: {
     sentiment: string;
     intention: string;
@@ -30,13 +54,23 @@ interface ConversationData {
   messageCount: number;
   hasRisk: boolean;
   saleStatus: "won" | "lost" | null;
+  leadStatus: string;
 }
 
+const temperatureConfig = {
+  hot: { icon: Flame, label: "Quente", color: "text-destructive", bgColor: "bg-destructive/10" },
+  warm: { icon: ThermometerSun, label: "Morno", color: "text-warning", bgColor: "bg-warning/10" },
+  cold: { icon: Snowflake, label: "Frio", color: "text-muted-foreground", bgColor: "bg-muted" },
+};
+
 const ConversationsPage = () => {
-  const { session } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const { session, isManager } = useAuth();
+  const navigate = useNavigate();
+  const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"pending" | "completed">("pending");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchConversations = async () => {
     if (!session?.access_token) return;
@@ -50,37 +84,7 @@ const ConversationsPage = () => {
 
       if (error) throw error;
 
-      const conversationsData: ConversationData[] = data?.conversations || [];
-
-      // Transform to app format
-      const transformedConversations: Conversation[] = conversationsData.map((conv) => ({
-        id: conv.id,
-        contact: {
-          id: conv.customer.id,
-          name: conv.customer.name,
-          phone: conv.customer.phone || "",
-          avatar: undefined,
-          company: undefined,
-        },
-        lastMessage: conv.lastMessage,
-        lastMessageTime: new Date(conv.lastMessageTime),
-        unreadCount: 0,
-        leadTemperature: (conv.insight?.temperature as LeadTemperature) || "cold",
-        saleStatus: conv.saleStatus || "pending",
-        assignedTo: "",
-        aiInsight: conv.insight ? {
-          emotion: conv.insight.sentiment,
-          emotionScore: parseInt(conv.insight.intention) || 0,
-          purchaseIntent: parseInt(conv.insight.intention) || 0,
-          objections: conv.insight.objection !== "none" ? [conv.insight.objection] : [],
-          suggestedResponses: conv.insight.suggestion ? [conv.insight.suggestion] : [],
-          leadTemperature: (conv.insight.temperature as LeadTemperature) || "cold",
-          keyTopics: [],
-        } : undefined,
-      }));
-
-      setConversations(transformedConversations);
-
+      setConversations(data?.conversations || []);
     } catch (error) {
       console.error('Error fetching conversations:', error);
       toast.error('Erro ao carregar conversas');
@@ -94,9 +98,200 @@ const ConversationsPage = () => {
     fetchConversations();
   }, [session]);
 
+  // Realtime subscription for messages
+  useEffect(() => {
+    const channel = supabase
+      .channel('conversations-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages',
+        },
+        () => {
+          fetchConversations();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'customers',
+        },
+        () => {
+          fetchConversations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     fetchConversations();
+  };
+
+  // Filter conversations by tab
+  const pendingConversations = conversations.filter(
+    c => !c.leadStatus || c.leadStatus === 'pending' || c.leadStatus === 'in_progress'
+  );
+  const completedConversations = conversations.filter(
+    c => c.leadStatus === 'won' || c.leadStatus === 'lost'
+  );
+
+  // Apply search filter
+  const filterBySearch = (convs: ConversationData[]) => {
+    if (!searchQuery.trim()) return convs;
+    const query = searchQuery.toLowerCase();
+    return convs.filter(c => 
+      c.customer.name.toLowerCase().includes(query) ||
+      c.customer.phone?.toLowerCase().includes(query) ||
+      c.sellerName?.toLowerCase().includes(query)
+    );
+  };
+
+  const currentConversations = filterBySearch(
+    activeTab === "pending" ? pendingConversations : completedConversations
+  );
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const getAlerts = (conv: ConversationData): string[] => {
+    const alerts: string[] = [];
+    
+    if (conv.leadStatus === 'won' || conv.leadStatus === 'lost') return alerts;
+
+    // Check for unanswered message
+    if (conv.lastMessageDirection === 'incoming') {
+      const minutesAgo = (Date.now() - new Date(conv.lastMessageTime).getTime()) / 1000 / 60;
+      if (minutesAgo > 10) {
+        alerts.push(`Aguardando resposta há ${Math.round(minutesAgo)} min`);
+      } else if (minutesAgo > 5) {
+        alerts.push('Cliente aguardando resposta');
+      }
+    }
+
+    // Hot lead
+    if (conv.insight?.temperature === 'hot') {
+      alerts.push('Lead quente!');
+    }
+
+    // Objection
+    if (conv.insight?.objection && conv.insight.objection !== 'none') {
+      alerts.push('Objeção detectada');
+    }
+
+    return alerts;
+  };
+
+  const renderConversationCard = (conv: ConversationData) => {
+    const temperature = conv.insight?.temperature || 'cold';
+    const TempIcon = temperatureConfig[temperature as keyof typeof temperatureConfig]?.icon || Snowflake;
+    const tempColor = temperatureConfig[temperature as keyof typeof temperatureConfig]?.color || 'text-muted-foreground';
+    const alerts = getAlerts(conv);
+    const isCompleted = conv.leadStatus === 'won' || conv.leadStatus === 'lost';
+
+    return (
+      <div
+        key={conv.id}
+        onClick={() => navigate(`/chat/${conv.id}`)}
+        className={cn(
+          "p-4 border-b border-border hover:bg-muted/50 cursor-pointer transition-colors",
+          alerts.length > 0 && !isCompleted && "border-l-4 border-l-warning"
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <Avatar className="h-10 w-10 flex-shrink-0">
+            <AvatarFallback className="bg-primary/10 text-primary text-sm">
+              {getInitials(conv.customer.name)}
+            </AvatarFallback>
+          </Avatar>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-medium truncate">{conv.customer.name}</span>
+                {!isCompleted && (
+                  <TempIcon className={cn("h-4 w-4 flex-shrink-0", tempColor)} />
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground flex-shrink-0">
+                {formatDistanceToNow(new Date(conv.lastMessageTime), {
+                  addSuffix: true,
+                  locale: ptBR,
+                })}
+              </span>
+            </div>
+
+            {/* Seller name for manager */}
+            {isManager && conv.sellerName && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                <User className="h-3 w-3" />
+                <span>{conv.sellerName}</span>
+              </div>
+            )}
+
+            <p className="text-sm text-muted-foreground truncate mt-1">
+              {conv.lastMessage}
+            </p>
+
+            {/* Alerts for pending */}
+            {!isCompleted && alerts.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {alerts.map((alert, idx) => (
+                  <Badge 
+                    key={idx} 
+                    variant="outline" 
+                    className="text-[10px] px-1.5 py-0 border-warning text-warning"
+                  >
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    {alert}
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            {/* Status for completed */}
+            {isCompleted && (
+              <div className="mt-2">
+                <Badge 
+                  className={cn(
+                    "text-xs",
+                    conv.leadStatus === 'won' 
+                      ? "bg-success text-success-foreground" 
+                      : "bg-destructive text-destructive-foreground"
+                  )}
+                >
+                  {conv.leadStatus === 'won' ? (
+                    <>
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Venda Fechada
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-3 w-3 mr-1" />
+                      Venda Perdida
+                    </>
+                  )}
+                </Badge>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (isLoading) {
@@ -116,34 +311,77 @@ const ConversationsPage = () => {
     <AppLayout>
       <div className="h-[calc(100vh-3rem)] flex flex-col">
         <div className="bg-card rounded-lg border border-border overflow-hidden flex flex-col flex-1">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <h2 className="font-semibold">Conversas</h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="h-8 w-8"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </Button>
-          </div>
-          {conversations.length > 0 ? (
-            <ConversationList
-              conversations={conversations}
-              selectedId={null}
-              onSelect={() => {}}
-              navigateToChat
-            />
-          ) : (
-            <div className="flex-1 flex items-center justify-center p-4">
-              <div className="text-center text-muted-foreground">
-                <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-sm">Nenhuma conversa ainda</p>
-                <p className="text-xs mt-1">As conversas aparecerão aqui</p>
-              </div>
+          {/* Header */}
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-lg">Conversas</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="h-8 w-8"
+              >
+                <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+              </Button>
             </div>
-          )}
+
+            {/* Search */}
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome, telefone..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "pending" | "completed")}>
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="pending" className="gap-2">
+                  <Clock className="h-4 w-4" />
+                  Pendente
+                  <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs">
+                    {pendingConversations.length}
+                  </Badge>
+                </TabsTrigger>
+                <TabsTrigger value="completed" className="gap-2">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Concluída
+                  <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs">
+                    {completedConversations.length}
+                  </Badge>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {/* Conversations List */}
+          <ScrollArea className="flex-1">
+            {currentConversations.length > 0 ? (
+              <div>
+                {currentConversations.map(renderConversationCard)}
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center p-8 h-64">
+                <div className="text-center text-muted-foreground">
+                  <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-sm">
+                    {activeTab === "pending" 
+                      ? "Nenhuma conversa pendente" 
+                      : "Nenhuma venda concluída"}
+                  </p>
+                  <p className="text-xs mt-1">
+                    {activeTab === "pending"
+                      ? "Novas conversas aparecerão aqui"
+                      : "Vendas finalizadas aparecerão aqui"}
+                  </p>
+                </div>
+              </div>
+            )}
+          </ScrollArea>
         </div>
       </div>
     </AppLayout>
