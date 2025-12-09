@@ -98,7 +98,10 @@ const ConversationsPage = () => {
   const [selectedIncompleteConv, setSelectedIncompleteConv] = useState<ConversationData | null>(null);
 
   const fetchConversations = async () => {
-    if (!session?.access_token) return;
+    if (!session?.access_token) {
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const { data, error } = await supabase.functions.invoke('list-conversations', {
@@ -117,9 +120,14 @@ const ConversationsPage = () => {
         .select('id, customer_id, alert_type, severity, message');
       
       setAlerts(alertsData || []);
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-      toast.error('Erro ao carregar conversas');
+    } catch (error: any) {
+      // Don't show error toast for auth-related errors (user logged out)
+      if (error?.message?.includes('401') || error?.message?.includes('token') || error?.message?.includes('auth')) {
+        console.log('Session expired, skipping fetch');
+      } else {
+        console.error('Error fetching conversations:', error);
+        toast.error('Erro ao carregar conversas');
+      }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -127,7 +135,11 @@ const ConversationsPage = () => {
   };
 
   useEffect(() => {
-    fetchConversations();
+    if (session?.access_token) {
+      fetchConversations();
+    } else {
+      setIsLoading(false);
+    }
   }, [session]);
 
   // Realtime subscription for messages, customers, sales, alerts, and sale_cycles
