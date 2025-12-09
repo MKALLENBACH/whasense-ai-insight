@@ -3,7 +3,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import ConversationList from "@/components/conversation/ConversationList";
 import ChatWindow from "@/components/conversation/ChatWindow";
 import AIInsightsPanel from "@/components/conversation/AIInsightsPanel";
-import { mockConversations, mockMessages, mockAIInsight } from "@/data/mockData";
+import { mockConversations, mockMessages, mockAIInsights } from "@/data/mockData";
 import { Message } from "@/types";
 import { MessageSquare } from "lucide-react";
 
@@ -76,8 +76,11 @@ const ConversationsPage = () => {
 
         {/* AI Insights Panel */}
         <div className="w-80 flex-shrink-0">
-          {selectedConversation ? (
-            <AIInsightsPanel insight={mockAIInsight} onUseSuggestion={handleUseSuggestion} />
+          {selectedConversation && selectedConversationId ? (
+            <AIInsightsPanel 
+              insight={mockAIInsights[selectedConversationId]} 
+              onUseSuggestion={handleUseSuggestion} 
+            />
           ) : (
             <div className="h-full bg-card rounded-lg border border-border flex items-center justify-center">
               <p className="text-sm text-muted-foreground">Insights aparecerão aqui</p>

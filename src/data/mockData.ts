@@ -290,18 +290,72 @@ export const mockMessages: Record<string, Message[]> = {
   ],
 };
 
-export const mockAIInsight: AIInsight = {
-  emotion: "Interessado e Ansioso",
-  emotionScore: 85,
-  purchaseIntent: 78,
-  objections: ["Prazo de entrega", "Custo-benefício"],
-  suggestedResponses: [
-    "A ativação é imediata após a confirmação do pagamento! 🚀",
-    "Para o plano Pro, você tem acesso liberado em até 24 horas.",
-    "Posso garantir uma condição especial se fecharmos hoje!",
-  ],
-  leadTemperature: "hot",
-  keyTopics: ["planos", "preço", "prazo"],
+export const mockAIInsights: Record<string, AIInsight> = {
+  "1": {
+    emotion: "Interessado e Ansioso",
+    emotionScore: 85,
+    purchaseIntent: 78,
+    objections: ["Prazo de entrega"],
+    suggestedResponses: [
+      "A ativação é imediata após a confirmação do pagamento! 🚀",
+      "Para o plano Pro, você tem acesso liberado em até 24 horas.",
+      "Posso garantir uma condição especial se fecharmos hoje!",
+    ],
+    leadTemperature: "hot",
+    keyTopics: ["planos", "preço", "prazo"],
+  },
+  "2": {
+    emotion: "Hesitante e Cauteloso",
+    emotionScore: 45,
+    purchaseIntent: 35,
+    objections: ["Preço elevado", "Precisa de aprovação interna"],
+    suggestedResponses: [
+      "Posso enviar uma proposta detalhada para você apresentar internamente.",
+      "Temos opção de parcelamento em até 12x sem juros!",
+      "Que tal uma call rápida para esclarecer todas as dúvidas?",
+    ],
+    leadTemperature: "warm",
+    keyTopics: ["investimento", "consultoria", "aprovação"],
+  },
+  "3": {
+    emotion: "Empolgado e Decidido",
+    emotionScore: 90,
+    purchaseIntent: 85,
+    objections: ["Desconto para volume"],
+    suggestedResponses: [
+      "Para 50 usuários, consigo um desconto de 20% no valor total! 🎉",
+      "Startups têm condições especiais: 3 meses grátis no plano anual.",
+      "Posso enviar a proposta personalizada ainda hoje!",
+    ],
+    leadTemperature: "hot",
+    keyTopics: ["startup", "escalabilidade", "volume", "desconto"],
+  },
+  "4": {
+    emotion: "Neutro e Informativo",
+    emotionScore: 30,
+    purchaseIntent: 15,
+    objections: ["Apenas buscando informações", "Sem urgência"],
+    suggestedResponses: [
+      "Fico à disposição caso surjam novas dúvidas!",
+      "Posso enviar um material completo sobre nossas integrações?",
+      "Que tal agendar uma demonstração sem compromisso?",
+    ],
+    leadTemperature: "cold",
+    keyTopics: ["suporte", "integrações", "informações"],
+  },
+  "5": {
+    emotion: "Confiante e Satisfeito",
+    emotionScore: 95,
+    purchaseIntent: 100,
+    objections: [],
+    suggestedResponses: [
+      "Contrato enviado! Bem-vinda à nossa família de clientes! 🎊",
+      "Seu acesso será liberado em até 2 horas após a confirmação.",
+      "Nosso time de onboarding entrará em contato em breve!",
+    ],
+    leadTemperature: "hot",
+    keyTopics: ["fechamento", "contrato", "pagamento"],
+  },
 };
 
 export const mockDashboardMetrics: DashboardMetrics = {
