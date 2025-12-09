@@ -267,6 +267,7 @@ const ChatPage = () => {
           message: messageContent, 
           message_id: messageId,
           cycleMessages,
+          companyId: user?.companyId, // Pass company ID for script lookup
         },
       });
 
