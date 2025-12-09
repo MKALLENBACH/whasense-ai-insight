@@ -14,6 +14,8 @@ import HistoryPage from "./pages/HistoryPage";
 import WhatsAppConnectPage from "./pages/WhatsAppConnectPage";
 import WhatsAppStatusPage from "./pages/WhatsAppStatusPage";
 import SellersPage from "./pages/SellersPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +30,8 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             
             {/* Seller routes */}
             <Route 
