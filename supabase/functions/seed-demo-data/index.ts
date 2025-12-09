@@ -101,14 +101,50 @@ serve(async (req) => {
 
     const results: string[] = [];
 
-    // 1. Create or get company
-    let companyId: string;
+    // 0. Get company first to clean up data
     const { data: existingCompany } = await supabase
       .from('companies')
       .select('id')
       .eq('name', DEMO_COMPANY_NAME)
       .maybeSingle();
 
+    if (existingCompany) {
+      // Clean up ALL existing data for this company
+      console.log('Cleaning up existing data for company:', existingCompany.id);
+      
+      // Delete insights (depends on messages)
+      await supabase.from('insights').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      
+      // Delete alerts
+      await supabase.from('alerts').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      
+      // Delete sales
+      await supabase.from('sales').delete().eq('company_id', existingCompany.id);
+      
+      // Get customers for this company
+      const { data: customers } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('company_id', existingCompany.id);
+      
+      if (customers && customers.length > 0) {
+        const customerIds = customers.map(c => c.id);
+        
+        // Delete messages for these customers
+        await supabase.from('messages').delete().in('customer_id', customerIds);
+        
+        // Delete sale_cycles for these customers
+        await supabase.from('sale_cycles').delete().in('customer_id', customerIds);
+        
+        // Delete customers
+        await supabase.from('customers').delete().eq('company_id', existingCompany.id);
+      }
+      
+      results.push(`🧹 Dados existentes limpos`);
+    }
+
+    // 1. Create or get company
+    let companyId: string;
     if (existingCompany) {
       companyId = existingCompany.id;
       results.push(`✅ Empresa "${DEMO_COMPANY_NAME}" já existe: ${companyId}`);
