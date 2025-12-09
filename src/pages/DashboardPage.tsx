@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   MessageSquare,
   TrendingUp,
@@ -33,6 +34,7 @@ interface DashboardMetrics {
   coldLeads: number;
   totalSellers: number;
   avgResponseTime: number;
+  pendingLeadsCount: number;
 }
 
 interface RecentSale {
@@ -56,6 +58,7 @@ const DashboardPage = () => {
     coldLeads: 0,
     totalSellers: 0,
     avgResponseTime: 0,
+    pendingLeadsCount: 0,
   });
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -81,15 +84,22 @@ const DashboardPage = () => {
 
       const sellerIds = sellers?.map(s => s.user_id) || [];
 
-      // Fetch messages to count conversations
-      const { data: customers, error: customersError } = await supabase
+      // Fetch customers - ONLY PENDING for lead distribution
+      const { data: allCustomers, error: customersError } = await supabase
         .from("customers")
-        .select("id")
+        .select("id, lead_status")
         .eq("company_id", user.companyId);
 
       if (customersError) console.error('Error fetching customers:', customersError);
 
-      const customerIds = customers?.map(c => c.id) || [];
+      // Filter only pending leads for distribution
+      const pendingCustomers = allCustomers?.filter(
+        c => !c.lead_status || c.lead_status === 'pending' || c.lead_status === 'in_progress'
+      ) || [];
+      const allCustomerIds = allCustomers?.map(c => c.id) || [];
+      const pendingCustomerIds = pendingCustomers.map(c => c.id);
+
+      const customerIds = allCustomerIds;
 
       // Fetch sales
       const { data: sales, error: salesError } = await supabase
@@ -104,11 +114,11 @@ const DashboardPage = () => {
       const lostSales = sales?.filter(s => s.status === "lost").length || 0;
       console.log('Won:', wonSales, 'Lost:', lostSales);
 
-      // Fetch all messages for these customers to get insight IDs
+      // Fetch all messages for PENDING customers only to get insight IDs
       const { data: messagesData } = await supabase
         .from("messages")
         .select("id, customer_id")
-        .in("customer_id", customerIds.length > 0 ? customerIds : ['']);
+        .in("customer_id", pendingCustomerIds.length > 0 ? pendingCustomerIds : ['']);
 
       const messageIds = messagesData?.map(m => m.id) || [];
 
@@ -119,7 +129,7 @@ const DashboardPage = () => {
         .in("message_id", messageIds.length > 0 ? messageIds : [''])
         .order("created_at", { ascending: false });
 
-      // Get the latest temperature per customer
+      // Get the latest temperature per PENDING customer only
       const customerTemperatures = new Map<string, string>();
       const messageToCustomer = new Map<string, string>();
       
@@ -136,16 +146,16 @@ const DashboardPage = () => {
         }
       });
 
-      // Count temperatures - customers without insights default to 'cold'
+      // Count temperatures - ONLY for PENDING customers
       const temperatureCounts = { hot: 0, warm: 0, cold: 0 };
-      customerIds.forEach(customerId => {
+      pendingCustomerIds.forEach(customerId => {
         const temp = customerTemperatures.get(customerId) || 'cold';
         if (temp === 'hot') temperatureCounts.hot++;
         else if (temp === 'warm') temperatureCounts.warm++;
         else temperatureCounts.cold++;
       });
 
-      // Count active conversations (customers with messages in last 24h)
+      // Count active conversations (all customers with messages in last 24h)
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: recentMessages } = await supabase
         .from("messages")
@@ -165,6 +175,7 @@ const DashboardPage = () => {
         coldLeads: temperatureCounts.cold,
         totalSellers: Math.max(0, sellerIds.length - 1), // Exclude manager
         avgResponseTime: 3, // Would need message timestamp analysis
+        pendingLeadsCount: pendingCustomerIds.length,
       });
 
       // Fetch recent sales with customer and seller names
@@ -347,9 +358,14 @@ const DashboardPage = () => {
           {/* Lead Temperature Distribution */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                Distribuição de Leads
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  Distribuição de Leads Pendentes
+                </span>
+                <Badge variant="outline" className="text-xs">
+                  {metrics.pendingLeadsCount} leads
+                </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>

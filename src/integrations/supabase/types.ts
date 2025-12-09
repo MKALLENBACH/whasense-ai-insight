@@ -41,6 +41,7 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          lead_status: Database["public"]["Enums"]["lead_status"]
           name: string
           phone: string | null
           seller_id: string | null
@@ -51,6 +52,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          lead_status?: Database["public"]["Enums"]["lead_status"]
           name: string
           phone?: string | null
           seller_id?: string | null
@@ -61,6 +63,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          lead_status?: Database["public"]["Enums"]["lead_status"]
           name?: string
           phone?: string | null
           seller_id?: string | null
@@ -318,6 +321,7 @@ export type Database = {
     }
     Enums: {
       app_role: "seller" | "manager"
+      lead_status: "pending" | "in_progress" | "won" | "lost"
       lead_temperature: "hot" | "warm" | "cold"
       message_direction: "incoming" | "outgoing"
       sale_status: "won" | "lost"
@@ -454,6 +458,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["seller", "manager"],
+      lead_status: ["pending", "in_progress", "won", "lost"],
       lead_temperature: ["hot", "warm", "cold"],
       message_direction: ["incoming", "outgoing"],
       sale_status: ["won", "lost"],
