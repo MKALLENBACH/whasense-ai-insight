@@ -63,37 +63,46 @@ const DashboardPage = () => {
 
   const fetchDashboardData = async () => {
     if (!user?.companyId) {
-      console.log('No company ID found for user');
+      console.log('No company ID found for user:', user);
       setIsLoading(false);
       return;
     }
 
+    console.log('Fetching dashboard data for company:', user.companyId);
+
     try {
       // Fetch sellers count
-      const { data: sellers } = await supabase
+      const { data: sellers, error: sellersError } = await supabase
         .from("profiles")
         .select("user_id")
         .eq("company_id", user.companyId);
 
+      if (sellersError) console.error('Error fetching sellers:', sellersError);
+
       const sellerIds = sellers?.map(s => s.user_id) || [];
 
       // Fetch messages to count conversations
-      const { data: customers } = await supabase
+      const { data: customers, error: customersError } = await supabase
         .from("customers")
         .select("id")
         .eq("company_id", user.companyId);
 
+      if (customersError) console.error('Error fetching customers:', customersError);
+
       const customerIds = customers?.map(c => c.id) || [];
 
       // Fetch sales
-      const { data: sales } = await supabase
+      const { data: sales, error: salesError } = await supabase
         .from("sales")
         .select("id, status, reason, created_at, customer_id, seller_id")
         .eq("company_id", user.companyId)
         .order("created_at", { ascending: false });
 
+      console.log('Sales fetched:', sales?.length, 'Error:', salesError);
+
       const wonSales = sales?.filter(s => s.status === "won").length || 0;
       const lostSales = sales?.filter(s => s.status === "lost").length || 0;
+      console.log('Won:', wonSales, 'Lost:', lostSales);
 
       // Fetch all messages for these customers to get insight IDs
       const { data: messagesData } = await supabase
