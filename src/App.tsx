@@ -19,6 +19,13 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
 
+// Admin pages
+import AdminLoginPage from "./pages/admin/AdminLoginPage";
+import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
+import AdminCompaniesPage from "./pages/admin/AdminCompaniesPage";
+import AdminCompanyDetailsPage from "./pages/admin/AdminCompanyDetailsPage";
+import AdminManagersPage from "./pages/admin/AdminManagersPage";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -33,6 +40,13 @@ const App = () => (
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            
+            {/* Admin routes */}
+            <Route path="/admin/login" element={<AdminLoginPage />} />
+            <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+            <Route path="/admin/empresas" element={<AdminCompaniesPage />} />
+            <Route path="/admin/empresa/:id" element={<AdminCompanyDetailsPage />} />
+            <Route path="/admin/gestores" element={<AdminManagersPage />} />
             
             {/* Seller routes */}
             <Route 

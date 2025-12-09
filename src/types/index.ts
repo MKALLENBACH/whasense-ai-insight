@@ -1,4 +1,4 @@
-export type UserRole = "vendedor" | "gestor";
+export type UserRole = "vendedor" | "gestor" | "admin";
 
 export type LeadTemperature = "cold" | "warm" | "hot";
 

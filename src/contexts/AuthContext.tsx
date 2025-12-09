@@ -31,7 +31,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
 
   const mapDbRoleToAppRole = (dbRole: string): UserRole => {
-    return dbRole === "manager" ? "gestor" : "vendedor";
+    if (dbRole === "manager") return "gestor";
+    if (dbRole === "admin") return "admin";
+    return "vendedor";
   };
 
   const fetchUserRole = async (userId: string): Promise<UserRole> => {
