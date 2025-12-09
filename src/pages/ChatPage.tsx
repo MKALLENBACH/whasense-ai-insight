@@ -126,10 +126,10 @@ const ChatPage = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (id && session) {
+    if (id && session && user) {
       fetchConversation();
     }
-  }, [id, session]);
+  }, [id, session, user, isManager, isSeller]);
 
   const fetchConversation = async () => {
     if (!id || !session?.access_token) return;
