@@ -26,3 +26,9 @@ verify_jwt = false
 
 [functions.whatsapp-manager]
 verify_jwt = false
+
+[functions.simulate-customer]
+verify_jwt = false
+
+[functions.seed-demo-data]
+verify_jwt = false
