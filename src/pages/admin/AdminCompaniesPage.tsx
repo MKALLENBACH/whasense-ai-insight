@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
+import EditCompanyModal from "@/components/admin/EditCompanyModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,8 @@ const AdminCompaniesPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
 
   // Form state
   const [companyName, setCompanyName] = useState("");
@@ -450,15 +453,28 @@ const AdminCompaniesPage = () => {
                         {format(new Date(company.created_at), "dd/MM/yyyy", { locale: ptBR })}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Link to={`/admin/empresa/${company.id}`}>
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
                             className="text-slate-400 hover:text-white"
+                            onClick={() => {
+                              setEditingCompany(company);
+                              setIsEditModalOpen(true);
+                            }}
                           >
-                            <Eye className="h-4 w-4" />
+                            <Edit className="h-4 w-4" />
                           </Button>
-                        </Link>
+                          <Link to={`/admin/empresa/${company.id}`}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-slate-400 hover:text-white"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -467,6 +483,14 @@ const AdminCompaniesPage = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Edit Company Modal */}
+        <EditCompanyModal
+          open={isEditModalOpen}
+          onOpenChange={setIsEditModalOpen}
+          company={editingCompany}
+          onSuccess={fetchCompanies}
+        />
       </div>
     </AdminLayout>
   );
