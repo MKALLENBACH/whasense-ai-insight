@@ -69,7 +69,6 @@ interface AIInsights {
 
 const GOAL_TYPES = {
   vendas: "Vendas",
-  faturamento: "Faturamento",
   conversas_ativas: "Conversas Ativas",
   taxa_resposta: "Taxa de Resposta (%)",
 };
