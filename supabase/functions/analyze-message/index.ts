@@ -1,4 +1,3 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -43,14 +42,9 @@ Sua função é analisar uma única mensagem enviada pelo cliente e retornar um 
 IMPORTANTE:
 - Responda SOMENTE o JSON.
 - Não adicione nenhuma explicação.
-- Não escreva texto fora do JSON.
+- Não escreva texto fora do JSON.`;
 
-Mensagem do cliente a analisar:
-"""
-{{message}}
-"""`;
-
-// IA Service - handles OpenAI communication
+// IA Service - handles Lovable AI communication
 async function analyzeMessage(message: string): Promise<{
   sentiment: string;
   intention: number;
@@ -59,28 +53,31 @@ async function analyzeMessage(message: string): Promise<{
   suggestion: string;
   next_action: string;
 }> {
-  const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+  const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
   
-  if (!openAIApiKey) {
-    throw new Error('OPENAI_API_KEY is not configured');
+  if (!lovableApiKey) {
+    throw new Error('LOVABLE_API_KEY is not configured');
   }
 
-  const prompt = ANALYSIS_PROMPT.replace('{{message}}', message);
+  const userPrompt = `Mensagem do cliente a analisar:
+"""
+${message}
+"""`;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${openAIApiKey}`,
+      'Authorization': `Bearer ${lovableApiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'google/gemini-2.5-flash',
       messages: [
         { 
           role: 'system', 
-          content: 'You are an AI that analyzes WhatsApp sales conversations. Always respond with valid JSON only.' 
+          content: ANALYSIS_PROMPT
         },
-        { role: 'user', content: prompt }
+        { role: 'user', content: userPrompt }
       ],
       temperature: 0.3,
       max_tokens: 500,
@@ -89,20 +86,37 @@ async function analyzeMessage(message: string): Promise<{
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('OpenAI API error:', response.status, errorText);
-    throw new Error(`OpenAI API error: ${response.status}`);
+    console.error('Lovable AI error:', response.status, errorText);
+    
+    if (response.status === 429) {
+      throw new Error('Rate limit exceeded. Please try again in a moment.');
+    }
+    if (response.status === 402) {
+      throw new Error('AI credits exhausted. Please add credits to continue.');
+    }
+    
+    throw new Error(`AI API error: ${response.status}`);
   }
 
   const data = await response.json();
   const content = data.choices[0]?.message?.content;
 
   if (!content) {
-    throw new Error('No content returned from OpenAI');
+    throw new Error('No content returned from AI');
   }
 
-  // Parse and validate JSON response
+  // Parse and validate JSON response - handle markdown code blocks
   try {
-    const parsed = JSON.parse(content.trim());
+    let jsonContent = content.trim();
+    
+    // Remove markdown code blocks if present
+    if (jsonContent.startsWith('```json')) {
+      jsonContent = jsonContent.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+    } else if (jsonContent.startsWith('```')) {
+      jsonContent = jsonContent.replace(/^```\n?/, '').replace(/\n?```$/, '');
+    }
+    
+    const parsed = JSON.parse(jsonContent);
     
     // Validate required fields
     const requiredFields = ['sentiment', 'intention', 'objection', 'temperature', 'suggestion', 'next_action'];
@@ -121,8 +135,16 @@ async function analyzeMessage(message: string): Promise<{
       next_action: String(parsed.next_action),
     };
   } catch (parseError) {
-    console.error('Failed to parse OpenAI response:', content);
-    throw new Error('Invalid JSON response from AI');
+    console.error('Failed to parse AI response:', content);
+    // Return default values instead of throwing
+    return {
+      sentiment: 'neutral',
+      intention: 50,
+      objection: 'none',
+      temperature: 'warm',
+      suggestion: 'Continue a conversa de forma natural.',
+      next_action: 'Responder ao cliente',
+    };
   }
 }
 
