@@ -54,7 +54,8 @@ const LoginPage = () => {
     try {
       const { role } = await login(email, password);
       toast.success("Login realizado com sucesso!");
-      navigate(role === "gestor" ? "/dashboard" : "/conversas");
+      // Use role returned from login, not user state (which may not be updated yet)
+      navigate(role === "gestor" ? "/dashboard" : "/conversas", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao fazer login");
     } finally {
