@@ -47,6 +47,7 @@ export type Database = {
           id: string
           intention: string | null
           message_id: string
+          next_action: string | null
           objection: string | null
           sentiment: string | null
           suggestion: string | null
@@ -57,6 +58,7 @@ export type Database = {
           id?: string
           intention?: string | null
           message_id: string
+          next_action?: string | null
           objection?: string | null
           sentiment?: string | null
           suggestion?: string | null
@@ -67,6 +69,7 @@ export type Database = {
           id?: string
           intention?: string | null
           message_id?: string
+          next_action?: string | null
           objection?: string | null
           sentiment?: string | null
           suggestion?: string | null
