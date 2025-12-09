@@ -25,7 +25,10 @@ export const useSaleCycles = ({ customerId, sellerId }: UseSaleCyclesOptions) =>
       if (error) throw error;
 
       // Type assertion to handle the database response
-      const typedCycles = (data || []) as SaleCycle[];
+      const typedCycles = (data || []).map((c) => ({
+        ...c,
+        last_activity_at: c.last_activity_at || null,
+      })) as SaleCycle[];
       setCycles(typedCycles);
 
       // Find active cycle (pending or in_progress)

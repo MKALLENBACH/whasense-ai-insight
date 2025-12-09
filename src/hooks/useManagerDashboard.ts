@@ -116,6 +116,10 @@ export function useManagerDashboard() {
         .select("*")
         .in("customer_id", customerIds.length > 0 ? customerIds : [""]);
 
+      // Separate active and closed cycles
+      const activeCycles = cycles?.filter(c => c.status === "pending" || c.status === "in_progress") || [];
+      const closedCycles = cycles?.filter(c => c.status === "won" || c.status === "lost") || [];
+
       // Get all sales
       const { data: sales } = await supabase
         .from("sales")
@@ -126,7 +130,7 @@ export function useManagerDashboard() {
       // Get all messages
       const { data: messages } = await supabase
         .from("messages")
-        .select("id, customer_id, seller_id, direction, timestamp")
+        .select("id, customer_id, seller_id, direction, timestamp, cycle_id")
         .in("customer_id", customerIds.length > 0 ? customerIds : [""]);
 
       const messageIds = messages?.map((m) => m.id) || [];
@@ -137,9 +141,12 @@ export function useManagerDashboard() {
         .select("*")
         .in("message_id", messageIds.length > 0 ? messageIds : [""]);
 
-      // Calculate KPIs
-      const pendingLeads = customers?.filter((c) => c.lead_status === "pending").length || 0;
-      const inProgressLeads = customers?.filter((c) => c.lead_status === "in_progress").length || 0;
+      // Calculate KPIs - use active cycles only for operational metrics
+      const activeCustomerIds = activeCycles.map(c => c.customer_id);
+      const pendingLeads = activeCycles.filter((c) => c.status === "pending").length;
+      const inProgressLeads = activeCycles.filter((c) => c.status === "in_progress").length;
+      
+      // Historical metrics from all sales
       const wonSales = sales?.filter((s) => s.status === "won").length || 0;
       const lostSales = sales?.filter((s) => s.status === "lost").length || 0;
       const totalSales = wonSales + lostSales;
@@ -171,12 +178,19 @@ export function useManagerDashboard() {
       const avgResponseTime = responseCount > 0 ? Math.round(totalResponseTime / responseCount) : 0;
 
       // Get hot leads (pending/in_progress with hot temperature)
+      // Get hot leads from ACTIVE cycles only
+      const activeMessageIds = messages
+        ?.filter(m => activeCycles.some(c => c.id === m.cycle_id))
+        .map(m => m.id) || [];
+      
+      const activeInsights = insights?.filter(i => activeMessageIds.includes(i.message_id)) || [];
+
       const messageToCustomer = new Map<string, string>();
       messages?.forEach((m) => messageToCustomer.set(m.id, m.customer_id));
 
       const customerTemperatures = new Map<string, string>();
-      insights
-        ?.filter((i) => i.temperature)
+      activeInsights
+        .filter((i) => i.temperature)
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .forEach((i) => {
           const customerId = messageToCustomer.get(i.message_id);
@@ -184,11 +198,6 @@ export function useManagerDashboard() {
             customerTemperatures.set(customerId, i.temperature!);
           }
         });
-
-      const activeCustomerIds =
-        customers
-          ?.filter((c) => c.lead_status === "pending" || c.lead_status === "in_progress")
-          .map((c) => c.id) || [];
 
       const hotLeads = activeCustomerIds.filter(
         (id) => customerTemperatures.get(id) === "hot"
@@ -204,13 +213,13 @@ export function useManagerDashboard() {
         hotLeads,
       });
 
-      // Lead distribution by seller
+      // Lead distribution by seller - ONLY ACTIVE CYCLES
       const bySeller = sellerProfiles.map((seller) => {
-        const sellerCustomers = customers?.filter((c) => c.seller_id === seller.user_id) || [];
+        const sellerActiveCycles = activeCycles.filter((c) => c.seller_id === seller.user_id);
         return {
           name: seller.name,
-          pending: sellerCustomers.filter((c) => c.lead_status === "pending").length,
-          inProgress: sellerCustomers.filter((c) => c.lead_status === "in_progress").length,
+          pending: sellerActiveCycles.filter((c) => c.status === "pending").length,
+          inProgress: sellerActiveCycles.filter((c) => c.status === "in_progress").length,
         };
       });
 
@@ -232,10 +241,8 @@ export function useManagerDashboard() {
         ],
       });
 
-      // Risk cycles - find cycles with issues
+      // Risk cycles - find cycles with issues (only active cycles)
       const risks: RiskCycle[] = [];
-      const activeCycles =
-        cycles?.filter((c) => c.status === "pending" || c.status === "in_progress") || [];
 
       for (const cycle of activeCycles) {
         const customer = customers?.find((c) => c.id === cycle.customer_id);
@@ -409,19 +416,17 @@ export function useManagerDashboard() {
       }
       setSalesTimeline(timeline);
 
-      // Recent sales
+      // Recent sales - use already defined closedCycles
       const recent: RecentSale[] = [];
-      const closedCycles =
-        cycles
-          ?.filter((c) => c.status === "won" || c.status === "lost")
-          .sort(
-            (a, b) =>
-              new Date(b.closed_at || b.created_at).getTime() -
-              new Date(a.closed_at || a.created_at).getTime()
-          )
-          .slice(0, 20) || [];
+      const sortedClosedCycles = closedCycles
+        .sort(
+          (a, b) =>
+            new Date(b.closed_at || b.created_at).getTime() -
+            new Date(a.closed_at || a.created_at).getTime()
+        )
+        .slice(0, 20);
 
-      for (const cycle of closedCycles) {
+      for (const cycle of sortedClosedCycles) {
         const customer = customers?.find((c) => c.id === cycle.customer_id);
         const seller = sellerProfiles.find((p) => p.user_id === cycle.seller_id);
         if (customer && seller) {

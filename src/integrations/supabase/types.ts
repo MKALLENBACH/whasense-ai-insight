@@ -265,6 +265,7 @@ export type Database = {
           created_at: string
           customer_id: string
           id: string
+          last_activity_at: string | null
           lost_reason: string | null
           seller_id: string
           status: Database["public"]["Enums"]["lead_status"]
@@ -275,6 +276,7 @@ export type Database = {
           created_at?: string
           customer_id: string
           id?: string
+          last_activity_at?: string | null
           lost_reason?: string | null
           seller_id: string
           status?: Database["public"]["Enums"]["lead_status"]
@@ -285,6 +287,7 @@ export type Database = {
           created_at?: string
           customer_id?: string
           id?: string
+          last_activity_at?: string | null
           lost_reason?: string | null
           seller_id?: string
           status?: Database["public"]["Enums"]["lead_status"]
