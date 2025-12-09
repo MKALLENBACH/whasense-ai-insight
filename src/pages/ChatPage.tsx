@@ -437,6 +437,87 @@ const ChatPage = () => {
     }
   };
 
+  // Handle audio recording and sending
+  const handleSendAudio = async (audioBlob: Blob) => {
+    if (!id || !user || isViewingHistory) return;
+
+    setIsSending(true);
+    
+    try {
+      // Get or create active cycle
+      const cycle = await getOrCreateActiveCycle();
+      if (!cycle) throw new Error("Failed to get or create cycle");
+
+      // Update cycle status to in_progress if it's pending
+      if (cycle.status === 'pending') {
+        await updateCycleStatus(cycle.id, 'in_progress');
+      }
+
+      // Upload audio to Supabase Storage
+      const fileName = `audio-${Date.now()}.webm`;
+      const filePath = `${user.companyId}/${id}/${cycle.id}/audio/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("message_attachments")
+        .upload(filePath, audioBlob, {
+          contentType: audioBlob.type || "audio/webm",
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("message_attachments")
+        .getPublicUrl(filePath);
+
+      // Create message with audio attachment
+      const { data: audioMsg, error: msgError } = await supabase
+        .from("messages")
+        .insert({
+          seller_id: user.id,
+          customer_id: id,
+          content: "[Transcrevendo áudio...]",
+          direction: "outgoing",
+          cycle_id: cycle.id,
+          attachment_url: urlData.publicUrl,
+          attachment_type: "audio",
+          attachment_name: fileName,
+        })
+        .select()
+        .single();
+
+      if (msgError) throw msgError;
+
+      setMessages((prev) => [...prev, audioMsg as unknown as Message]);
+      toast.success("Áudio enviado!");
+
+      // Trigger audio analysis in the background
+      supabase.functions.invoke("analyze-audio", {
+        body: {
+          audio_url: urlData.publicUrl,
+          message_id: audioMsg.id,
+          sender: "seller",
+        },
+      }).then(({ data, error }) => {
+        if (!error && data?.transcription) {
+          // Update local message with transcription
+          setMessages((prev) => 
+            prev.map(m => 
+              m.id === audioMsg.id 
+                ? { ...m, content: data.transcription }
+                : m
+            )
+          );
+        }
+      }).catch(console.error);
+
+    } catch (error) {
+      console.error("Error sending audio:", error);
+      toast.error("Erro ao enviar áudio");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const simulateIncomingMessage = async () => {
     if (!id || !user || isSimulatingResponse || isConversationCompleted || isViewingHistory) return;
 
@@ -687,6 +768,7 @@ const ChatPage = () => {
           {isSeller && !isConversationCompleted && !isViewingHistory && activeCycle && (
             <ChatInput
               onSendMessage={handleSendMessageWithAttachments}
+              onSendAudio={handleSendAudio}
               disabled={isSending}
               companyId={user?.companyId}
               customerId={id || ""}

@@ -97,35 +97,59 @@ const MessageBubble = ({
 
       case "audio":
         return (
-          <div className="flex items-center gap-2 bg-background/50 rounded-lg p-2">
-            <audio
-              id={`audio-${attachmentUrl}`}
-              src={attachmentUrl}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onEnded={() => setIsPlaying(false)}
-              className="hidden"
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 rounded-full"
-              onClick={() => {
-                const audio = document.getElementById(`audio-${attachmentUrl}`) as HTMLAudioElement;
-                if (audio) handleAudioToggle(audio);
-              }}
-            >
-              {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-            </Button>
-            <div className="flex-1">
-              <Music className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground ml-1">{attachmentName || "Áudio"}</span>
+          <div className={cn(
+            "rounded-lg overflow-hidden",
+            isOutgoing ? "bg-primary-foreground/10" : "bg-background"
+          )}>
+            <div className="flex items-center gap-3 p-3">
+              <audio
+                id={`audio-${attachmentUrl}`}
+                src={attachmentUrl}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onEnded={() => setIsPlaying(false)}
+                className="hidden"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-10 w-10 rounded-full shrink-0",
+                  isOutgoing 
+                    ? "bg-primary-foreground/20 hover:bg-primary-foreground/30" 
+                    : "bg-primary/10 hover:bg-primary/20"
+                )}
+                onClick={() => {
+                  const audio = document.getElementById(`audio-${attachmentUrl}`) as HTMLAudioElement;
+                  if (audio) handleAudioToggle(audio);
+                }}
+              >
+                {isPlaying ? (
+                  <Pause className={cn("h-5 w-5", isOutgoing ? "text-primary-foreground" : "text-primary")} />
+                ) : (
+                  <Play className={cn("h-5 w-5", isOutgoing ? "text-primary-foreground" : "text-primary")} />
+                )}
+              </Button>
+              <div className="flex-1 min-w-0">
+                <audio
+                  src={attachmentUrl}
+                  controls
+                  className="w-full max-w-[200px] h-8"
+                  style={{ 
+                    filter: isOutgoing ? "invert(1) hue-rotate(180deg)" : "none",
+                    opacity: 0.9
+                  }}
+                />
+              </div>
             </div>
-            <audio
-              src={attachmentUrl}
-              controls
-              className="w-full max-w-[200px]"
-            />
+            {content && content !== "[Áudio - transcrição não disponível]" && (
+              <div className={cn(
+                "px-3 pb-2 text-xs italic",
+                isOutgoing ? "text-primary-foreground/70" : "text-muted-foreground"
+              )}>
+                "{content}"
+              </div>
+            )}
           </div>
         );
 
