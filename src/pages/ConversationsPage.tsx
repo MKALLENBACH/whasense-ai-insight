@@ -23,11 +23,13 @@ import {
   Search,
   User,
   Building2,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import NewLeadModal from "@/components/lead/NewLeadModal";
 
 interface ConversationData {
   id: string;
@@ -37,6 +39,8 @@ interface ConversationData {
     phone: string | null;
     email: string | null;
     lead_status: string;
+    is_incomplete: boolean;
+    companyName: string | null;
   };
   lastMessage: string;
   lastMessageTime: string;
@@ -54,7 +58,9 @@ interface ConversationData {
   messageCount: number;
   hasRisk: boolean;
   saleStatus: "won" | "lost" | null;
+  saleReason: string | null;
   leadStatus: string;
+  isIncomplete: boolean;
 }
 
 const temperatureConfig = {
@@ -71,6 +77,10 @@ const ConversationsPage = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<"pending" | "completed">("pending");
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Modal state for incomplete leads
+  const [showLeadModal, setShowLeadModal] = useState(false);
+  const [selectedIncompleteConv, setSelectedIncompleteConv] = useState<ConversationData | null>(null);
 
   const fetchConversations = async () => {
     if (!session?.access_token) return;
@@ -124,6 +134,17 @@ const ConversationsPage = () => {
           fetchConversations();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sales',
+        },
+        () => {
+          fetchConversations();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -151,6 +172,7 @@ const ConversationsPage = () => {
     return convs.filter(c => 
       c.customer.name.toLowerCase().includes(query) ||
       c.customer.phone?.toLowerCase().includes(query) ||
+      c.customer.companyName?.toLowerCase().includes(query) ||
       c.sellerName?.toLowerCase().includes(query)
     );
   };
@@ -196,6 +218,15 @@ const ConversationsPage = () => {
     return alerts;
   };
 
+  const handleConversationClick = (conv: ConversationData) => {
+    if (conv.isIncomplete) {
+      setSelectedIncompleteConv(conv);
+      setShowLeadModal(true);
+    } else {
+      navigate(`/chat/${conv.id}`);
+    }
+  };
+
   const renderConversationCard = (conv: ConversationData) => {
     const temperature = conv.insight?.temperature || 'cold';
     const TempIcon = temperatureConfig[temperature as keyof typeof temperatureConfig]?.icon || Snowflake;
@@ -206,15 +237,21 @@ const ConversationsPage = () => {
     return (
       <div
         key={conv.id}
-        onClick={() => navigate(`/chat/${conv.id}`)}
+        onClick={() => handleConversationClick(conv)}
         className={cn(
           "p-4 border-b border-border hover:bg-muted/50 cursor-pointer transition-colors",
-          alerts.length > 0 && !isCompleted && "border-l-4 border-l-warning"
+          alerts.length > 0 && !isCompleted && "border-l-4 border-l-warning",
+          conv.isIncomplete && "border-l-4 border-l-orange-500 bg-orange-500/5"
         )}
       >
         <div className="flex items-start gap-3">
           <Avatar className="h-10 w-10 flex-shrink-0">
-            <AvatarFallback className="bg-primary/10 text-primary text-sm">
+            <AvatarFallback className={cn(
+              "text-sm",
+              conv.isIncomplete 
+                ? "bg-orange-500/10 text-orange-500" 
+                : "bg-primary/10 text-primary"
+            )}>
               {getInitials(conv.customer.name)}
             </AvatarFallback>
           </Avatar>
@@ -223,8 +260,17 @@ const ConversationsPage = () => {
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="font-medium truncate">{conv.customer.name}</span>
-                {!isCompleted && (
+                {!isCompleted && !conv.isIncomplete && (
                   <TempIcon className={cn("h-4 w-4 flex-shrink-0", tempColor)} />
+                )}
+                {conv.isIncomplete && (
+                  <Badge 
+                    variant="outline" 
+                    className="text-[10px] px-1.5 py-0 border-orange-500 bg-orange-500/10 text-orange-500"
+                  >
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                    Incompleto
+                  </Badge>
                 )}
               </div>
               <span className="text-xs text-muted-foreground flex-shrink-0">
@@ -234,6 +280,14 @@ const ConversationsPage = () => {
                 })}
               </span>
             </div>
+
+            {/* Company name */}
+            {conv.customer.companyName && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                <Building2 className="h-3 w-3" />
+                <span>{conv.customer.companyName}</span>
+              </div>
+            )}
 
             {/* Seller name for manager */}
             {isManager && conv.sellerName && (
@@ -265,7 +319,7 @@ const ConversationsPage = () => {
 
             {/* Status for completed */}
             {isCompleted && (
-              <div className="mt-2">
+              <div className="mt-2 space-y-1">
                 <Badge 
                   className={cn(
                     "text-xs",
@@ -286,6 +340,11 @@ const ConversationsPage = () => {
                     </>
                   )}
                 </Badge>
+                {conv.saleReason && conv.leadStatus === 'lost' && (
+                  <p className="text-xs text-muted-foreground">
+                    Motivo: {conv.saleReason}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -330,7 +389,7 @@ const ConversationsPage = () => {
             <div className="relative mb-4">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome, telefone..."
+                placeholder="Buscar por nome, telefone, empresa..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -384,6 +443,29 @@ const ConversationsPage = () => {
           </ScrollArea>
         </div>
       </div>
+
+      {/* Modal for incomplete leads */}
+      {selectedIncompleteConv && (
+        <NewLeadModal
+          open={showLeadModal}
+          onOpenChange={(open) => {
+            setShowLeadModal(open);
+            if (!open) setSelectedIncompleteConv(null);
+          }}
+          phoneNumber={selectedIncompleteConv.customer.phone || ""}
+          customerId={selectedIncompleteConv.id}
+          isEditMode={true}
+          existingData={{
+            name: selectedIncompleteConv.customer.name,
+            email: selectedIncompleteConv.customer.email,
+            companyId: null,
+          }}
+          onSuccess={() => {
+            fetchConversations();
+            navigate(`/chat/${selectedIncompleteConv.id}`);
+          }}
+        />
+      )}
     </AppLayout>
   );
 };

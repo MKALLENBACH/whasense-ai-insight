@@ -78,7 +78,9 @@ serve(async (req) => {
           phone,
           email,
           lead_status,
-          seller_id
+          seller_id,
+          is_incomplete,
+          company_id
         )
       `)
       .order('timestamp', { ascending: false });
@@ -94,16 +96,28 @@ serve(async (req) => {
       throw messagesError;
     }
 
-    // Get all sales for this seller
-    const { data: sales } = await supabase
+    // Get all sales for this seller (or all for manager in company)
+    let salesQuery = supabase
       .from('sales')
-      .select('customer_id, status')
-      .eq('seller_id', user.id);
+      .select('customer_id, status, reason');
+
+    if (!isManager) {
+      salesQuery = salesQuery.eq('seller_id', user.id);
+    }
+
+    const { data: sales } = await salesQuery;
 
     const salesMap = new Map();
     for (const sale of sales || []) {
-      salesMap.set(sale.customer_id, sale.status);
+      salesMap.set(sale.customer_id, { status: sale.status, reason: sale.reason });
     }
+
+    // Get company names
+    const { data: companiesData } = await supabase
+      .from('companies')
+      .select('id, name');
+    
+    const companiesMap = new Map(companiesData?.map(c => [c.id, c.name]) || []);
 
     // Group messages by customer
     const conversationsMap = new Map();
@@ -117,11 +131,14 @@ serve(async (req) => {
       if (!customer) continue;
       
       if (!conversationsMap.has(customerId)) {
+        const saleInfo = salesMap.get(customerId);
         conversationsMap.set(customerId, {
           id: customerId,
           customer: {
             ...customer,
             lead_status: customer.lead_status || 'pending',
+            is_incomplete: customer.is_incomplete || false,
+            companyName: customer.company_id ? companiesMap.get(customer.company_id) : null,
           },
           lastMessage: message.content,
           lastMessageTime: message.timestamp,
@@ -130,8 +147,10 @@ serve(async (req) => {
           insight: null,
           messageCount: 1,
           hasRisk: false,
-          saleStatus: salesMap.get(customerId) || null,
+          saleStatus: saleInfo?.status || null,
+          saleReason: saleInfo?.reason || null,
           leadStatus: customer.lead_status || 'pending',
+          isIncomplete: customer.is_incomplete || false,
         });
         customerMessageIds.set(customerId, [message.id]);
       } else {
@@ -167,17 +186,19 @@ serve(async (req) => {
       if (insights && insights.length > 0) {
         const insight = insights[0];
         const conv = conversationsMap.get(customerId);
-        conv.insight = {
-          sentiment: insight.sentiment,
-          intention: insight.intention,
-          objection: insight.objection,
-          temperature: insight.temperature,
-          suggestion: insight.suggestion,
-          next_action: insight.next_action,
-        };
-        conv.hasRisk = insight.sentiment === 'angry' || 
-                       insight.sentiment === 'negative' || 
-                       (insight.objection && insight.objection !== 'none');
+        if (conv) {
+          conv.insight = {
+            sentiment: insight.sentiment,
+            intention: insight.intention,
+            objection: insight.objection,
+            temperature: insight.temperature,
+            suggestion: insight.suggestion,
+            next_action: insight.next_action,
+          };
+          conv.hasRisk = insight.sentiment === 'angry' || 
+                         insight.sentiment === 'negative' || 
+                         (insight.objection && insight.objection !== 'none');
+        }
       }
     }
 
@@ -196,6 +217,15 @@ serve(async (req) => {
         sellerName: sellerMap.get(c.sellerId) || 'Vendedor',
       }));
     }
+
+    // Sort: incomplete leads first, then by last message time
+    filteredConversations.sort((a, b) => {
+      // Incomplete leads first
+      if (a.isIncomplete && !b.isIncomplete) return -1;
+      if (!a.isIncomplete && b.isIncomplete) return 1;
+      // Then by last message time (most recent first)
+      return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
+    });
 
     console.log(`Found ${filteredConversations.length} conversations`);
 
