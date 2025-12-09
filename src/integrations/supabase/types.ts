@@ -14,6 +14,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_scripts: {
+        Row: {
+          ai_persona: string | null
+          closing_techniques: string | null
+          company_id: string
+          created_at: string
+          example_responses: string | null
+          forbidden_phrases: string | null
+          id: string
+          is_active: boolean
+          objection_handling: string | null
+          opening_messages: string | null
+          product_context: string | null
+          recommended_phrases: string | null
+          sales_playbook: string | null
+          script_name: string
+          tone_of_voice: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_persona?: string | null
+          closing_techniques?: string | null
+          company_id: string
+          created_at?: string
+          example_responses?: string | null
+          forbidden_phrases?: string | null
+          id?: string
+          is_active?: boolean
+          objection_handling?: string | null
+          opening_messages?: string | null
+          product_context?: string | null
+          recommended_phrases?: string | null
+          sales_playbook?: string | null
+          script_name: string
+          tone_of_voice?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_persona?: string | null
+          closing_techniques?: string | null
+          company_id?: string
+          created_at?: string
+          example_responses?: string | null
+          forbidden_phrases?: string | null
+          id?: string
+          is_active?: boolean
+          objection_handling?: string | null
+          opening_messages?: string | null
+          product_context?: string | null
+          recommended_phrases?: string | null
+          sales_playbook?: string | null
+          script_name?: string
+          tone_of_voice?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_scripts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alerts: {
         Row: {
           alert_type: string
@@ -144,6 +209,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      default_ai_script: {
+        Row: {
+          ai_persona: string | null
+          closing_techniques: string | null
+          created_at: string
+          example_responses: string | null
+          forbidden_phrases: string | null
+          id: string
+          objection_handling: string | null
+          opening_messages: string | null
+          product_context: string | null
+          recommended_phrases: string | null
+          sales_playbook: string | null
+          script_name: string
+          tone_of_voice: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_persona?: string | null
+          closing_techniques?: string | null
+          created_at?: string
+          example_responses?: string | null
+          forbidden_phrases?: string | null
+          id?: string
+          objection_handling?: string | null
+          opening_messages?: string | null
+          product_context?: string | null
+          recommended_phrases?: string | null
+          sales_playbook?: string | null
+          script_name?: string
+          tone_of_voice?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_persona?: string | null
+          closing_techniques?: string | null
+          created_at?: string
+          example_responses?: string | null
+          forbidden_phrases?: string | null
+          id?: string
+          objection_handling?: string | null
+          opening_messages?: string | null
+          product_context?: string | null
+          recommended_phrases?: string | null
+          sales_playbook?: string | null
+          script_name?: string
+          tone_of_voice?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       insights: {
         Row: {
