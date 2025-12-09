@@ -17,20 +17,26 @@ export type Database = {
       companies: {
         Row: {
           created_at: string
+          description: string | null
           id: string
           name: string
+          segment: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
+          description?: string | null
           id?: string
           name: string
+          segment?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
+          description?: string | null
           id?: string
           name?: string
+          segment?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -41,6 +47,7 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          is_incomplete: boolean
           lead_status: Database["public"]["Enums"]["lead_status"]
           name: string
           phone: string | null
@@ -52,6 +59,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          is_incomplete?: boolean
           lead_status?: Database["public"]["Enums"]["lead_status"]
           name: string
           phone?: string | null
@@ -63,6 +71,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          is_incomplete?: boolean
           lead_status?: Database["public"]["Enums"]["lead_status"]
           name?: string
           phone?: string | null

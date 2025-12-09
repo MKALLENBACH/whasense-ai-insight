@@ -29,7 +29,9 @@ import {
   RefreshCw,
   Trophy,
   XCircle,
-  Bot
+  Bot,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -39,6 +41,7 @@ import LeadTemperatureBadge from "@/components/LeadTemperatureBadge";
 import SaleRegistrationModal from "@/components/sale/SaleRegistrationModal";
 import { useCustomerSimulation } from "@/hooks/useCustomerSimulation";
 import ManagerInsightsPanel from "@/components/manager/ManagerInsightsPanel";
+import NewLeadModal from "@/components/lead/NewLeadModal";
 
 interface Message {
   id: string;
@@ -62,6 +65,8 @@ interface Customer {
   phone: string | null;
   email: string | null;
   seller_id: string | null;
+  lead_status: string;
+  is_incomplete: boolean;
 }
 
 interface ExistingSale {
@@ -110,6 +115,10 @@ const ChatPage = () => {
   const [simulationEnabled, setSimulationEnabled] = useState(true);
   const [isSimulatingResponse, setIsSimulatingResponse] = useState(false);
   const [existingSale, setExistingSale] = useState<ExistingSale | null>(null);
+  const [showLeadModal, setShowLeadModal] = useState(false);
+
+  // Determine if conversation is completed
+  const isConversationCompleted = customer?.lead_status === 'won' || customer?.lead_status === 'lost';
 
   // AI Customer Simulation
   const {
@@ -121,9 +130,9 @@ const ChatPage = () => {
   } = useCustomerSimulation({
     customerId: id || "",
     sellerId: user?.id || "",
-    enabled: simulationEnabled,
-    minDelay: 20000, // 20 seconds
-    maxDelay: 60000, // 60 seconds
+    enabled: simulationEnabled && !isConversationCompleted,
+    minDelay: 20000,
+    maxDelay: 60000,
   });
 
   const scrollToBottom = () => {
@@ -148,22 +157,25 @@ const ChatPage = () => {
       // Fetch customer info
       const { data: customerData, error: customerError } = await supabase
         .from("customers")
-        .select("*")
+        .select("*, lead_status, is_incomplete")
         .eq("id", id)
         .maybeSingle();
 
       if (customerError) throw customerError;
       setCustomer(customerData);
 
+      // If customer is incomplete, show the modal
+      if (customerData?.is_incomplete && isSeller) {
+        setShowLeadModal(true);
+      }
+
       // Fetch messages for this customer
-      // Managers can see all messages, sellers only see their own
       let messagesQuery = supabase
         .from("messages")
         .select("id, content, direction, timestamp")
         .eq("customer_id", id)
         .order("timestamp", { ascending: true });
 
-      // Only filter by seller_id for sellers, managers can see all
       if (isSeller) {
         messagesQuery = messagesQuery.eq("seller_id", user?.id);
       }
@@ -174,8 +186,8 @@ const ChatPage = () => {
       
       setMessages(messagesData || []);
 
-      // Get the latest insight if exists
-      if (messagesData && messagesData.length > 0) {
+      // Get the latest insight if exists (only for non-completed conversations)
+      if (messagesData && messagesData.length > 0 && customerData?.lead_status !== 'won' && customerData?.lead_status !== 'lost') {
         const lastIncomingMessage = [...messagesData].reverse().find(m => m.direction === "incoming");
         if (lastIncomingMessage) {
           const { data: insightData } = await supabase
@@ -226,6 +238,8 @@ const ChatPage = () => {
   };
 
   const analyzeMessage = async (messageContent: string, messageId: string) => {
+    if (isConversationCompleted) return; // Don't analyze if completed
+    
     setIsAnalyzing(true);
     try {
       const { data, error } = await supabase.functions.invoke("analyze-message", {
@@ -253,6 +267,16 @@ const ChatPage = () => {
     setNewMessage("");
     
     try {
+      // Update lead status to in_progress if it's pending
+      if (customer?.lead_status === 'pending') {
+        await supabase
+          .from("customers")
+          .update({ lead_status: 'in_progress' })
+          .eq("id", id);
+        
+        setCustomer(prev => prev ? { ...prev, lead_status: 'in_progress' } : null);
+      }
+
       const { data, error } = await supabase
         .from("messages")
         .insert({
@@ -269,11 +293,10 @@ const ChatPage = () => {
       setMessages((prev) => [...prev, data]);
 
       // Trigger AI customer response after seller sends a message
-      if (simulationEnabled) {
+      if (simulationEnabled && !isConversationCompleted) {
         setIsSimulatingResponse(true);
         const response = await triggerResponseAfterSellerMessage(messageContent);
         if (response) {
-          // Fetch the new message from the database
           const { data: newMsg } = await supabase
             .from("messages")
             .select("id, content, direction, timestamp")
@@ -282,7 +305,6 @@ const ChatPage = () => {
           
           if (newMsg) {
             setMessages((prev) => [...prev, newMsg]);
-            // Trigger analysis for the new customer message
             await analyzeMessage(response.message, response.messageId);
           }
         }
@@ -297,14 +319,13 @@ const ChatPage = () => {
   };
 
   const simulateIncomingMessage = async () => {
-    if (!id || !user || isSimulatingResponse) return;
+    if (!id || !user || isSimulatingResponse || isConversationCompleted) return;
 
     setIsSimulatingResponse(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      // Use AI to generate customer response
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/simulate-customer`,
         {
@@ -324,7 +345,6 @@ const ChatPage = () => {
       const data = await response.json();
       
       if (data.success) {
-        // Fetch the new message
         const { data: newMsg } = await supabase
           .from("messages")
           .select("id, content, direction, timestamp")
@@ -344,7 +364,6 @@ const ChatPage = () => {
     }
   };
 
-  // Update simulation history when messages change
   useEffect(() => {
     updateHistory(messages.map(m => ({ direction: m.direction, content: m.content })));
   }, [messages, updateHistory]);
@@ -395,39 +414,66 @@ const ChatPage = () => {
               <ArrowLeft className="h-4 w-4" />
             </Button>
 
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
+            <div className={cn(
+              "h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold",
+              customer?.is_incomplete 
+                ? "bg-orange-500/10 text-orange-500" 
+                : "bg-primary/10 text-primary"
+            )}>
               {customer ? getInitials(customer.name) : "?"}
             </div>
 
             <div className="flex-1">
-              <h2 className="font-semibold">{customer?.name || "Cliente"}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold">{customer?.name || "Cliente"}</h2>
+                {customer?.is_incomplete && (
+                  <Badge 
+                    variant="outline" 
+                    className="text-[10px] px-1.5 py-0 border-orange-500 bg-orange-500/10 text-orange-500 cursor-pointer"
+                    onClick={() => setShowLeadModal(true)}
+                  >
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                    Completar dados
+                  </Badge>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
                 {customer?.phone || customer?.email || "Sem contato"}
               </p>
             </div>
 
-            {aiAnalysis && (
+            {/* Completed badge */}
+            {isConversationCompleted && (
+              <Badge className={existingSale?.status === "won" ? "bg-success" : "bg-destructive"}>
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                Venda {existingSale?.status === "won" ? "Concluída" : "Perdida"}
+              </Badge>
+            )}
+
+            {/* Temperature badge - only for active conversations */}
+            {!isConversationCompleted && aiAnalysis && (
               <LeadTemperatureBadge 
                 temperature={aiAnalysis.temperature as "hot" | "warm" | "cold"} 
                 showLabel 
               />
             )}
 
-            {/* Demo button to simulate incoming messages - Only for sellers */}
-            {isSeller && (
+            {/* Demo button to simulate incoming messages - Only for sellers on active conversations */}
+            {isSeller && !isConversationCompleted && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={simulateIncomingMessage}
                 className="gap-2"
+                disabled={isSimulatingResponse}
               >
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className={cn("h-4 w-4", isSimulatingResponse && "animate-spin")} />
                 Simular
               </Button>
             )}
 
-            {/* Sale registration buttons - Only for sellers when no existing sale */}
-            {isSeller && !existingSale && (
+            {/* Sale registration buttons - Only for sellers when no existing sale and not completed */}
+            {isSeller && !existingSale && !isConversationCompleted && (
               <>
                 <Button
                   variant="default"
@@ -448,13 +494,6 @@ const ChatPage = () => {
                   Perda
                 </Button>
               </>
-            )}
-
-            {/* Show status badge for sellers when sale exists */}
-            {isSeller && existingSale && (
-              <Badge className={existingSale.status === "won" ? "bg-success" : "bg-destructive"}>
-                {existingSale.status === "won" ? "Venda Ganha" : "Venda Perdida"}
-              </Badge>
             )}
 
             {/* Edit button - Only for managers when sale exists */}
@@ -479,7 +518,7 @@ const ChatPage = () => {
                   <div className="text-center">
                     <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>Nenhuma mensagem ainda</p>
-                    <p className="text-sm">Clique em "Simular mensagem" para testar</p>
+                    <p className="text-sm">Clique em "Simular" para testar</p>
                   </div>
                 </div>
               ) : (
@@ -518,8 +557,8 @@ const ChatPage = () => {
             </div>
           </ScrollArea>
 
-          {/* Message Input - Only for sellers */}
-          {isSeller && (
+          {/* Message Input - Only for sellers on active conversations */}
+          {isSeller && !isConversationCompleted && (
             <form onSubmit={handleSendMessage} className="p-4 border-t border-border">
               <div className="flex gap-2">
                 <Input
@@ -539,12 +578,21 @@ const ChatPage = () => {
               </div>
             </form>
           )}
+
+          {/* Read-only message for completed conversations */}
+          {isConversationCompleted && (
+            <div className="p-4 border-t border-border bg-muted/50">
+              <p className="text-sm text-muted-foreground text-center">
+                Esta conversa foi concluída. Não é possível enviar novas mensagens.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Insights Panel - Different for Manager vs Seller */}
         {isManager ? (
           <ManagerInsightsPanel customerId={id || ""} />
-        ) : (
+        ) : !isConversationCompleted ? (
           <div className="w-80 flex-shrink-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
             <div className="p-4 border-b border-border">
               <h3 className="font-semibold flex items-center gap-2">
@@ -682,6 +730,31 @@ const ChatPage = () => {
               )}
             </ScrollArea>
           </div>
+        ) : (
+          // Static panel for completed conversations (seller view)
+          <div className="w-80 flex-shrink-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-border">
+              <h3 className="font-semibold flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-success" />
+                Conversa Concluída
+              </h3>
+            </div>
+            <div className="flex-1 flex items-center justify-center p-4">
+              <div className="text-center">
+                <Badge className={cn(
+                  "text-lg px-4 py-2",
+                  existingSale?.status === "won" ? "bg-success" : "bg-destructive"
+                )}>
+                  {existingSale?.status === "won" ? "Venda Ganha" : "Venda Perdida"}
+                </Badge>
+                {existingSale?.reason && (
+                  <p className="text-sm text-muted-foreground mt-4">
+                    Motivo: {existingSale.reason}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
@@ -697,6 +770,25 @@ const ChatPage = () => {
           existingSaleId={existingSale?.id}
           existingStatus={existingSale?.status}
           existingReason={existingSale?.reason || undefined}
+          onSuccess={() => {
+            fetchConversation();
+          }}
+        />
+      )}
+
+      {/* Lead Modal for incomplete leads */}
+      {customer && (
+        <NewLeadModal
+          open={showLeadModal}
+          onOpenChange={setShowLeadModal}
+          phoneNumber={customer.phone || ""}
+          customerId={customer.id}
+          isEditMode={true}
+          existingData={{
+            name: customer.name,
+            email: customer.email,
+            companyId: null,
+          }}
           onSuccess={() => {
             fetchConversation();
           }}
