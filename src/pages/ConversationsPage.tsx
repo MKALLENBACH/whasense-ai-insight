@@ -31,6 +31,14 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import NewLeadModal from "@/components/lead/NewLeadModal";
 
+interface AlertData {
+  id: string;
+  customer_id: string;
+  alert_type: string;
+  severity: string;
+  message: string;
+}
+
 interface ConversationData {
   id: string;
   customer: {
@@ -73,6 +81,7 @@ const ConversationsPage = () => {
   const { session, isManager } = useAuth();
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<ConversationData[]>([]);
+  const [alerts, setAlerts] = useState<AlertData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<"pending" | "completed">("pending");
@@ -95,6 +104,13 @@ const ConversationsPage = () => {
       if (error) throw error;
 
       setConversations(data?.conversations || []);
+
+      // Fetch alerts from database
+      const { data: alertsData } = await supabase
+        .from('alerts')
+        .select('id, customer_id, alert_type, severity, message');
+      
+      setAlerts(alertsData || []);
     } catch (error) {
       console.error('Error fetching conversations:', error);
       toast.error('Erro ao carregar conversas');
@@ -145,6 +161,17 @@ const ConversationsPage = () => {
           fetchConversations();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'alerts',
+        },
+        () => {
+          fetchConversations();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -190,32 +217,45 @@ const ConversationsPage = () => {
       .slice(0, 2);
   };
 
-  const getAlerts = (conv: ConversationData): string[] => {
-    const alerts: string[] = [];
+  // Get alerts for a conversation from the database alerts
+  const getAlertsForConversation = (conv: ConversationData): AlertData[] => {
+    if (conv.leadStatus === 'won' || conv.leadStatus === 'lost') return [];
+    if (isManager) return []; // Managers don't see operational alerts
     
-    if (conv.leadStatus === 'won' || conv.leadStatus === 'lost') return alerts;
+    const convAlerts = alerts.filter(a => a.customer_id === conv.id);
+    
+    // Sort by priority: open_objection > hot_lead > waiting_response > stale_lead > incomplete_lead
+    const priorityOrder: Record<string, number> = {
+      'open_objection': 1,
+      'hot_lead': 2,
+      'waiting_response': 3,
+      'stale_lead': 4,
+      'incomplete_lead': 5,
+    };
+    
+    return convAlerts
+      .sort((a, b) => (priorityOrder[a.alert_type] || 99) - (priorityOrder[b.alert_type] || 99))
+      .slice(0, 3); // Max 3 alerts per conversation
+  };
 
-    // Check for unanswered message
-    if (conv.lastMessageDirection === 'incoming') {
-      const minutesAgo = (Date.now() - new Date(conv.lastMessageTime).getTime()) / 1000 / 60;
-      if (minutesAgo > 10) {
-        alerts.push(`Aguardando resposta há ${Math.round(minutesAgo)} min`);
-      } else if (minutesAgo > 5) {
-        alerts.push('Cliente aguardando resposta');
-      }
+  const getAlertIcon = (alertType: string) => {
+    switch (alertType) {
+      case 'hot_lead': return Flame;
+      case 'open_objection': return AlertTriangle;
+      case 'waiting_response': return Clock;
+      case 'stale_lead': return Clock;
+      case 'incomplete_lead': return AlertCircle;
+      default: return AlertTriangle;
     }
+  };
 
-    // Hot lead
-    if (conv.insight?.temperature === 'hot') {
-      alerts.push('Lead quente!');
+  const getAlertColor = (severity: string) => {
+    switch (severity) {
+      case 'critical': return 'border-destructive text-destructive';
+      case 'warning': return 'border-warning text-warning';
+      case 'info': return 'border-blue-500 text-blue-500';
+      default: return 'border-muted-foreground text-muted-foreground';
     }
-
-    // Objection
-    if (conv.insight?.objection && conv.insight.objection !== 'none') {
-      alerts.push('Objeção detectada');
-    }
-
-    return alerts;
   };
 
   const handleConversationClick = (conv: ConversationData) => {
@@ -231,7 +271,7 @@ const ConversationsPage = () => {
     const temperature = conv.insight?.temperature || 'cold';
     const TempIcon = temperatureConfig[temperature as keyof typeof temperatureConfig]?.icon || Snowflake;
     const tempColor = temperatureConfig[temperature as keyof typeof temperatureConfig]?.color || 'text-muted-foreground';
-    const alerts = getAlerts(conv);
+    const convAlerts = getAlertsForConversation(conv);
     const isCompleted = conv.leadStatus === 'won' || conv.leadStatus === 'lost';
 
     return (
@@ -240,7 +280,7 @@ const ConversationsPage = () => {
         onClick={() => handleConversationClick(conv)}
         className={cn(
           "p-4 border-b border-border hover:bg-muted/50 cursor-pointer transition-colors",
-          alerts.length > 0 && !isCompleted && "border-l-4 border-l-warning",
+          convAlerts.length > 0 && !isCompleted && "border-l-4 border-l-warning",
           conv.isIncomplete && "border-l-4 border-l-orange-500 bg-orange-500/5"
         )}
       >
@@ -302,18 +342,21 @@ const ConversationsPage = () => {
             </p>
 
             {/* Alerts for pending */}
-            {!isCompleted && alerts.length > 0 && (
+            {!isCompleted && convAlerts.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
-                {alerts.map((alert, idx) => (
-                  <Badge 
-                    key={idx} 
-                    variant="outline" 
-                    className="text-[10px] px-1.5 py-0 border-warning text-warning"
-                  >
-                    <AlertTriangle className="h-3 w-3 mr-1" />
-                    {alert}
-                  </Badge>
-                ))}
+                {convAlerts.map((alert) => {
+                  const AlertIcon = getAlertIcon(alert.alert_type);
+                  return (
+                    <Badge 
+                      key={alert.id} 
+                      variant="outline" 
+                      className={cn("text-[10px] px-1.5 py-0", getAlertColor(alert.severity))}
+                    >
+                      <AlertIcon className="h-3 w-3 mr-1" />
+                      {alert.message}
+                    </Badge>
+                  );
+                })}
               </div>
             )}
 
