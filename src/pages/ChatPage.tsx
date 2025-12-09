@@ -691,6 +691,8 @@ const ChatPage = () => {
               companyId={user?.companyId}
               customerId={id || ""}
               cycleId={activeCycle.id}
+              initialMessage={newMessage}
+              onMessageChange={setNewMessage}
             />
           )}
 

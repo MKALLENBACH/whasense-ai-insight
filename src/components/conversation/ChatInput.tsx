@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,14 +18,23 @@ interface ChatInputProps {
   companyId?: string;
   customerId: string;
   cycleId: string;
+  initialMessage?: string;
+  onMessageChange?: (message: string) => void;
 }
 
-const ChatInput = ({ onSendMessage, disabled, companyId, customerId, cycleId }: ChatInputProps) => {
-  const [message, setMessage] = useState("");
+const ChatInput = ({ onSendMessage, disabled, companyId, customerId, cycleId, initialMessage, onMessageChange }: ChatInputProps) => {
+  const [message, setMessage] = useState(initialMessage || "");
   const [isSending, setIsSending] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync with external initialMessage when it changes (e.g., when suggestion is applied)
+  useEffect(() => {
+    if (initialMessage !== undefined && initialMessage !== message) {
+      setMessage(initialMessage);
+    }
+  }, [initialMessage]);
 
   const getFileType = (file: File): PendingFile["type"] => {
     if (file.type.startsWith("image/")) return "image";
