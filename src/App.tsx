@@ -32,7 +32,7 @@ const App = () => (
             <Route 
               path="/conversas" 
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="vendedor">
                   <ConversationsPage />
                 </ProtectedRoute>
               } 
@@ -40,7 +40,7 @@ const App = () => (
             <Route 
               path="/chat/:id" 
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="vendedor">
                   <ChatPage />
                 </ProtectedRoute>
               } 
@@ -48,7 +48,7 @@ const App = () => (
             <Route 
               path="/alertas" 
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="vendedor">
                   <AlertsPage />
                 </ProtectedRoute>
               } 
