@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.register-sale]
 verify_jwt = false
+
+[functions.conversation-history]
+verify_jwt = false

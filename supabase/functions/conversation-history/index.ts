@@ -1,0 +1,141 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Get the authorization header to identify the user
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Authorization header required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify the JWT and get user
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Fetching conversation history for user:', user.id);
+
+    // Get all customers with their messages and sales
+    const { data: customers, error: customersError } = await supabase
+      .from('customers')
+      .select('*')
+      .order('updated_at', { ascending: false });
+
+    if (customersError) {
+      console.error('Error fetching customers:', customersError);
+      throw customersError;
+    }
+
+    const conversationHistory = [];
+
+    for (const customer of customers || []) {
+      // Get latest message for this customer
+      const { data: latestMessage } = await supabase
+        .from('messages')
+        .select('id, content, direction, timestamp, seller_id')
+        .eq('customer_id', customer.id)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!latestMessage) continue;
+
+      // Get seller profile
+      const { data: sellerProfile } = await supabase
+        .from('profiles')
+        .select('name, email')
+        .eq('user_id', latestMessage.seller_id)
+        .maybeSingle();
+
+      // Get latest insight for this conversation
+      const { data: latestInsight } = await supabase
+        .from('insights')
+        .select('*')
+        .eq('message_id', latestMessage.id)
+        .maybeSingle();
+
+      // Get sale result if exists
+      const { data: sale } = await supabase
+        .from('sales')
+        .select('*')
+        .eq('customer_id', customer.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // Get message count
+      const { count: messageCount } = await supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('customer_id', customer.id);
+
+      conversationHistory.push({
+        id: customer.id,
+        customer: {
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          email: customer.email,
+        },
+        seller: sellerProfile ? {
+          name: sellerProfile.name,
+          email: sellerProfile.email,
+        } : null,
+        lastMessage: latestMessage.content,
+        lastMessageTime: latestMessage.timestamp,
+        messageCount: messageCount || 0,
+        insight: latestInsight ? {
+          sentiment: latestInsight.sentiment,
+          intention: latestInsight.intention,
+          objection: latestInsight.objection,
+          temperature: latestInsight.temperature,
+          suggestion: latestInsight.suggestion,
+          next_action: latestInsight.next_action,
+        } : null,
+        sale: sale ? {
+          id: sale.id,
+          status: sale.status,
+          reason: sale.reason,
+          createdAt: sale.created_at,
+        } : null,
+      });
+    }
+
+    console.log(`Found ${conversationHistory.length} conversations`);
+
+    return new Response(
+      JSON.stringify({ conversations: conversationHistory }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('Error in conversation-history:', error);
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
