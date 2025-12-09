@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          customer_id: string
+          id: string
+          message: string
+          metadata: Json | null
+          seller_id: string
+          severity: string
+          updated_at: string
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          customer_id: string
+          id?: string
+          message: string
+          metadata?: Json | null
+          seller_id: string
+          severity?: string
+          updated_at?: string
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          customer_id?: string
+          id?: string
+          message?: string
+          metadata?: Json | null
+          seller_id?: string
+          severity?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           created_at: string
