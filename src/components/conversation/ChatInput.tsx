@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Send, Paperclip, Loader2, X, Image, FileText, Film, Music } from "lucide-react";
 import { toast } from "sonner";
+import AudioRecorder from "./AudioRecorder";
 
 interface PendingFile {
   file: File;
@@ -14,6 +15,7 @@ interface PendingFile {
 
 interface ChatInputProps {
   onSendMessage: (content: string, attachments?: { url: string; type: string; name: string }[]) => Promise<void>;
+  onSendAudio?: (audioBlob: Blob) => Promise<void>;
   disabled?: boolean;
   companyId?: string;
   customerId: string;
@@ -22,7 +24,16 @@ interface ChatInputProps {
   onMessageChange?: (message: string) => void;
 }
 
-const ChatInput = ({ onSendMessage, disabled, companyId, customerId, cycleId, initialMessage, onMessageChange }: ChatInputProps) => {
+const ChatInput = ({ 
+  onSendMessage, 
+  onSendAudio,
+  disabled, 
+  companyId, 
+  customerId, 
+  cycleId, 
+  initialMessage, 
+  onMessageChange 
+}: ChatInputProps) => {
   const [message, setMessage] = useState(initialMessage || "");
   const [isSending, setIsSending] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
@@ -211,6 +222,14 @@ const ChatInput = ({ onSendMessage, disabled, companyId, customerId, cycleId, in
           </TooltipTrigger>
           <TooltipContent>Anexar arquivo</TooltipContent>
         </Tooltip>
+
+        {/* Audio recorder */}
+        {onSendAudio && (
+          <AudioRecorder 
+            onSendAudio={onSendAudio} 
+            disabled={disabled || isSending} 
+          />
+        )}
 
         <input
           ref={fileInputRef}
