@@ -13,6 +13,9 @@ const ALERT_TYPES = {
   OPEN_OBJECTION: 'open_objection',
   STALE_LEAD: 'stale_lead',
   INCOMPLETE_LEAD: 'incomplete_lead',
+  CLIENT_ANGRY_AUDIO: 'client_angry_audio',
+  AUDIO_OBJECTION: 'audio_objection',
+  HIGH_INTENT_AUDIO: 'high_intent_audio',
 };
 
 // Thresholds in milliseconds
