@@ -44,6 +44,7 @@ import { Badge } from "@/components/ui/badge";
 interface Company {
   id: string;
   name: string;
+  cnpj: string | null;
   segment: string | null;
   created_at: string;
   is_active: boolean;
@@ -62,6 +63,7 @@ const AdminCompaniesPage = () => {
 
   // Form state
   const [companyName, setCompanyName] = useState("");
+  const [companyCnpj, setCompanyCnpj] = useState("");
   const [companySegment, setCompanySegment] = useState("");
   const [managerName, setManagerName] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
@@ -154,6 +156,7 @@ const AdminCompaniesPage = () => {
         body: {
           action: "create_company_with_manager",
           companyName,
+          companyCnpj: companyCnpj.trim() || null,
           companySegment,
           managerName,
           managerEmail,
@@ -188,6 +191,7 @@ const AdminCompaniesPage = () => {
 
   const resetForm = () => {
     setCompanyName("");
+    setCompanyCnpj("");
     setCompanySegment("");
     setManagerName("");
     setManagerEmail("");
@@ -223,6 +227,7 @@ const AdminCompaniesPage = () => {
   const filteredCompanies = companies.filter(
     (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.cnpj?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.managerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.managerEmail?.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -259,6 +264,16 @@ const AdminCompaniesPage = () => {
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     placeholder="Ex: Exercit Esportes"
+                    className="bg-slate-900/50 border-slate-700 text-white"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-slate-300">CNPJ</Label>
+                  <Input
+                    value={companyCnpj}
+                    onChange={(e) => setCompanyCnpj(e.target.value)}
+                    placeholder="Ex: 12.345.678/0001-90"
                     className="bg-slate-900/50 border-slate-700 text-white"
                   />
                 </div>
@@ -344,7 +359,7 @@ const AdminCompaniesPage = () => {
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <Input
-            placeholder="Buscar por empresa, gestor ou email..."
+            placeholder="Buscar por empresa, CNPJ, gestor ou email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
@@ -368,6 +383,7 @@ const AdminCompaniesPage = () => {
                 <TableHeader>
                   <TableRow className="border-slate-700 hover:bg-transparent">
                     <TableHead className="text-slate-400">Empresa</TableHead>
+                    <TableHead className="text-slate-400">CNPJ</TableHead>
                     <TableHead className="text-slate-400">Status</TableHead>
                     <TableHead className="text-slate-400">Gestor</TableHead>
                     <TableHead className="text-slate-400 text-center">Vendedores</TableHead>
@@ -393,6 +409,9 @@ const AdminCompaniesPage = () => {
                             )}
                           </div>
                         </div>
+                      </TableCell>
+                      <TableCell className="text-slate-300 font-mono text-sm">
+                        {company.cnpj || <span className="text-slate-500">-</span>}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
