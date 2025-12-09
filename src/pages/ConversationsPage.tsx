@@ -65,8 +65,14 @@ interface ConversationData {
   } | null;
   messageCount: number;
   hasRisk: boolean;
-  saleStatus: "won" | "lost" | null;
-  saleReason: string | null;
+  // Cycle-based status (preferred)
+  cycleStatus?: string;
+  cycleId?: string | null;
+  cycleLostReason?: string | null;
+  cycleWonSummary?: string | null;
+  // Legacy fields
+  saleStatus?: "won" | "lost" | null;
+  saleReason?: string | null;
   leadStatus: string;
   isIncomplete: boolean;
 }
@@ -124,7 +130,7 @@ const ConversationsPage = () => {
     fetchConversations();
   }, [session]);
 
-  // Realtime subscription for messages
+  // Realtime subscription for messages, customers, sales, alerts, and sale_cycles
   useEffect(() => {
     const channel = supabase
       .channel('conversations-updates')
@@ -172,6 +178,17 @@ const ConversationsPage = () => {
           fetchConversations();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sale_cycles',
+        },
+        () => {
+          fetchConversations();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -184,13 +201,17 @@ const ConversationsPage = () => {
     fetchConversations();
   };
 
-  // Filter conversations by tab
-  const pendingConversations = conversations.filter(
-    c => !c.leadStatus || c.leadStatus === 'pending' || c.leadStatus === 'in_progress'
-  );
-  const completedConversations = conversations.filter(
-    c => c.leadStatus === 'won' || c.leadStatus === 'lost'
-  );
+  // Filter conversations by tab - use cycleStatus (preferred) or fallback to leadStatus
+  const getStatus = (c: ConversationData) => c.cycleStatus || c.leadStatus || 'pending';
+  
+  const pendingConversations = conversations.filter(c => {
+    const status = getStatus(c);
+    return status === 'pending' || status === 'in_progress';
+  });
+  const completedConversations = conversations.filter(c => {
+    const status = getStatus(c);
+    return status === 'won' || status === 'lost';
+  });
 
   // Apply search filter
   const filterBySearch = (convs: ConversationData[]) => {
@@ -219,7 +240,8 @@ const ConversationsPage = () => {
 
   // Get alerts for a conversation from the database alerts
   const getAlertsForConversation = (conv: ConversationData): AlertData[] => {
-    if (conv.leadStatus === 'won' || conv.leadStatus === 'lost') return [];
+    const status = conv.cycleStatus || conv.leadStatus;
+    if (status === 'won' || status === 'lost') return [];
     if (isManager) return []; // Managers don't see operational alerts
     
     const convAlerts = alerts.filter(a => a.customer_id === conv.id);
@@ -272,7 +294,8 @@ const ConversationsPage = () => {
     const TempIcon = temperatureConfig[temperature as keyof typeof temperatureConfig]?.icon || Snowflake;
     const tempColor = temperatureConfig[temperature as keyof typeof temperatureConfig]?.color || 'text-muted-foreground';
     const convAlerts = getAlertsForConversation(conv);
-    const isCompleted = conv.leadStatus === 'won' || conv.leadStatus === 'lost';
+    const status = conv.cycleStatus || conv.leadStatus;
+    const isCompleted = status === 'won' || status === 'lost';
 
     return (
       <div
@@ -366,12 +389,12 @@ const ConversationsPage = () => {
                 <Badge 
                   className={cn(
                     "text-xs",
-                    conv.leadStatus === 'won' 
+                    status === 'won' 
                       ? "bg-success text-success-foreground" 
                       : "bg-destructive text-destructive-foreground"
                   )}
                 >
-                  {conv.leadStatus === 'won' ? (
+                  {status === 'won' ? (
                     <>
                       <CheckCircle2 className="h-3 w-3 mr-1" />
                       Venda Fechada
@@ -383,9 +406,9 @@ const ConversationsPage = () => {
                     </>
                   )}
                 </Badge>
-                {conv.saleReason && conv.leadStatus === 'lost' && (
+                {(conv.cycleLostReason || conv.saleReason) && status === 'lost' && (
                   <p className="text-xs text-muted-foreground">
-                    Motivo: {conv.saleReason}
+                    Motivo: {conv.cycleLostReason || conv.saleReason}
                   </p>
                 )}
               </div>
