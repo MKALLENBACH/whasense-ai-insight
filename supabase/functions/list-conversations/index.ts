@@ -13,7 +13,6 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     // Get the authorization header to identify the user
@@ -25,12 +24,13 @@ serve(async (req) => {
       );
     }
 
-    // Use anon client to validate the user's token
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    // Extract the JWT token from the header
+    const token = authHeader.replace('Bearer ', '');
+
+    // Use service role client with getUser(token) to validate the user
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
       console.error('Auth error:', authError);
@@ -40,8 +40,7 @@ serve(async (req) => {
       );
     }
 
-    // Use service role for database operations
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // supabase client already created above with service role
 
     console.log('Fetching conversations for seller:', user.id);
 
