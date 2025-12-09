@@ -122,23 +122,13 @@ const AdminAIScriptsPage = () => {
   const fetchScriptsForCompany = async (companyId: string) => {
     try {
       const { data, error } = await supabase.functions.invoke("ai-scripts/by-company", {
-        body: {},
+        body: { companyId },
       });
       
-      // Use query params approach
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-scripts/by-company?companyId=${companyId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-        }
-      );
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       
-      const result = await response.json();
-      if (result.error) throw new Error(result.error);
-      
-      setScripts(result.scripts || []);
+      setScripts(data?.scripts || []);
       setSelectedScript(null);
     } catch (error) {
       console.error("Error fetching scripts:", error);

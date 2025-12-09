@@ -80,8 +80,8 @@ serve(async (req) => {
       );
     }
 
-    // GET /ai-scripts/list - List all scripts
-    if (action === "list" && req.method === "GET") {
+    // GET/POST /ai-scripts/list - List all scripts
+    if (action === "list") {
       const { data: scripts, error } = await supabase
         .from("ai_scripts")
         .select(`
@@ -98,9 +98,20 @@ serve(async (req) => {
       );
     }
 
-    // GET /ai-scripts/by-company?companyId=XXX - Get all scripts for a company
-    if (action === "by-company" && req.method === "GET") {
-      const companyId = url.searchParams.get("companyId");
+    // GET/POST /ai-scripts/by-company - Get all scripts for a company
+    if (action === "by-company") {
+      let companyId: string | null = null;
+      
+      if (req.method === "GET") {
+        companyId = url.searchParams.get("companyId");
+      } else if (req.method === "POST") {
+        try {
+          const body = await req.json();
+          companyId = body.companyId;
+        } catch {
+          companyId = null;
+        }
+      }
       
       if (!companyId) {
         return new Response(
@@ -123,8 +134,8 @@ serve(async (req) => {
       );
     }
 
-    // GET /ai-scripts/default - Get default script
-    if (action === "default" && req.method === "GET") {
+    // GET/POST /ai-scripts/default - Get default script
+    if (action === "default") {
       const { data: script, error } = await supabase
         .from("default_ai_script")
         .select("*")
