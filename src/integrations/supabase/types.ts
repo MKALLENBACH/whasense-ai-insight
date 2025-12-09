@@ -43,6 +43,7 @@ export type Database = {
           id: string
           name: string
           phone: string | null
+          seller_id: string | null
           updated_at: string
         }
         Insert: {
@@ -52,6 +53,7 @@ export type Database = {
           id?: string
           name: string
           phone?: string | null
+          seller_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -61,6 +63,7 @@ export type Database = {
           id?: string
           name?: string
           phone?: string | null
+          seller_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -256,6 +259,45 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_sessions: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          last_connected_at: string | null
+          phone_number: string | null
+          seller_id: string
+          session_data: Json | null
+          status: Database["public"]["Enums"]["whatsapp_session_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          last_connected_at?: string | null
+          phone_number?: string | null
+          seller_id: string
+          session_data?: Json | null
+          status?: Database["public"]["Enums"]["whatsapp_session_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          last_connected_at?: string | null
+          phone_number?: string | null
+          seller_id?: string
+          session_data?: Json | null
+          status?: Database["public"]["Enums"]["whatsapp_session_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -279,6 +321,11 @@ export type Database = {
       lead_temperature: "hot" | "warm" | "cold"
       message_direction: "incoming" | "outgoing"
       sale_status: "won" | "lost"
+      whatsapp_session_status:
+        | "connected"
+        | "disconnected"
+        | "pending"
+        | "expired"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -410,6 +457,12 @@ export const Constants = {
       lead_temperature: ["hot", "warm", "cold"],
       message_direction: ["incoming", "outgoing"],
       sale_status: ["won", "lost"],
+      whatsapp_session_status: [
+        "connected",
+        "disconnected",
+        "pending",
+        "expired",
+      ],
     },
   },
 } as const

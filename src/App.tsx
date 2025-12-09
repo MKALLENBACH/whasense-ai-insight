@@ -11,6 +11,8 @@ import ChatPage from "./pages/ChatPage";
 import AlertsPage from "./pages/AlertsPage";
 import DashboardPage from "./pages/DashboardPage";
 import HistoryPage from "./pages/HistoryPage";
+import WhatsAppConnectPage from "./pages/WhatsAppConnectPage";
+import WhatsAppStatusPage from "./pages/WhatsAppStatusPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,6 +53,14 @@ const App = () => (
                 </ProtectedRoute>
               } 
             />
+            <Route 
+              path="/whatsapp-connect" 
+              element={
+                <ProtectedRoute requiredRole="vendedor">
+                  <WhatsAppConnectPage />
+                </ProtectedRoute>
+              } 
+            />
             
             {/* Manager routes */}
             <Route 
@@ -66,6 +76,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="gestor">
                   <HistoryPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dashboard/whatsapp-status" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <WhatsAppStatusPage />
                 </ProtectedRoute>
               } 
             />

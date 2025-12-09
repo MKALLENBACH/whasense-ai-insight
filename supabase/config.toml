@@ -17,3 +17,12 @@ verify_jwt = false
 
 [functions.create-seller]
 verify_jwt = false
+
+[functions.whatsapp-session]
+verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.whatsapp-manager]
+verify_jwt = false
