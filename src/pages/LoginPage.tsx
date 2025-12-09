@@ -80,11 +80,9 @@ const LoginPage = () => {
         <Card className="border-none shadow-2xl backdrop-blur-sm bg-card/95">
           <CardHeader className="text-center space-y-1 pb-4">
             <CardTitle className="text-2xl font-bold">Acessar conta</CardTitle>
-            <CardDescription className="text-base">
-              Entre com suas credenciais
-            </CardDescription>
+            <CardDescription className="text-base">Entre com suas credenciais</CardDescription>
           </CardHeader>
-          
+
           <CardContent>
             {error && (
               <Alert variant="destructive" className="mb-4">
@@ -134,12 +132,7 @@ const LoginPage = () => {
                 </div>
               </div>
 
-              <Button 
-                type="submit" 
-                variant="hero" 
-                className="w-full h-11 text-base font-semibold" 
-                disabled={isLoading}
-              >
+              <Button type="submit" variant="hero" className="w-full h-11 text-base font-semibold" disabled={isLoading}>
                 {isLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -153,7 +146,7 @@ const LoginPage = () => {
           </CardContent>
 
           <CardFooter className="flex flex-col gap-3 pt-0">
-            <button 
+            <button
               type="button"
               className="text-sm text-muted-foreground hover:text-primary transition-colors"
               onClick={() => toast.info("Funcionalidade em desenvolvimento")}
@@ -169,6 +162,7 @@ const LoginPage = () => {
                 </p>
                 <div className="space-y-1 text-muted-foreground">
                   <p>📧 vendedor1@exercit.com / 123456</p>
+                  <p>📧 vendedor2@exercit.com / 123456</p>
                   <p>📧 gestor@exercit.com / 123456</p>
                 </div>
               </div>
