@@ -182,6 +182,8 @@ const ChatPage = () => {
             .from("insights")
             .select("*")
             .eq("message_id", lastIncomingMessage.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
             .maybeSingle();
 
           if (insightData) {
