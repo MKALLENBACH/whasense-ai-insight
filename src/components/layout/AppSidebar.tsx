@@ -1,4 +1,4 @@
-import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone, Users } from "lucide-react";
+import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone, Users, Bot } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -64,6 +64,7 @@ const AppSidebar = () => {
   const gestorLinks: NavLinkItem[] = [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/gestor/vendedores", icon: Users, label: "Vendedores" },
+    { to: "/gestor/followups", icon: Bot, label: "Follow-ups" },
     { to: "/historico", icon: History, label: "Histórico" },
     { to: "/dashboard/whatsapp-status", icon: Smartphone, label: "Status WhatsApp" },
   ];

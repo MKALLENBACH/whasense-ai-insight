@@ -5,6 +5,8 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import CompanyPlanSection from "@/components/admin/CompanyPlanSection";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -23,10 +25,12 @@ import {
   Loader2,
   Mail,
   Calendar,
+  Bot,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 interface CompanyDetails {
   id: string;
@@ -34,6 +38,7 @@ interface CompanyDetails {
   segment: string | null;
   plan_id: string | null;
   created_at: string;
+  allow_followups: boolean;
 }
 
 interface CompanyUser {
@@ -285,6 +290,49 @@ const AdminCompanyDetailsPage = () => {
             ) : (
               <p className="text-slate-500 text-center py-4">Nenhum gestor cadastrado</p>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Follow-ups Control */}
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Bot className="h-5 w-5 text-cyan-500" />
+              Follow-ups Automáticos
+            </CardTitle>
+            <CardDescription className="text-slate-400">
+              Controle de follow-ups automáticos para esta empresa
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg">
+              <div className="space-y-0.5">
+                <Label htmlFor="allow-followups" className="text-base text-white">
+                  Permitir follow-ups automáticos
+                </Label>
+                <p className="text-sm text-slate-400">
+                  Quando ativado, a empresa pode configurar follow-ups automáticos
+                </p>
+              </div>
+              <Switch
+                id="allow-followups"
+                checked={company.allow_followups}
+                onCheckedChange={async (checked) => {
+                  try {
+                    const { error } = await supabase
+                      .from("companies")
+                      .update({ allow_followups: checked })
+                      .eq("id", company.id);
+                    if (error) throw error;
+                    setCompany({ ...company, allow_followups: checked });
+                    toast.success(checked ? "Follow-ups ativados" : "Follow-ups desativados");
+                  } catch (err) {
+                    console.error("Error updating follow-ups:", err);
+                    toast.error("Erro ao atualizar follow-ups");
+                  }
+                }}
+              />
+            </div>
           </CardContent>
         </Card>
 
