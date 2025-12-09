@@ -1,4 +1,4 @@
-import { MessageSquare, LayoutDashboard, History, Bell, Settings, LogOut, Zap } from "lucide-react";
+import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -19,11 +19,13 @@ interface NavLinkItem {
   const vendedorLinks: NavLinkItem[] = [
     { to: "/conversas", icon: MessageSquare, label: "Conversas" },
     { to: "/alertas", icon: Bell, label: "Alertas", badge: unreadAlerts },
+    { to: "/whatsapp-connect", icon: Smartphone, label: "WhatsApp" },
   ];
 
   const gestorLinks: NavLinkItem[] = [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/historico", icon: History, label: "Histórico" },
+    { to: "/dashboard/whatsapp-status", icon: Smartphone, label: "Status WhatsApp" },
   ];
 
   const links = user?.role === "gestor" ? gestorLinks : vendedorLinks;
