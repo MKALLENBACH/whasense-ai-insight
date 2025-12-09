@@ -5,11 +5,13 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CheckCircle2, XCircle, AlertTriangle, Frown, Smile, Meh, Angry, HelpCircle, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
 
 interface ConversationListProps {
   conversations: Conversation[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  navigateToChat?: boolean;
 }
 
 const sentimentConfig: Record<string, { icon: typeof Smile; label: string; className: string }> = {
@@ -29,7 +31,9 @@ const objectionLabels: Record<string, string> = {
   none: "",
 };
 
-const ConversationList = ({ conversations, selectedId, onSelect }: ConversationListProps) => {
+const ConversationList = ({ conversations, selectedId, onSelect, navigateToChat = false }: ConversationListProps) => {
+  const navigate = useNavigate();
+  
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -57,7 +61,12 @@ const ConversationList = ({ conversations, selectedId, onSelect }: ConversationL
         return (
           <button
             key={conversation.id}
-            onClick={() => onSelect(conversation.id)}
+            onClick={() => {
+              onSelect(conversation.id);
+              if (navigateToChat) {
+                navigate(`/chat/${conversation.id}`);
+              }
+            }}
             className={cn(
               "w-full p-3 flex items-start gap-3 text-left transition-all duration-200 hover:bg-muted/50 border-b border-border/50",
               selectedId === conversation.id && "bg-primary/5 border-l-2 border-l-primary"
