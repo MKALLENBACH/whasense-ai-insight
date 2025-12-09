@@ -9,11 +9,12 @@ import { SellerPerformanceChart } from "@/components/dashboard/SellerPerformance
 import { SalesTimelineChart } from "@/components/dashboard/SalesTimelineChart";
 import { RecentSalesTable } from "@/components/dashboard/RecentSalesTable";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, Clock, Target, Flame, TrendingUp, TrendingDown, Users, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, RefreshCw, Clock, Target, Flame, TrendingUp, TrendingDown, Users, CheckCircle2, XCircle, Bot, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const ManagerDashboardPage = () => {
-  const { isLoading, kpis, leadDistribution, riskCycles, objections, sellerPerformance, salesTimeline, recentSales, refresh } = useManagerDashboard();
+  const { isLoading, kpis, leadDistribution, riskCycles, objections, sellerPerformance, salesTimeline, recentSales, followupMetrics, refresh } = useManagerDashboard();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = async () => {
@@ -60,6 +61,34 @@ const ManagerDashboardPage = () => {
           <KPICard title="Tempo Resp." value={`${kpis.avgResponseTime} min`} icon={Clock} iconClassName="bg-muted text-muted-foreground" />
           <KPICard title="Leads Quentes" value={kpis.hotLeads} icon={Flame} iconClassName="bg-red-500/10 text-red-500" />
         </div>
+
+        {/* Follow-up Metrics - Only show if enabled */}
+        {followupMetrics.enabled && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <Bot className="h-5 w-5 text-primary" />
+                Follow-ups Automáticos
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <p className="text-2xl font-bold text-foreground">{followupMetrics.last24h}</p>
+                  <p className="text-xs text-muted-foreground">Últimas 24h</p>
+                </div>
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <p className="text-2xl font-bold text-foreground">{followupMetrics.last7days}</p>
+                  <p className="text-xs text-muted-foreground">Últimos 7 dias</p>
+                </div>
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <p className="text-2xl font-bold text-foreground">{followupMetrics.totalSent}</p>
+                  <p className="text-xs text-muted-foreground">Total enviados</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Charts Row 1 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

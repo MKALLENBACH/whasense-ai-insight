@@ -12,6 +12,13 @@ export interface ManagerKPIs {
   hotLeads: number;
 }
 
+export interface FollowupMetrics {
+  enabled: boolean;
+  totalSent: number;
+  last24h: number;
+  last7days: number;
+}
+
 export interface LeadDistribution {
   bySeller: { name: string; pending: number; inProgress: number }[];
   byTemperature: { temperature: string; count: number }[];
@@ -79,6 +86,12 @@ export function useManagerDashboard() {
   const [sellerPerformance, setSellerPerformance] = useState<SellerPerformance[]>([]);
   const [salesTimeline, setSalesTimeline] = useState<SalesTimelinePoint[]>([]);
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
+  const [followupMetrics, setFollowupMetrics] = useState<FollowupMetrics>({
+    enabled: false,
+    totalSent: 0,
+    last24h: 0,
+    last7days: 0,
+  });
 
   const fetchData = useCallback(async () => {
     if (!user?.companyId) return;
@@ -442,6 +455,62 @@ export function useManagerDashboard() {
         }
       }
       setRecentSales(recent);
+
+      // Fetch follow-up metrics
+      // Check if follow-ups are enabled for this company
+      const { data: companyData } = await supabase
+        .from("companies")
+        .select("allow_followups")
+        .eq("id", user.companyId)
+        .single();
+
+      const { data: settingsData } = await supabase
+        .from("company_settings")
+        .select("followups_enabled")
+        .eq("company_id", user.companyId)
+        .maybeSingle();
+
+      const followupsEnabled = companyData?.allow_followups && settingsData?.followups_enabled;
+
+      if (followupsEnabled) {
+        // Count follow-up messages (messages containing "[Follow-up automático]")
+        const now = new Date();
+        const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const last7days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        const followupMessages = messages?.filter(m => 
+          m.direction === "outgoing" && 
+          // We need to check content, but messages query doesn't include content
+          // So we'll do a separate query
+          true
+        ) || [];
+
+        // Get follow-up messages with content
+        const { data: followupMsgs } = await supabase
+          .from("messages")
+          .select("id, timestamp, content")
+          .in("seller_id", actualSellerIds.length > 0 ? actualSellerIds : [""])
+          .eq("direction", "outgoing")
+          .ilike("content", "%[Follow-up automático]%");
+
+        const totalSent = followupMsgs?.length || 0;
+        const last24hCount = followupMsgs?.filter(m => new Date(m.timestamp) >= last24h).length || 0;
+        const last7daysCount = followupMsgs?.filter(m => new Date(m.timestamp) >= last7days).length || 0;
+
+        setFollowupMetrics({
+          enabled: true,
+          totalSent,
+          last24h: last24hCount,
+          last7days: last7daysCount,
+        });
+      } else {
+        setFollowupMetrics({
+          enabled: false,
+          totalSent: 0,
+          last24h: 0,
+          last7days: 0,
+        });
+      }
     } catch (error) {
       console.error("Error fetching manager dashboard:", error);
     } finally {
@@ -478,6 +547,7 @@ export function useManagerDashboard() {
     sellerPerformance,
     salesTimeline,
     recentSales,
+    followupMetrics,
     refresh: fetchData,
   };
 }
