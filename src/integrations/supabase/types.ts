@@ -141,6 +141,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          plan_id: string | null
           segment: string | null
           updated_at: string
         }
@@ -151,6 +152,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          plan_id?: string | null
           segment?: string | null
           updated_at?: string
         }
@@ -161,10 +163,19 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          plan_id?: string | null
           segment?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "companies_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       customers: {
         Row: {
@@ -352,6 +363,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      plans: {
+        Row: {
+          annual_price: number
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          monthly_price: number
+          name: string
+          seller_limit: number | null
+          updated_at: string
+        }
+        Insert: {
+          annual_price?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          monthly_price?: number
+          name: string
+          seller_limit?: number | null
+          updated_at?: string
+        }
+        Update: {
+          annual_price?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          monthly_price?: number
+          name?: string
+          seller_limit?: number | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {

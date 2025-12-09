@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/components/admin/AdminLayout";
+import CompanyPlanSection from "@/components/admin/CompanyPlanSection";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,7 @@ interface CompanyDetails {
   id: string;
   name: string;
   segment: string | null;
+  plan_id: string | null;
   created_at: string;
 }
 
@@ -285,6 +287,13 @@ const AdminCompanyDetailsPage = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Plan Section */}
+        <CompanyPlanSection
+          companyId={company.id}
+          currentPlanId={company.plan_id}
+          onPlanUpdated={() => fetchCompanyDetails(company.id)}
+        />
 
         {/* Sellers table */}
         <Card className="bg-slate-800 border-slate-700">

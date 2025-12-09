@@ -17,6 +17,7 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import CreateSellerModal from "@/components/seller/CreateSellerModal";
 import EditSellerModal from "@/components/seller/EditSellerModal";
+import PlanLimitBanner from "@/components/seller/PlanLimitBanner";
 import AppLayout from "@/components/layout/AppLayout";
 
 interface Seller {
@@ -28,6 +29,11 @@ interface Seller {
   is_active: boolean;
 }
 
+interface PlanInfo {
+  name: string | null;
+  sellerLimit: number | null;
+}
+
 const SellersPage = () => {
   const { user } = useAuth();
   const [sellers, setSellers] = useState<Seller[]>([]);
@@ -36,6 +42,7 @@ const SellersPage = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
   const [togglingStatus, setTogglingStatus] = useState<string | null>(null);
+  const [planInfo, setPlanInfo] = useState<PlanInfo>({ name: null, sellerLimit: null });
 
   const fetchSellers = async () => {
     if (!user?.id) return;
@@ -67,8 +74,32 @@ const SellersPage = () => {
         return;
       }
 
+      const companyId = managerProfile.company_id;
+
+      // Fetch company's plan info
+      const { data: companyData } = await supabase
+        .from("companies")
+        .select("plan_id")
+        .eq("id", companyId)
+        .single();
+
+      if (companyData?.plan_id) {
+        const { data: planData } = await supabase
+          .from("plans")
+          .select("name, seller_limit")
+          .eq("id", companyData.plan_id)
+          .single();
+
+        if (planData) {
+          setPlanInfo({
+            name: planData.name,
+            sellerLimit: planData.seller_limit,
+          });
+        }
+      }
+
       // Filter profiles from the same company
-      const companyProfiles = profiles.filter(p => p.company_id === managerProfile.company_id);
+      const companyProfiles = profiles.filter(p => p.company_id === companyId);
       const userIds = companyProfiles.map((p) => p.user_id);
 
       // Get roles for these users
@@ -139,9 +170,19 @@ const SellersPage = () => {
     }
   };
 
+  const activeSellerCount = sellers.filter(s => s.is_active).length;
+  const isAtLimit = planInfo.sellerLimit !== null && activeSellerCount >= planInfo.sellerLimit;
+
   return (
     <AppLayout>
       <div className="space-y-6">
+        {/* Plan Banner */}
+        <PlanLimitBanner
+          planName={planInfo.name}
+          sellerLimit={planInfo.sellerLimit}
+          currentSellerCount={activeSellerCount}
+        />
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -150,7 +191,12 @@ const SellersPage = () => {
               Gerencie os vendedores da sua equipe
             </p>
           </div>
-          <Button onClick={() => setIsCreateModalOpen(true)} className="gap-2">
+          <Button 
+            onClick={() => setIsCreateModalOpen(true)} 
+            className="gap-2"
+            disabled={isAtLimit}
+            title={isAtLimit ? "Limite de vendedores atingido" : undefined}
+          >
             <Plus className="h-4 w-4" />
             Cadastrar Vendedor
           </Button>
