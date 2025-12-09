@@ -13,6 +13,7 @@ import DashboardPage from "./pages/DashboardPage";
 import HistoryPage from "./pages/HistoryPage";
 import WhatsAppConnectPage from "./pages/WhatsAppConnectPage";
 import WhatsAppStatusPage from "./pages/WhatsAppStatusPage";
+import SellersPage from "./pages/SellersPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -84,6 +85,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="gestor">
                   <WhatsAppStatusPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/gestor/vendedores" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <SellersPage />
                 </ProtectedRoute>
               } 
             />
