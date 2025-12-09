@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { 
   History, 
   Trophy, 
@@ -11,11 +10,13 @@ import {
   Clock, 
   ChevronRight, 
   MessageSquare,
-  Calendar
+  Calendar,
+  Info
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { CycleDetailsModal } from "./CycleDetailsModal";
 
 export interface SaleCycle {
   id: string;
@@ -26,6 +27,7 @@ export interface SaleCycle {
   closed_at: string | null;
   lost_reason: string | null;
   won_summary: string | null;
+  last_activity_at?: string | null;
   messageCount?: number;
 }
 
@@ -57,85 +59,116 @@ const SaleCycleHistory = ({
   onSelectCycle,
   className,
 }: SaleCycleHistoryProps) => {
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [selectedCycleForDetails, setSelectedCycleForDetails] = useState<{ id: string; number: number } | null>(null);
+
   if (cycles.length === 0) {
     return null;
   }
 
-  return (
-    <Card className={cn("", className)}>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <History className="h-4 w-4" />
-          Histórico de Ciclos ({cycles.length})
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <ScrollArea className="h-[200px]">
-          <div className="space-y-2">
-            {cycles.map((cycle, index) => {
-              const status = statusConfig[cycle.status] || statusConfig.pending;
-              const StatusIcon = status.icon;
-              const isActive = cycle.id === activeCycleId;
-              const cycleNumber = cycles.length - index;
+  const handleDetailsClick = (e: React.MouseEvent, cycleId: string, cycleNumber: number) => {
+    e.stopPropagation();
+    setSelectedCycleForDetails({ id: cycleId, number: cycleNumber });
+    setDetailsModalOpen(true);
+  };
 
-              return (
-                <Button
-                  key={cycle.id}
-                  variant="ghost"
-                  className={cn(
-                    "w-full justify-start h-auto p-3 hover:bg-muted/50",
-                    isActive && "bg-primary/5 border border-primary/20"
-                  )}
-                  onClick={() => onSelectCycle(cycle.id)}
-                >
-                  <div className="flex items-center gap-3 w-full">
-                    <div className={cn(
-                      "h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold",
-                      status.color
-                    )}>
-                      <StatusIcon className="h-4 w-4" />
-                    </div>
-                    
-                    <div className="flex-1 text-left">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">Ciclo #{cycleNumber}</span>
-                        {isActive && (
-                          <Badge variant="default" className="text-[10px] px-1.5 py-0">
-                            Atual
-                          </Badge>
+  return (
+    <>
+      <Card className={cn("", className)}>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <History className="h-4 w-4" />
+            Histórico de Ciclos ({cycles.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <ScrollArea className="h-[220px]">
+            <div className="space-y-2">
+              {cycles.map((cycle, index) => {
+                const status = statusConfig[cycle.status] || statusConfig.pending;
+                const StatusIcon = status.icon;
+                const isActive = cycle.id === activeCycleId;
+                const cycleNumber = cycles.length - index;
+
+                return (
+                  <div
+                    key={cycle.id}
+                    className={cn(
+                      "w-full flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors",
+                      isActive 
+                        ? "bg-primary/5 border border-primary/20 hover:bg-primary/10" 
+                        : "hover:bg-muted/50"
+                    )}
+                    onClick={() => onSelectCycle(cycle.id)}
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className={cn(
+                        "h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0",
+                        status.color
+                      )}>
+                        <StatusIcon className="h-4 w-4" />
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">Ciclo #{cycleNumber}</span>
+                          {isActive && (
+                            <Badge variant="default" className="text-[10px] px-1.5 py-0">
+                              Atual
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Calendar className="h-3 w-3" />
+                          {format(new Date(cycle.created_at), "dd/MM/yy", { locale: ptBR })}
+                          {cycle.closed_at && (
+                            <>
+                              <span>→</span>
+                              {format(new Date(cycle.closed_at), "dd/MM/yy", { locale: ptBR })}
+                            </>
+                          )}
+                        </div>
+                        {cycle.status === "lost" && cycle.lost_reason && (
+                          <p className="text-xs text-destructive mt-0.5 truncate">
+                            {lossReasonLabels[cycle.lost_reason] || cycle.lost_reason}
+                          </p>
+                        )}
+                        {cycle.status === "won" && cycle.won_summary && (
+                          <p className="text-xs text-success mt-0.5 truncate max-w-[150px]">
+                            {cycle.won_summary}
+                          </p>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        {format(new Date(cycle.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                        {cycle.closed_at && (
-                          <>
-                            <span>→</span>
-                            {format(new Date(cycle.closed_at), "dd/MM/yyyy", { locale: ptBR })}
-                          </>
-                        )}
-                      </div>
-                      {cycle.status === "lost" && cycle.lost_reason && (
-                        <p className="text-xs text-destructive mt-0.5">
-                          Motivo: {lossReasonLabels[cycle.lost_reason] || cycle.lost_reason}
-                        </p>
-                      )}
-                      {cycle.status === "won" && cycle.won_summary && (
-                        <p className="text-xs text-success mt-0.5 truncate max-w-[200px]">
-                          {cycle.won_summary}
-                        </p>
-                      )}
                     </div>
                     
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={(e) => handleDetailsClick(e, cycle.id, cycleNumber)}
+                      >
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
                   </div>
-                </Button>
-              );
-            })}
-          </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      {selectedCycleForDetails && (
+        <CycleDetailsModal
+          open={detailsModalOpen}
+          onOpenChange={setDetailsModalOpen}
+          cycleId={selectedCycleForDetails.id}
+          cycleNumber={selectedCycleForDetails.number}
+        />
+      )}
+    </>
   );
 };
 
