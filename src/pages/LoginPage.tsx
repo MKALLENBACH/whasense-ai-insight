@@ -168,8 +168,8 @@ const LoginPage = () => {
                   Credenciais de teste:
                 </p>
                 <div className="space-y-1 text-muted-foreground">
-                  <p>📧 vendedor1@demo.com / 123456</p>
-                  <p>📧 gestor@demo.com / 123456</p>
+                  <p>📧 vendedor1@exercit.com / 123456</p>
+                  <p>📧 gestor@exercit.com / 123456</p>
                 </div>
               </div>
             </div>
