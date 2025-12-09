@@ -45,22 +45,22 @@ serve(async (req) => {
 
     console.log('Fetching conversations for seller:', user.id);
 
-    // Get user role and company
-    const { data: roleData } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    // Get user role and company in parallel
+    const [roleResult, profileResult] = await Promise.all([
+      supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+      supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+    ]);
 
-    const isManager = roleData?.role === 'manager';
-
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    const companyId = profileData?.company_id;
+    const isManager = roleResult.data?.role === 'manager';
+    const companyId = profileResult.data?.company_id;
 
     // Get all customers that have messages with this seller (or all for manager)
     let messagesQuery = supabase
@@ -72,6 +72,7 @@ serve(async (req) => {
         timestamp,
         customer_id,
         seller_id,
+        cycle_id,
         customers (
           id,
           name,
@@ -96,20 +97,39 @@ serve(async (req) => {
       throw messagesError;
     }
 
-    // Get all sales for this seller (or all for manager in company)
-    let salesQuery = supabase
-      .from('sales')
-      .select('customer_id, status, reason');
+    // Get all customer IDs from messages
+    const customerIds = [...new Set((messages || []).map(m => m.customer_id).filter(Boolean))];
 
-    if (!isManager) {
-      salesQuery = salesQuery.eq('seller_id', user.id);
-    }
+    // Fetch all active sale_cycles for these customers (status pending or in_progress)
+    // AND all cycles to know the current cycle status
+    const { data: allCycles } = await supabase
+      .from('sale_cycles')
+      .select('id, customer_id, seller_id, status, created_at, closed_at, lost_reason, won_summary')
+      .in('customer_id', customerIds.length > 0 ? customerIds : [''])
+      .order('created_at', { ascending: false });
 
-    const { data: sales } = await salesQuery;
+    // Build a map of customer_id -> most recent cycle (active or last closed)
+    const customerCycleMap = new Map<string, {
+      id: string;
+      status: string;
+      created_at: string;
+      closed_at: string | null;
+      lost_reason: string | null;
+      won_summary: string | null;
+    }>();
 
-    const salesMap = new Map();
-    for (const sale of sales || []) {
-      salesMap.set(sale.customer_id, { status: sale.status, reason: sale.reason });
+    for (const cycle of allCycles || []) {
+      // Only keep the most recent cycle per customer
+      if (!customerCycleMap.has(cycle.customer_id)) {
+        customerCycleMap.set(cycle.customer_id, {
+          id: cycle.id,
+          status: cycle.status,
+          created_at: cycle.created_at,
+          closed_at: cycle.closed_at,
+          lost_reason: cycle.lost_reason,
+          won_summary: cycle.won_summary,
+        });
+      }
     }
 
     // Get company names
@@ -131,7 +151,10 @@ serve(async (req) => {
       if (!customer) continue;
       
       if (!conversationsMap.has(customerId)) {
-        const saleInfo = salesMap.get(customerId);
+        const cycleInfo = customerCycleMap.get(customerId);
+        // Use cycle status if available, otherwise fallback to customer lead_status
+        const currentStatus = cycleInfo?.status || customer.lead_status || 'pending';
+        
         conversationsMap.set(customerId, {
           id: customerId,
           customer: {
@@ -147,9 +170,13 @@ serve(async (req) => {
           insight: null,
           messageCount: 1,
           hasRisk: false,
-          saleStatus: saleInfo?.status || null,
-          saleReason: saleInfo?.reason || null,
-          leadStatus: customer.lead_status || 'pending',
+          // Use cycle status for filtering tabs
+          cycleStatus: currentStatus,
+          cycleId: cycleInfo?.id || null,
+          cycleLostReason: cycleInfo?.lost_reason || null,
+          cycleWonSummary: cycleInfo?.won_summary || null,
+          // Keep leadStatus for backward compatibility but use cycleStatus for tabs
+          leadStatus: currentStatus,
           isIncomplete: customer.is_incomplete || false,
         });
         customerMessageIds.set(customerId, [message.id]);
@@ -173,31 +200,50 @@ serve(async (req) => {
       filteredConversations = filteredConversations.filter(c => companyCustomerIds.has(c.id));
     }
 
-    // Get the latest insight for each conversation (from incoming messages)
-    for (const [customerId, messageIds] of customerMessageIds.entries()) {
-      // Get the most recent insight from any message in this conversation
-      const { data: insights } = await supabase
+    // Get the latest insight for each conversation (batch query)
+    const allMessageIds = Array.from(customerMessageIds.values()).flat();
+    
+    if (allMessageIds.length > 0) {
+      const { data: allInsights } = await supabase
         .from('insights')
         .select('*')
-        .in('message_id', messageIds)
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .in('message_id', allMessageIds)
+        .order('created_at', { ascending: false });
 
-      if (insights && insights.length > 0) {
-        const insight = insights[0];
-        const conv = conversationsMap.get(customerId);
-        if (conv) {
-          conv.insight = {
-            sentiment: insight.sentiment,
-            intention: insight.intention,
-            objection: insight.objection,
-            temperature: insight.temperature,
-            suggestion: insight.suggestion,
-            next_action: insight.next_action,
-          };
-          conv.hasRisk = insight.sentiment === 'angry' || 
-                         insight.sentiment === 'negative' || 
-                         (insight.objection && insight.objection !== 'none');
+      // Build a map of message_id -> insight
+      const insightsByMessage = new Map<string, any>();
+      for (const insight of allInsights || []) {
+        if (!insightsByMessage.has(insight.message_id)) {
+          insightsByMessage.set(insight.message_id, insight);
+        }
+      }
+
+      // For each customer, find the most recent insight from any of their messages
+      for (const [customerId, messageIds] of customerMessageIds.entries()) {
+        let latestInsight = null;
+        for (const msgId of messageIds) {
+          const insight = insightsByMessage.get(msgId);
+          if (insight) {
+            latestInsight = insight;
+            break; // Already sorted by created_at desc, so first match is the latest
+          }
+        }
+
+        if (latestInsight) {
+          const conv = conversationsMap.get(customerId);
+          if (conv) {
+            conv.insight = {
+              sentiment: latestInsight.sentiment,
+              intention: latestInsight.intention,
+              objection: latestInsight.objection,
+              temperature: latestInsight.temperature,
+              suggestion: latestInsight.suggestion,
+              next_action: latestInsight.next_action,
+            };
+            conv.hasRisk = latestInsight.sentiment === 'angry' || 
+                           latestInsight.sentiment === 'negative' || 
+                           (latestInsight.objection && latestInsight.objection !== 'none');
+          }
         }
       }
     }
