@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.seed-demo-data]
 verify_jwt = false
+
+[functions.manager-insights]
+verify_jwt = false
