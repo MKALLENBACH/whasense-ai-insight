@@ -9,7 +9,8 @@ import LoginPage from "./pages/LoginPage";
 import ConversationsPage from "./pages/ConversationsPage";
 import ChatPage from "./pages/ChatPage";
 import AlertsPage from "./pages/AlertsPage";
-import DashboardPage from "./pages/DashboardPage";
+import ManagerDashboardPage from "./pages/ManagerDashboardPage";
+import SellerDashboardPage from "./pages/SellerDashboardPage";
 import HistoryPage from "./pages/HistoryPage";
 import WhatsAppConnectPage from "./pages/WhatsAppConnectPage";
 import WhatsAppStatusPage from "./pages/WhatsAppStatusPage";
@@ -67,12 +68,22 @@ const App = () => (
               } 
             />
             
+            {/* Seller dashboard */}
+            <Route 
+              path="/dashboard-vendedor" 
+              element={
+                <ProtectedRoute requiredRole="vendedor">
+                  <SellerDashboardPage />
+                </ProtectedRoute>
+              } 
+            />
+            
             {/* Manager routes */}
             <Route 
               path="/dashboard" 
               element={
                 <ProtectedRoute requiredRole="gestor">
-                  <DashboardPage />
+                  <ManagerDashboardPage />
                 </ProtectedRoute>
               } 
             />
