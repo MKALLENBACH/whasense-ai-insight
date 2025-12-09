@@ -144,61 +144,25 @@ const AdminCompaniesPage = () => {
     setIsCreating(true);
 
     try {
-      // 1. Create company
-      const { data: newCompany, error: companyError } = await supabase
-        .from("companies")
-        .insert({
-          name: companyName,
-          segment: companySegment || null,
-        })
-        .select()
-        .single();
-
-      if (companyError) throw companyError;
-
-      // 2. Create user in Supabase Auth using admin function
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: managerEmail,
-        password: managerPassword,
-        options: {
-          data: {
-            name: managerName,
-          },
+      // Use edge function for admin operations (bypasses RLS)
+      const { data, error } = await supabase.functions.invoke("admin-operations", {
+        body: {
+          action: "create_company_with_manager",
+          companyName,
+          companySegment,
+          managerName,
+          managerEmail,
+          managerPassword,
         },
       });
 
-      if (signUpError) {
-        // Rollback company creation
-        await supabase.from("companies").delete().eq("id", newCompany.id);
-        throw signUpError;
+      if (error) {
+        console.error("Edge function error:", error);
+        throw new Error(error.message || "Erro ao criar empresa");
       }
 
-      if (!authData.user) {
-        await supabase.from("companies").delete().eq("id", newCompany.id);
-        throw new Error("Erro ao criar usuário");
-      }
-
-      // 3. Update profile with company_id
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({
-          company_id: newCompany.id,
-          name: managerName,
-        })
-        .eq("user_id", authData.user.id);
-
-      if (profileError) {
-        console.error("Profile update error:", profileError);
-      }
-
-      // 4. Create manager role
-      const { error: roleError } = await supabase.from("user_roles").insert({
-        user_id: authData.user.id,
-        role: "manager",
-      });
-
-      if (roleError) {
-        console.error("Role insert error:", roleError);
+      if (data?.error) {
+        throw new Error(data.error);
       }
 
       toast.success("Empresa criada com sucesso!");
@@ -207,10 +171,10 @@ const AdminCompaniesPage = () => {
       fetchCompanies();
     } catch (error: any) {
       console.error("Error creating company:", error);
-      if (error.message?.includes("already registered")) {
+      if (error.message?.includes("already registered") || error.message?.includes("already been registered")) {
         toast.error("Este email já está cadastrado");
       } else {
-        toast.error("Erro ao criar empresa");
+        toast.error(error.message || "Erro ao criar empresa");
       }
     } finally {
       setIsCreating(false);
