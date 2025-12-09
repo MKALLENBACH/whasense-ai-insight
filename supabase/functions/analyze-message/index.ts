@@ -6,50 +6,123 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ANALYSIS_PROMPT = `Você é uma IA especialista em análise de conversas de WhatsApp focada em vendas.
-
-Sua função é analisar uma única mensagem enviada pelo cliente e retornar um JSON contendo:
-
-1. sentiment → Emoção do cliente
-   Valores possíveis:
-   - "positive"
-   - "neutral"
-   - "negative"
-   - "angry"
-   - "insecure"
-   - "excited"
-
-2. intention → Nível de intenção de compra (0 a 100)
-
-3. objection → Objeção principal detectada
-   Valores possíveis:
-   - "price"
-   - "delay"
-   - "trust"
-   - "doubt"
-   - "none"
-
-4. temperature → Probabilidade de conversão
-   Valores possíveis:
-   - "cold"
-   - "warm"
-   - "hot"
-
-5. suggestion → Sugestão de resposta breve e prática
-
-6. next_action → Ação recomendada para o vendedor tomar agora
+const ANALYSIS_PROMPT = `Você é um especialista em vendas consultivas, responsável por analisar profundamente a conversa e gerar respostas de alta conversão.
 
 IMPORTANTE:
-- Responda SOMENTE o JSON.
-- Não adicione nenhuma explicação.
-- Não escreva texto fora do JSON.`;
+Você deve analisar TODA a conversa abaixo, referente ao ciclo atual.
+Nunca ignore o contexto completo.
+Nunca se perca na etapa da negociação.
+
+-----------------------------------------
+HISTÓRICO COMPLETO DO CICLO (mensagens):
+"""
+{{cycleMessages}}
+"""
+-----------------------------------------
+
+Mensagem atual do cliente:
+"""
+{{message}}
+"""
+
+-----------------------------------------
+🎯 IDENTIFIQUE A FASE ATUAL DA VENDA
+-----------------------------------------
+
+Classifique obrigatoriamente em uma das fases:
+
+- abertura
+- descoberta
+- diagnostico
+- apresentacao_solução
+- validacao
+- proposta
+- fechamento
+- objeção
+- pos_venda
+- reativacao
+
+-----------------------------------------
+🎯 O QUE VOCÊ DEVE FAZER:
+-----------------------------------------
+
+1. Ler toda a conversa do ciclo (não apenas a última mensagem)
+2. Entender a intenção do cliente
+3. Detectar objeções explícitas e implícitas
+4. Classificar a fase da venda atual
+5. Gerar a melhor resposta possível
+6. Definir a próxima ação ideal do vendedor para avançar
+
+-----------------------------------------
+💡 APLICAR TÉCNICAS DE VENDAS:
+-----------------------------------------
+
+- SPIN Selling
+- GAP Selling
+- Rapport empático
+- Feel–Felt–Found
+- Gatilhos mentais suaves
+- Perguntas consultivas
+- Copywriting de conversão
+- Next step coaching (sempre mover a conversa para frente)
+
+-----------------------------------------
+🧠 REGRAS IMPORTANTES:
+-----------------------------------------
+- Responda como humano (natural e simpático)
+- Use no máximo 1–3 frases
+- Nunca ofereça desconto espontaneamente
+- Nunca invente informações inexistentes
+- Não repita a mensagem do cliente
+- Não seja robótico
+- SE houver objeção, acolha antes de redirecionar
+
+-----------------------------------------
+📦 FORMATO DA RESPOSTA (sempre JSON válido):
+-----------------------------------------
+
+{
+  "sales_stage": "fase_da_venda",
+  "sentiment": "positive | neutral | negative | angry | insecure | excited",
+  "intention": 0-100,
+  "objection": "price | delay | trust | doubt | none",
+  "temperature": "cold | warm | hot",
+  "analysis": "Resumo em 1-2 frases do que está acontecendo.",
+  "suggestion": "Melhor resposta possível ao cliente.",
+  "next_action": "Ação recomendada para avançar a venda."
+}
+
+-----------------------------------------`;
+
+interface CycleMessage {
+  from: "client" | "seller";
+  text: string;
+  timestamp?: string;
+}
+
+function formatCycleMessages(cycleMessages: CycleMessage[]): string {
+  if (!cycleMessages || cycleMessages.length === 0) {
+    return "(Nenhuma mensagem anterior no ciclo)";
+  }
+
+  return cycleMessages.map((msg, index) => {
+    const role = msg.from === "client" ? "CLIENTE" : "VENDEDOR";
+    const time = msg.timestamp ? ` [${msg.timestamp}]` : "";
+    return `[${index + 1}] ${role}${time}: ${msg.text}`;
+  }).join("\n");
+}
 
 // IA Service - handles Lovable AI communication
-async function analyzeMessage(message: string): Promise<{
+async function analyzeMessage(
+  message: string, 
+  cycleMessages: CycleMessage[] = []
+): Promise<{
+  sales_stage: string;
   sentiment: string;
   intention: number;
   objection: string;
   temperature: string;
+  analysis: string;
   suggestion: string;
   next_action: string;
 }> {
@@ -59,10 +132,18 @@ async function analyzeMessage(message: string): Promise<{
     throw new Error('LOVABLE_API_KEY is not configured');
   }
 
-  const userPrompt = `Mensagem do cliente a analisar:
-"""
-${message}
-"""`;
+  // Format the cycle messages for the prompt
+  const formattedCycleMessages = formatCycleMessages(cycleMessages);
+
+  // Build the prompt with the cycle context
+  const systemPrompt = ANALYSIS_PROMPT
+    .replace("{{cycleMessages}}", formattedCycleMessages)
+    .replace("{{message}}", message);
+
+  console.log("Analyzing with cycle context:", {
+    messageCount: cycleMessages.length,
+    currentMessage: message.substring(0, 50) + "...",
+  });
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
@@ -75,12 +156,15 @@ ${message}
       messages: [
         { 
           role: 'system', 
-          content: ANALYSIS_PROMPT
+          content: systemPrompt
         },
-        { role: 'user', content: userPrompt }
+        { 
+          role: 'user', 
+          content: `Analise a mensagem atual do cliente considerando todo o histórico do ciclo acima e retorne o JSON com sua análise completa.`
+        }
       ],
       temperature: 0.3,
-      max_tokens: 500,
+      max_tokens: 800,
     }),
   });
 
@@ -118,32 +202,29 @@ ${message}
     
     const parsed = JSON.parse(jsonContent);
     
-    // Validate required fields
-    const requiredFields = ['sentiment', 'intention', 'objection', 'temperature', 'suggestion', 'next_action'];
-    for (const field of requiredFields) {
-      if (!(field in parsed)) {
-        throw new Error(`Missing required field: ${field}`);
-      }
-    }
-
+    // Validate and normalize response
     return {
-      sentiment: String(parsed.sentiment),
-      intention: Number(parsed.intention),
-      objection: String(parsed.objection),
-      temperature: String(parsed.temperature),
-      suggestion: String(parsed.suggestion),
-      next_action: String(parsed.next_action),
+      sales_stage: String(parsed.sales_stage || "descoberta"),
+      sentiment: String(parsed.sentiment || "neutral"),
+      intention: Number(parsed.intention) || 50,
+      objection: String(parsed.objection || "none"),
+      temperature: String(parsed.temperature || "warm"),
+      analysis: String(parsed.analysis || ""),
+      suggestion: String(parsed.suggestion || "Continue a conversa de forma natural."),
+      next_action: String(parsed.next_action || "Responder ao cliente"),
     };
   } catch (parseError) {
     console.error('Failed to parse AI response:', content);
     // Return default values instead of throwing
     return {
-      sentiment: 'neutral',
+      sales_stage: "descoberta",
+      sentiment: "neutral",
       intention: 50,
-      objection: 'none',
-      temperature: 'warm',
-      suggestion: 'Continue a conversa de forma natural.',
-      next_action: 'Responder ao cliente',
+      objection: "none",
+      temperature: "warm",
+      analysis: "Análise não disponível.",
+      suggestion: "Continue a conversa de forma natural.",
+      next_action: "Responder ao cliente",
     };
   }
 }
@@ -165,7 +246,7 @@ serve(async (req) => {
 
     // Parse request body
     const body = await req.json();
-    const { message, message_id } = body;
+    const { message, message_id, cycleMessages } = body;
 
     // Validate input
     if (!message || typeof message !== 'string') {
@@ -189,12 +270,20 @@ serve(async (req) => {
       );
     }
 
-    console.log('Analyzing message:', message.substring(0, 100) + '...');
+    console.log('Analyzing message with cycle context:', {
+      message: message.substring(0, 100) + '...',
+      cycleMessagesCount: cycleMessages?.length || 0,
+    });
 
-    // Call IA Service to analyze the message
-    const analysis = await analyzeMessage(message);
+    // Call IA Service to analyze the message with full cycle context
+    const analysis = await analyzeMessage(message, cycleMessages || []);
 
-    console.log('Analysis result:', analysis);
+    console.log('Analysis result:', {
+      sales_stage: analysis.sales_stage,
+      sentiment: analysis.sentiment,
+      temperature: analysis.temperature,
+      objection: analysis.objection,
+    });
 
     // Save to database if message_id is provided
     if (message_id) {

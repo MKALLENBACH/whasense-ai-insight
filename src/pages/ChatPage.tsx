@@ -54,10 +54,12 @@ interface Message {
 }
 
 interface AIAnalysis {
+  sales_stage?: string;
   sentiment: string;
   intention: number;
   objection: string;
   temperature: string;
+  analysis?: string;
   suggestion: string;
   next_action: string;
 }
@@ -242,13 +244,29 @@ const ChatPage = () => {
     }
   };
 
+  // Build cycle messages for AI context
+  const buildCycleMessages = useCallback(() => {
+    return messages.map(m => ({
+      from: m.direction === "incoming" ? "client" as const : "seller" as const,
+      text: m.content,
+      timestamp: format(new Date(m.timestamp), "HH:mm", { locale: ptBR }),
+    }));
+  }, [messages]);
+
   const analyzeMessage = async (messageContent: string, messageId: string) => {
     if (isConversationCompleted || isViewingHistory) return;
     
     setIsAnalyzing(true);
     try {
+      // Send full cycle history to AI
+      const cycleMessages = buildCycleMessages();
+      
       const { data, error } = await supabase.functions.invoke("analyze-message", {
-        body: { message: messageContent, message_id: messageId },
+        body: { 
+          message: messageContent, 
+          message_id: messageId,
+          cycleMessages,
+        },
       });
 
       if (error) throw error;
