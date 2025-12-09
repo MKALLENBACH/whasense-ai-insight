@@ -40,7 +40,7 @@ const App = () => (
             <Route 
               path="/chat/:id" 
               element={
-                <ProtectedRoute requiredRole="vendedor">
+                <ProtectedRoute>
                   <ChatPage />
                 </ProtectedRoute>
               } 
