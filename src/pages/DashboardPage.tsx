@@ -197,6 +197,31 @@ const DashboardPage = () => {
     fetchDashboardData();
   }, [user?.companyId]);
 
+  // Realtime subscription for sales updates
+  useEffect(() => {
+    if (!user?.companyId) return;
+
+    const channel = supabase
+      .channel('dashboard-sales-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sales',
+        },
+        (payload) => {
+          console.log('Sales change detected:', payload);
+          fetchDashboardData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.companyId]);
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     fetchDashboardData();
