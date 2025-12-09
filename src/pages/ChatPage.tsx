@@ -88,7 +88,7 @@ const temperatureConfig: Record<string, { label: string; color: string }> = {
 const ChatPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { session, user } = useAuth();
+  const { session, user, isManager, isSeller } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -147,12 +147,19 @@ const ChatPage = () => {
       setCustomer(customerData);
 
       // Fetch messages for this customer
-      const { data: messagesData, error: messagesError } = await supabase
+      // Managers can see all messages, sellers only see their own
+      let messagesQuery = supabase
         .from("messages")
         .select("id, content, direction, timestamp")
         .eq("customer_id", id)
-        .eq("seller_id", user?.id)
         .order("timestamp", { ascending: true });
+
+      // Only filter by seller_id for sellers, managers can see all
+      if (isSeller) {
+        messagesQuery = messagesQuery.eq("seller_id", user?.id);
+      }
+
+      const { data: messagesData, error: messagesError } = await messagesQuery;
 
       if (messagesError) throw messagesError;
       
@@ -376,36 +383,42 @@ const ChatPage = () => {
               />
             )}
 
-            {/* Demo button to simulate incoming messages */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={simulateIncomingMessage}
-              className="gap-2"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Simular
-            </Button>
+            {/* Demo button to simulate incoming messages - Only for sellers */}
+            {isSeller && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={simulateIncomingMessage}
+                className="gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Simular
+              </Button>
+            )}
 
-            {/* Sale registration buttons */}
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => setShowSaleModal(true)}
-              className="gap-2 bg-success hover:bg-success/90"
-            >
-              <Trophy className="h-4 w-4" />
-              Venda
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowSaleModal(true)}
-              className="gap-2"
-            >
-              <XCircle className="h-4 w-4" />
-              Perda
-            </Button>
+            {/* Sale registration buttons - Only for sellers */}
+            {isSeller && (
+              <>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setShowSaleModal(true)}
+                  className="gap-2 bg-success hover:bg-success/90"
+                >
+                  <Trophy className="h-4 w-4" />
+                  Venda
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSaleModal(true)}
+                  className="gap-2"
+                >
+                  <XCircle className="h-4 w-4" />
+                  Perda
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Messages Area */}
@@ -455,25 +468,27 @@ const ChatPage = () => {
             </div>
           </ScrollArea>
 
-          {/* Message Input */}
-          <form onSubmit={handleSendMessage} className="p-4 border-t border-border">
-            <div className="flex gap-2">
-              <Input
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Digite sua mensagem..."
-                disabled={isSending}
-                className="flex-1"
-              />
-              <Button type="submit" disabled={isSending || !newMessage.trim()}>
-                {isSending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          </form>
+          {/* Message Input - Only for sellers */}
+          {isSeller && (
+            <form onSubmit={handleSendMessage} className="p-4 border-t border-border">
+              <div className="flex gap-2">
+                <Input
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Digite sua mensagem..."
+                  disabled={isSending}
+                  className="flex-1"
+                />
+                <Button type="submit" disabled={isSending || !newMessage.trim()}>
+                  {isSending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </form>
+          )}
         </div>
 
         {/* AI Insights Panel */}
@@ -481,10 +496,10 @@ const ChatPage = () => {
           <div className="p-4 border-b border-border">
             <h3 className="font-semibold flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
-              Insights da IA
+              {isManager ? "Resumo da Conversa" : "Insights da IA"}
             </h3>
             <p className="text-xs text-muted-foreground mt-1">
-              Análise automática em tempo real
+              {isManager ? "Visão geral para gestores" : "Análise automática em tempo real"}
             </p>
           </div>
 
@@ -498,7 +513,7 @@ const ChatPage = () => {
               </div>
             ) : aiAnalysis ? (
               <div className="space-y-4">
-                {/* Sentiment */}
+                {/* Sentiment - Visible to both */}
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
@@ -513,7 +528,7 @@ const ChatPage = () => {
                   </CardContent>
                 </Card>
 
-                {/* Purchase Intent */}
+                {/* Purchase Intent - Visible to both */}
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
@@ -534,7 +549,7 @@ const ChatPage = () => {
                   </CardContent>
                 </Card>
 
-                {/* Objection */}
+                {/* Objection - Visible to both */}
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
@@ -551,64 +566,71 @@ const ChatPage = () => {
                   </CardContent>
                 </Card>
 
-                {/* Temperature */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Thermometer className="h-4 w-4 text-primary" />
-                      Temperatura do Lead
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Badge className={tempInfo.color}>
-                      {tempInfo.label}
-                    </Badge>
-                  </CardContent>
-                </Card>
+                {/* Temperature - Only for sellers */}
+                {isSeller && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Thermometer className="h-4 w-4 text-primary" />
+                        Temperatura do Lead
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Badge className={tempInfo.color}>
+                        {tempInfo.label}
+                      </Badge>
+                    </CardContent>
+                  </Card>
+                )}
 
-                <Separator />
+                {/* Separator and Suggestion - Only for sellers */}
+                {isSeller && (
+                  <>
+                    <Separator />
 
-                {/* Suggestion */}
-                <Card className="border-primary/30 bg-primary/5">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Lightbulb className="h-4 w-4 text-primary" />
-                      Sugestão de Resposta
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-sm">{aiAnalysis.suggestion}</p>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={useSuggestion}
-                      className="w-full gap-2"
-                    >
-                      <Copy className="h-4 w-4" />
-                      Usar sugestão da IA
-                    </Button>
-                  </CardContent>
-                </Card>
+                    {/* Suggestion */}
+                    <Card className="border-primary/30 bg-primary/5">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Lightbulb className="h-4 w-4 text-primary" />
+                          Sugestão de Resposta
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <p className="text-sm">{aiAnalysis.suggestion}</p>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={useSuggestion}
+                          className="w-full gap-2"
+                        >
+                          <Copy className="h-4 w-4" />
+                          Usar sugestão da IA
+                        </Button>
+                      </CardContent>
+                    </Card>
 
-                {/* Next Action */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <ArrowRight className="h-4 w-4 text-success" />
-                      Próxima Ação
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">{aiAnalysis.next_action}</p>
-                  </CardContent>
-                </Card>
+                    {/* Next Action */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <ArrowRight className="h-4 w-4 text-success" />
+                          Próxima Ação
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground">{aiAnalysis.next_action}</p>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-center py-8 text-muted-foreground">
                 <div className="text-center">
                   <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Aguardando mensagem do cliente</p>
-                  <p className="text-xs mt-1">Os insights aparecerão automaticamente</p>
+                  <p className="text-sm">{isManager ? "Nenhuma análise disponível" : "Aguardando mensagem do cliente"}</p>
+                  <p className="text-xs mt-1">{isManager ? "Esta conversa ainda não possui insights" : "Os insights aparecerão automaticamente"}</p>
                 </div>
               </div>
             )}
