@@ -180,6 +180,7 @@ export type Database = {
         Row: {
           content: string
           customer_id: string
+          cycle_id: string | null
           direction: Database["public"]["Enums"]["message_direction"]
           id: string
           seller_id: string
@@ -188,6 +189,7 @@ export type Database = {
         Insert: {
           content: string
           customer_id: string
+          cycle_id?: string | null
           direction: Database["public"]["Enums"]["message_direction"]
           id?: string
           seller_id: string
@@ -196,6 +198,7 @@ export type Database = {
         Update: {
           content?: string
           customer_id?: string
+          cycle_id?: string | null
           direction?: Database["public"]["Enums"]["message_direction"]
           id?: string
           seller_id?: string
@@ -207,6 +210,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "sale_cycles"
             referencedColumns: ["id"]
           },
         ]
@@ -245,6 +255,47 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sale_cycles: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          customer_id: string
+          id: string
+          lost_reason: string | null
+          seller_id: string
+          status: Database["public"]["Enums"]["lead_status"]
+          won_summary: string | null
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          customer_id: string
+          id?: string
+          lost_reason?: string | null
+          seller_id: string
+          status?: Database["public"]["Enums"]["lead_status"]
+          won_summary?: string | null
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          customer_id?: string
+          id?: string
+          lost_reason?: string | null
+          seller_id?: string
+          status?: Database["public"]["Enums"]["lead_status"]
+          won_summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_cycles_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]
@@ -359,6 +410,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      close_sale_cycle: {
+        Args: {
+          _cycle_id: string
+          _reason?: string
+          _status: Database["public"]["Enums"]["lead_status"]
+          _summary?: string
+        }
+        Returns: undefined
+      }
+      get_or_create_active_cycle: {
+        Args: { _customer_id: string; _seller_id: string }
+        Returns: string
+      }
       get_user_company: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }

@@ -49,6 +49,39 @@ serve(async (req) => {
       });
     }
 
+    // Get or create active cycle for this customer
+    let cycleId: string;
+    
+    const { data: existingCycle } = await supabase
+      .from('sale_cycles')
+      .select('id, status')
+      .eq('customer_id', customerId)
+      .in('status', ['pending', 'in_progress'])
+      .limit(1)
+      .maybeSingle();
+
+    if (existingCycle) {
+      cycleId = existingCycle.id;
+    } else {
+      // Create new cycle
+      const { data: newCycle, error: cycleError } = await supabase
+        .from('sale_cycles')
+        .insert({
+          customer_id: customerId,
+          seller_id: sellerId,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (cycleError) {
+        console.error('Error creating cycle:', cycleError);
+        throw cycleError;
+      }
+      cycleId = newCycle.id;
+      console.log('Created new cycle for simulation:', cycleId);
+    }
+
     // Build conversation context
     let conversationContext = "";
     if (conversationHistory && conversationHistory.length > 0) {
@@ -90,7 +123,7 @@ serve(async (req) => {
     const aiData = await aiResponse.json();
     const customerMessage = aiData.choices?.[0]?.message?.content?.trim() || "Hmm, pode me explicar melhor?";
 
-    // Save the customer message
+    // Save the customer message with cycle_id
     const { data: savedMessage, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -99,6 +132,7 @@ serve(async (req) => {
         content: customerMessage,
         direction: 'incoming',
         timestamp: new Date().toISOString(),
+        cycle_id: cycleId,
       })
       .select('id')
       .single();
@@ -129,6 +163,7 @@ serve(async (req) => {
       success: true,
       message: customerMessage,
       messageId: savedMessage.id,
+      cycleId,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
