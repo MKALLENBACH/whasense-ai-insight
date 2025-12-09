@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -155,13 +155,12 @@ const LoginPage = () => {
           </CardContent>
 
           <CardFooter className="flex flex-col gap-3 pt-0">
-            <button
-              type="button"
+            <Link
+              to="/forgot-password"
               className="text-sm text-muted-foreground hover:text-primary transition-colors"
-              onClick={() => toast.info("Funcionalidade em desenvolvimento")}
             >
               Esqueci minha senha
-            </button>
+            </Link>
 
             <div className="w-full border-t border-border pt-4 mt-2">
               <div className="p-3 bg-muted/50 rounded-lg text-xs">
