@@ -51,11 +51,45 @@ serve(async (req) => {
     console.log('Starting alert calculation...');
     const now = new Date();
 
-    // Fetch all active customers (pending or in_progress) with their latest messages and insights
+    // Fetch all customers with active sale cycles (pending or in_progress only)
+    // First get customers with active cycles
+    const { data: activeCycles, error: cyclesError } = await supabase
+      .from('sale_cycles')
+      .select('customer_id, seller_id')
+      .in('status', ['pending', 'in_progress']);
+
+    if (cyclesError) {
+      console.error('Error fetching active cycles:', cyclesError);
+      throw cyclesError;
+    }
+
+    const activeCustomerIds = [...new Set(activeCycles?.map(c => c.customer_id) || [])];
+    
+    if (activeCustomerIds.length === 0) {
+      console.log('No active cycles found, cleaning up all alerts');
+      // Delete all operational alerts since there are no active cycles
+      await supabase
+        .from('alerts')
+        .delete()
+        .in('alert_type', [
+          ALERT_TYPES.WAITING_RESPONSE,
+          ALERT_TYPES.HOT_LEAD,
+          ALERT_TYPES.OPEN_OBJECTION,
+          ALERT_TYPES.STALE_LEAD,
+          ALERT_TYPES.INCOMPLETE_LEAD,
+        ]);
+      
+      return new Response(
+        JSON.stringify({ success: true, alertsCreated: 0, customersProcessed: 0 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Fetch customer details for active cycles only
     const { data: customers, error: customersError } = await supabase
       .from('customers')
       .select('id, name, seller_id, lead_status, is_incomplete, company_id')
-      .in('lead_status', ['pending', 'in_progress']);
+      .in('id', activeCustomerIds);
 
     if (customersError) {
       console.error('Error fetching customers:', customersError);
@@ -218,9 +252,6 @@ serve(async (req) => {
     }
 
     // Delete all existing alerts and insert new ones (atomic update)
-    // First, get IDs of customers with alerts to delete
-    const activeCustomerIds = customers?.map(c => c.id) || [];
-    
     if (activeCustomerIds.length > 0) {
       // Delete alerts for active customers (will be recreated if conditions still apply)
       const { error: deleteError } = await supabase
