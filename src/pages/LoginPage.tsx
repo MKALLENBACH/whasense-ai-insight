@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Zap, Loader2, Mail, Lock, AlertCircle } from "lucide-react";
+import { Zap, Loader2, Mail, Lock, AlertCircle, Dumbbell, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -13,6 +14,7 @@ const LoginPage = () => {
   const { login, isAuthenticated, user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [isSeedingDemo, setIsSeedingDemo] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -57,6 +59,31 @@ const LoginPage = () => {
       setError(err instanceof Error ? err.message : "Erro ao fazer login");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSeedDemo = async () => {
+    setIsSeedingDemo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('seed-demo-data');
+      
+      if (error) throw error;
+
+      toast.success("Ambiente de testes criado!", {
+        description: "Use as credenciais abaixo para acessar",
+        duration: 8000,
+      });
+
+      // Auto-fill with demo credentials
+      setEmail("vendedor1@exercit.com");
+      setPassword("123456");
+
+      console.log("Demo data seeded:", data);
+    } catch (err) {
+      console.error("Error seeding demo:", err);
+      toast.error("Erro ao criar ambiente de testes");
+    } finally {
+      setIsSeedingDemo(false);
     }
   };
 
@@ -157,7 +184,7 @@ const LoginPage = () => {
             </form>
           </CardContent>
 
-          <CardFooter className="flex justify-center pt-0">
+          <CardFooter className="flex flex-col gap-3 pt-0">
             <button 
               type="button"
               className="text-sm text-muted-foreground hover:text-primary transition-colors"
@@ -165,6 +192,41 @@ const LoginPage = () => {
             >
               Esqueci minha senha
             </button>
+
+            <div className="w-full border-t border-border pt-4 mt-2">
+              <p className="text-xs text-muted-foreground text-center mb-3">
+                Ambiente de testes Exercit Esportes
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handleSeedDemo}
+                disabled={isSeedingDemo}
+              >
+                {isSeedingDemo ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Criando ambiente...
+                  </>
+                ) : (
+                  <>
+                    <Dumbbell className="h-4 w-4" />
+                    Criar Demo Exercit Esportes
+                  </>
+                )}
+              </Button>
+              <div className="mt-3 p-3 bg-muted/50 rounded-lg text-xs">
+                <p className="font-medium flex items-center gap-2 mb-2">
+                  <Users className="h-3 w-3" />
+                  Credenciais de teste:
+                </p>
+                <div className="space-y-1 text-muted-foreground">
+                  <p>📧 vendedor1@exercit.com / 123456</p>
+                  <p>📧 gestor@exercit.com / 123456</p>
+                </div>
+              </div>
+            </div>
           </CardFooter>
         </Card>
 
