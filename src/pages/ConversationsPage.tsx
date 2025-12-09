@@ -29,6 +29,7 @@ interface ConversationData {
   } | null;
   messageCount: number;
   hasRisk: boolean;
+  saleStatus: "won" | "lost" | null;
 }
 
 const ConversationsPage = () => {
@@ -65,7 +66,7 @@ const ConversationsPage = () => {
         lastMessageTime: new Date(conv.lastMessageTime),
         unreadCount: 0,
         leadTemperature: (conv.insight?.temperature as LeadTemperature) || "cold",
-        saleStatus: "pending",
+        saleStatus: conv.saleStatus || "pending",
         assignedTo: "",
         aiInsight: conv.insight ? {
           emotion: conv.insight.sentiment,
