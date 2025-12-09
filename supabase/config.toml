@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.award-points]
 verify_jwt = false
+
+[functions.seller-performance-insights]
+verify_jwt = false
