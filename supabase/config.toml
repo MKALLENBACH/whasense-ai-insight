@@ -2,3 +2,6 @@ project_id = "ygxnxxbxeflkvyxkwmwh"
 
 [functions.analyze-message]
 verify_jwt = false
+
+[functions.list-conversations]
+verify_jwt = false
