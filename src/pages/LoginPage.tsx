@@ -162,7 +162,6 @@ const LoginPage = () => {
                 </p>
                 <div className="space-y-1 text-muted-foreground">
                   <p>📧 vendedor1@exercit.com / 123456</p>
-                  <p>📧 vendedor2@exercit.com / 123456</p>
                   <p>📧 gestor@exercit.com / 123456</p>
                 </div>
               </div>
