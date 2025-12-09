@@ -20,11 +20,11 @@ serve(async (req) => {
     console.log('Webhook received:', JSON.stringify(body));
 
     const { 
-      phoneNumber,      // Customer phone number
-      message,          // Message content
-      timestamp,        // When the message was sent
-      messageId,        // Unique message ID from WhatsApp
-      type = 'text'     // Message type (text, image, audio, etc.)
+      phoneNumber,
+      message,
+      timestamp,
+      messageId,
+      type = 'text'
     } = body;
 
     if (!phoneNumber || !message) {
@@ -43,7 +43,6 @@ serve(async (req) => {
       .single();
 
     if (sessionError || !session) {
-      // Try to find by partial match (removing country code variations)
       const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-11);
       const { data: sessionByClean } = await supabase
         .from('whatsapp_sessions')
@@ -65,7 +64,7 @@ serve(async (req) => {
 
     const sellerId = session?.seller_id;
 
-    // Get seller's company_id for the customer
+    // Get seller's company_id
     const { data: sellerProfile } = await supabase
       .from('profiles')
       .select('company_id')
@@ -74,6 +73,7 @@ serve(async (req) => {
 
     // Find or create customer
     let customerId: string;
+    let isNewCustomer = false;
     const { data: existingCustomer } = await supabase
       .from('customers')
       .select('id')
@@ -84,7 +84,7 @@ serve(async (req) => {
     if (existingCustomer) {
       customerId = existingCustomer.id;
     } else {
-      // Create new customer
+      isNewCustomer = true;
       const { data: newCustomer, error: customerError } = await supabase
         .from('customers')
         .insert({
@@ -92,6 +92,7 @@ serve(async (req) => {
           phone: phoneNumber,
           seller_id: sellerId,
           company_id: sellerProfile?.company_id,
+          is_incomplete: true,
         })
         .select('id')
         .single();
@@ -102,7 +103,42 @@ serve(async (req) => {
       customerId = newCustomer.id;
     }
 
-    // Save the message
+    // Get or create active cycle for this customer
+    let cycleId: string;
+    
+    // Check for existing active cycle
+    const { data: existingCycle } = await supabase
+      .from('sale_cycles')
+      .select('id, status')
+      .eq('customer_id', customerId)
+      .in('status', ['pending', 'in_progress'])
+      .limit(1)
+      .maybeSingle();
+
+    if (existingCycle) {
+      cycleId = existingCycle.id;
+      console.log('Using existing cycle:', cycleId);
+    } else {
+      // Create new cycle
+      const { data: newCycle, error: cycleError } = await supabase
+        .from('sale_cycles')
+        .insert({
+          customer_id: customerId,
+          seller_id: sellerId,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (cycleError) {
+        console.error('Error creating cycle:', cycleError);
+        throw cycleError;
+      }
+      cycleId = newCycle.id;
+      console.log('Created new cycle:', cycleId);
+    }
+
+    // Save the message with cycle_id
     const { data: savedMessage, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -111,6 +147,7 @@ serve(async (req) => {
         content: message,
         direction: 'incoming',
         timestamp: timestamp || new Date().toISOString(),
+        cycle_id: cycleId,
       })
       .select('id')
       .single();
@@ -137,13 +174,14 @@ serve(async (req) => {
       console.log('AI Analysis result:', analysisResult);
     } catch (analyzeError) {
       console.error('Failed to analyze message:', analyzeError);
-      // Don't fail the webhook if analysis fails
     }
 
     return new Response(JSON.stringify({
       success: true,
       messageId: savedMessage.id,
       customerId,
+      cycleId,
+      isNewCustomer,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

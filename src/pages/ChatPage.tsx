@@ -29,7 +29,6 @@ import {
   RefreshCw,
   Trophy,
   XCircle,
-  Bot,
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
@@ -42,12 +41,16 @@ import SaleRegistrationModal from "@/components/sale/SaleRegistrationModal";
 import { useCustomerSimulation } from "@/hooks/useCustomerSimulation";
 import ManagerInsightsPanel from "@/components/manager/ManagerInsightsPanel";
 import NewLeadModal from "@/components/lead/NewLeadModal";
+import SaleCycleHistory from "@/components/sale/SaleCycleHistory";
+import CurrentCycleBadge from "@/components/sale/CurrentCycleBadge";
+import { useSaleCycles } from "@/hooks/useSaleCycles";
 
 interface Message {
   id: string;
   content: string;
   direction: "incoming" | "outgoing";
   timestamp: string;
+  cycle_id?: string | null;
 }
 
 interface AIAnalysis {
@@ -67,12 +70,6 @@ interface Customer {
   seller_id: string | null;
   lead_status: string;
   is_incomplete: boolean;
-}
-
-interface ExistingSale {
-  id: string;
-  status: "won" | "lost";
-  reason: string | null;
 }
 
 const sentimentConfig: Record<string, { icon: typeof Smile; label: string; color: string }> = {
@@ -114,11 +111,33 @@ const ChatPage = () => {
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [simulationEnabled, setSimulationEnabled] = useState(true);
   const [isSimulatingResponse, setIsSimulatingResponse] = useState(false);
-  const [existingSale, setExistingSale] = useState<ExistingSale | null>(null);
   const [showLeadModal, setShowLeadModal] = useState(false);
+  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
+  const [isViewingHistory, setIsViewingHistory] = useState(false);
+
+  // Sale cycles hook
+  const {
+    cycles,
+    activeCycle,
+    isLoading: isCyclesLoading,
+    closeCycle,
+    updateCycleStatus,
+    getCycleNumber,
+    getOrCreateActiveCycle,
+    fetchCycles,
+  } = useSaleCycles({
+    customerId: id || "",
+    sellerId: user?.id,
+  });
+
+  // Current cycle to display (active or selected from history)
+  const displayedCycleId = selectedCycleId || activeCycle?.id;
+  const displayedCycle = selectedCycleId 
+    ? cycles.find(c => c.id === selectedCycleId) 
+    : activeCycle;
 
   // Determine if conversation is completed
-  const isConversationCompleted = customer?.lead_status === 'won' || customer?.lead_status === 'lost';
+  const isConversationCompleted = displayedCycle?.status === 'won' || displayedCycle?.status === 'lost';
 
   // AI Customer Simulation
   const {
@@ -130,7 +149,7 @@ const ChatPage = () => {
   } = useCustomerSimulation({
     customerId: id || "",
     sellerId: user?.id || "",
-    enabled: simulationEnabled && !isConversationCompleted,
+    enabled: simulationEnabled && !isConversationCompleted && !isViewingHistory,
     minDelay: 20000,
     maxDelay: 60000,
   });
@@ -147,7 +166,7 @@ const ChatPage = () => {
     if (id && session && user) {
       fetchConversation();
     }
-  }, [id, session, user, isManager, isSeller]);
+  }, [id, session, user, isManager, isSeller, displayedCycleId]);
 
   const fetchConversation = async () => {
     if (!id || !session?.access_token) return;
@@ -169,15 +188,20 @@ const ChatPage = () => {
         setShowLeadModal(true);
       }
 
-      // Fetch messages for this customer
+      // Fetch messages for this customer (filtered by cycle if viewing history)
       let messagesQuery = supabase
         .from("messages")
-        .select("id, content, direction, timestamp")
+        .select("id, content, direction, timestamp, cycle_id")
         .eq("customer_id", id)
         .order("timestamp", { ascending: true });
 
       if (isSeller) {
         messagesQuery = messagesQuery.eq("seller_id", user?.id);
+      }
+
+      // Filter by cycle if selected
+      if (displayedCycleId) {
+        messagesQuery = messagesQuery.eq("cycle_id", displayedCycleId);
       }
 
       const { data: messagesData, error: messagesError } = await messagesQuery;
@@ -187,7 +211,7 @@ const ChatPage = () => {
       setMessages(messagesData || []);
 
       // Get the latest insight if exists (only for non-completed conversations)
-      if (messagesData && messagesData.length > 0 && customerData?.lead_status !== 'won' && customerData?.lead_status !== 'lost') {
+      if (messagesData && messagesData.length > 0 && !isConversationCompleted) {
         const lastIncomingMessage = [...messagesData].reverse().find(m => m.direction === "incoming");
         if (lastIncomingMessage) {
           const { data: insightData } = await supabase
@@ -210,25 +234,6 @@ const ChatPage = () => {
           }
         }
       }
-
-      // Fetch existing sale for this customer
-      const { data: saleData } = await supabase
-        .from("sales")
-        .select("id, status, reason")
-        .eq("customer_id", id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (saleData) {
-        setExistingSale({
-          id: saleData.id,
-          status: saleData.status as "won" | "lost",
-          reason: saleData.reason,
-        });
-      } else {
-        setExistingSale(null);
-      }
     } catch (error) {
       console.error("Error fetching conversation:", error);
       toast.error("Erro ao carregar conversa");
@@ -238,7 +243,7 @@ const ChatPage = () => {
   };
 
   const analyzeMessage = async (messageContent: string, messageId: string) => {
-    if (isConversationCompleted) return; // Don't analyze if completed
+    if (isConversationCompleted || isViewingHistory) return;
     
     setIsAnalyzing(true);
     try {
@@ -260,21 +265,20 @@ const ChatPage = () => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !id || !user || isSending) return;
+    if (!newMessage.trim() || !id || !user || isSending || isViewingHistory) return;
 
     const messageContent = newMessage.trim();
     setIsSending(true);
     setNewMessage("");
     
     try {
-      // Update lead status to in_progress if it's pending
-      if (customer?.lead_status === 'pending') {
-        await supabase
-          .from("customers")
-          .update({ lead_status: 'in_progress' })
-          .eq("id", id);
-        
-        setCustomer(prev => prev ? { ...prev, lead_status: 'in_progress' } : null);
+      // Get or create active cycle
+      const cycle = await getOrCreateActiveCycle();
+      if (!cycle) throw new Error("Failed to get or create cycle");
+
+      // Update cycle status to in_progress if it's pending
+      if (cycle.status === 'pending') {
+        await updateCycleStatus(cycle.id, 'in_progress');
       }
 
       const { data, error } = await supabase
@@ -284,6 +288,7 @@ const ChatPage = () => {
           customer_id: id,
           content: messageContent,
           direction: "outgoing",
+          cycle_id: cycle.id,
         })
         .select()
         .single();
@@ -299,7 +304,7 @@ const ChatPage = () => {
         if (response) {
           const { data: newMsg } = await supabase
             .from("messages")
-            .select("id, content, direction, timestamp")
+            .select("id, content, direction, timestamp, cycle_id")
             .eq("id", response.messageId)
             .single();
           
@@ -319,7 +324,7 @@ const ChatPage = () => {
   };
 
   const simulateIncomingMessage = async () => {
-    if (!id || !user || isSimulatingResponse || isConversationCompleted) return;
+    if (!id || !user || isSimulatingResponse || isConversationCompleted || isViewingHistory) return;
 
     setIsSimulatingResponse(true);
     try {
@@ -347,7 +352,7 @@ const ChatPage = () => {
       if (data.success) {
         const { data: newMsg } = await supabase
           .from("messages")
-          .select("id, content, direction, timestamp")
+          .select("id, content, direction, timestamp, cycle_id")
           .eq("id", data.messageId)
           .single();
         
@@ -355,6 +360,8 @@ const ChatPage = () => {
           setMessages((prev) => [...prev, newMsg]);
           await analyzeMessage(data.message, data.messageId);
         }
+        // Refresh cycles to get the new one if created
+        await fetchCycles();
       }
     } catch (error) {
       console.error("Error simulating message:", error);
@@ -384,7 +391,22 @@ const ChatPage = () => {
       .slice(0, 2);
   };
 
-  if (isLoading) {
+  const handleSelectCycle = (cycleId: string) => {
+    if (cycleId === activeCycle?.id) {
+      setSelectedCycleId(null);
+      setIsViewingHistory(false);
+    } else {
+      setSelectedCycleId(cycleId);
+      setIsViewingHistory(true);
+    }
+  };
+
+  const handleBackToCurrentCycle = () => {
+    setSelectedCycleId(null);
+    setIsViewingHistory(false);
+  };
+
+  if (isLoading || isCyclesLoading) {
     return (
       <AppLayout>
         <div className="h-[calc(100vh-3rem)] flex items-center justify-center">
@@ -397,6 +419,7 @@ const ChatPage = () => {
   const sentimentInfo = sentimentConfig[aiAnalysis?.sentiment || "neutral"] || sentimentConfig.neutral;
   const SentimentIcon = sentimentInfo.icon;
   const tempInfo = temperatureConfig[aiAnalysis?.temperature || "cold"] || temperatureConfig.cold;
+  const currentCycleNumber = displayedCycle ? getCycleNumber(displayedCycle.id) : 1;
 
   return (
     <AppLayout>
@@ -442,16 +465,29 @@ const ChatPage = () => {
               </p>
             </div>
 
-            {/* Completed badge */}
-            {isConversationCompleted && (
-              <Badge className={existingSale?.status === "won" ? "bg-success" : "bg-destructive"}>
-                <CheckCircle2 className="h-3 w-3 mr-1" />
-                Venda {existingSale?.status === "won" ? "Concluída" : "Perdida"}
-              </Badge>
+            {/* Current Cycle Badge */}
+            {displayedCycle && (
+              <CurrentCycleBadge
+                cycleNumber={currentCycleNumber}
+                status={displayedCycle.status as "pending" | "in_progress" | "won" | "lost"}
+              />
+            )}
+
+            {/* Viewing history indicator */}
+            {isViewingHistory && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBackToCurrentCycle}
+                className="gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Voltar ao atual
+              </Button>
             )}
 
             {/* Temperature badge - only for active conversations */}
-            {!isConversationCompleted && aiAnalysis && (
+            {!isConversationCompleted && !isViewingHistory && aiAnalysis && (
               <LeadTemperatureBadge 
                 temperature={aiAnalysis.temperature as "hot" | "warm" | "cold"} 
                 showLabel 
@@ -459,7 +495,7 @@ const ChatPage = () => {
             )}
 
             {/* Demo button to simulate incoming messages - Only for sellers on active conversations */}
-            {isSeller && !isConversationCompleted && (
+            {isSeller && !isConversationCompleted && !isViewingHistory && (
               <Button
                 variant="outline"
                 size="sm"
@@ -472,8 +508,8 @@ const ChatPage = () => {
               </Button>
             )}
 
-            {/* Sale registration buttons - Only for sellers when no existing sale and not completed */}
-            {isSeller && !existingSale && !isConversationCompleted && (
+            {/* Sale registration buttons - Only for sellers when cycle is active */}
+            {isSeller && activeCycle && !isConversationCompleted && !isViewingHistory && (
               <>
                 <Button
                   variant="default"
@@ -495,19 +531,6 @@ const ChatPage = () => {
                 </Button>
               </>
             )}
-
-            {/* Edit button - Only for managers when sale exists */}
-            {isManager && existingSale && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowSaleModal(true)}
-                className="gap-2"
-              >
-                <Trophy className="h-4 w-4" />
-                Editar Status
-              </Button>
-            )}
           </div>
 
           {/* Messages Area */}
@@ -517,8 +540,8 @@ const ChatPage = () => {
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <div className="text-center">
                     <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Nenhuma mensagem ainda</p>
-                    <p className="text-sm">Clique em "Simular" para testar</p>
+                    <p>Nenhuma mensagem {isViewingHistory ? "neste ciclo" : "ainda"}</p>
+                    {!isViewingHistory && <p className="text-sm">Clique em "Simular" para testar</p>}
                   </div>
                 </div>
               ) : (
@@ -558,7 +581,7 @@ const ChatPage = () => {
           </ScrollArea>
 
           {/* Message Input - Only for sellers on active conversations */}
-          {isSeller && !isConversationCompleted && (
+          {isSeller && !isConversationCompleted && !isViewingHistory && (
             <form onSubmit={handleSendMessage} className="p-4 border-t border-border">
               <div className="flex gap-2">
                 <Input
@@ -579,198 +602,215 @@ const ChatPage = () => {
             </form>
           )}
 
-          {/* Read-only message for completed conversations */}
-          {isConversationCompleted && (
+          {/* Read-only message for completed/history conversations */}
+          {(isConversationCompleted || isViewingHistory) && (
             <div className="p-4 border-t border-border bg-muted/50">
               <p className="text-sm text-muted-foreground text-center">
-                Esta conversa foi concluída. Não é possível enviar novas mensagens.
+                {isViewingHistory 
+                  ? "Você está visualizando um ciclo anterior. Volte ao ciclo atual para enviar mensagens."
+                  : "Este ciclo foi encerrado. Não é possível enviar novas mensagens."}
               </p>
             </div>
           )}
         </div>
 
-        {/* Insights Panel - Different for Manager vs Seller */}
-        {isManager ? (
-          <ManagerInsightsPanel customerId={id || ""} />
-        ) : !isConversationCompleted ? (
-          <div className="w-80 flex-shrink-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-border">
-              <h3 className="font-semibold flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                Insights da IA
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                Análise automática em tempo real
-              </p>
-            </div>
+        {/* Right Panel */}
+        <div className="w-80 flex-shrink-0 flex flex-col gap-4">
+          {/* Cycle History */}
+          {cycles.length > 0 && (
+            <SaleCycleHistory
+              cycles={cycles}
+              activeCycleId={activeCycle?.id || null}
+              onSelectCycle={handleSelectCycle}
+            />
+          )}
 
-            <ScrollArea className="flex-1 p-4">
-              {isAnalyzing ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="text-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">Analisando mensagem...</p>
+          {/* Insights Panel - Different for Manager vs Seller */}
+          {isManager ? (
+            <ManagerInsightsPanel customerId={id || ""} />
+          ) : !isConversationCompleted && !isViewingHistory ? (
+            <div className="flex-1 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-border">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Insights da IA
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Análise automática em tempo real
+                </p>
+              </div>
+
+              <ScrollArea className="flex-1 p-4">
+                {isAnalyzing ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">Analisando mensagem...</p>
+                    </div>
                   </div>
-                </div>
-              ) : aiAnalysis ? (
-                <div className="space-y-4">
-                  {/* Sentiment */}
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <SentimentIcon className={cn("h-4 w-4", sentimentInfo.color)} />
-                        Emoção do Cliente
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <Badge variant="outline" className={sentimentInfo.color}>
-                        {sentimentInfo.label}
-                      </Badge>
-                    </CardContent>
-                  </Card>
+                ) : aiAnalysis ? (
+                  <div className="space-y-4">
+                    {/* Sentiment */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <SentimentIcon className={cn("h-4 w-4", sentimentInfo.color)} />
+                          Emoção do Cliente
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Badge variant="outline" className={sentimentInfo.color}>
+                          {sentimentInfo.label}
+                        </Badge>
+                      </CardContent>
+                    </Card>
 
-                  {/* Purchase Intent */}
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <Target className="h-4 w-4 text-primary" />
-                        Intenção de Compra
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-primary transition-all duration-500"
-                            style={{ width: `${aiAnalysis.intention}%` }}
-                          />
+                    {/* Purchase Intent */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Target className="h-4 w-4 text-primary" />
+                          Intenção de Compra
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary transition-all duration-500"
+                              style={{ width: `${aiAnalysis.intention}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-semibold">{aiAnalysis.intention}%</span>
                         </div>
-                        <span className="text-sm font-semibold">{aiAnalysis.intention}%</span>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
 
-                  {/* Objection */}
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-warning" />
-                        Objeção Detectada
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <Badge 
-                        variant={aiAnalysis.objection === "none" ? "secondary" : "destructive"}
-                      >
-                        {objectionLabels[aiAnalysis.objection] || aiAnalysis.objection}
-                      </Badge>
-                    </CardContent>
-                  </Card>
+                    {/* Objection */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-warning" />
+                          Objeção Detectada
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Badge 
+                          variant={aiAnalysis.objection === "none" ? "secondary" : "destructive"}
+                        >
+                          {objectionLabels[aiAnalysis.objection] || aiAnalysis.objection}
+                        </Badge>
+                      </CardContent>
+                    </Card>
 
-                  {/* Temperature */}
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <Thermometer className="h-4 w-4 text-primary" />
-                        Temperatura do Lead
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <Badge className={tempInfo.color}>
-                        {tempInfo.label}
-                      </Badge>
-                    </CardContent>
-                  </Card>
+                    {/* Temperature */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Thermometer className="h-4 w-4 text-primary" />
+                          Temperatura do Lead
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Badge className={tempInfo.color}>
+                          {tempInfo.label}
+                        </Badge>
+                      </CardContent>
+                    </Card>
 
-                  <Separator />
+                    <Separator />
 
-                  {/* Suggestion */}
-                  <Card className="border-primary/30 bg-primary/5">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <Lightbulb className="h-4 w-4 text-primary" />
-                        Sugestão de Resposta
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <p className="text-sm">{aiAnalysis.suggestion}</p>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={useSuggestion}
-                        className="w-full gap-2"
-                      >
-                        <Copy className="h-4 w-4" />
-                        Usar sugestão da IA
-                      </Button>
-                    </CardContent>
-                  </Card>
+                    {/* Suggestion */}
+                    <Card className="border-primary/30 bg-primary/5">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Lightbulb className="h-4 w-4 text-primary" />
+                          Sugestão de Resposta
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <p className="text-sm">{aiAnalysis.suggestion}</p>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={useSuggestion}
+                          className="w-full gap-2"
+                        >
+                          <Copy className="h-4 w-4" />
+                          Usar sugestão da IA
+                        </Button>
+                      </CardContent>
+                    </Card>
 
-                  {/* Next Action */}
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <ArrowRight className="h-4 w-4 text-success" />
-                        Próxima Ação
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground">{aiAnalysis.next_action}</p>
-                    </CardContent>
-                  </Card>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center py-8 text-muted-foreground">
-                  <div className="text-center">
-                    <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Aguardando mensagem do cliente</p>
-                    <p className="text-xs mt-1">Os insights aparecerão automaticamente</p>
+                    {/* Next Action */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <ArrowRight className="h-4 w-4 text-success" />
+                          Próxima Ação
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground">{aiAnalysis.next_action}</p>
+                      </CardContent>
+                    </Card>
                   </div>
-                </div>
-              )}
-            </ScrollArea>
-          </div>
-        ) : (
-          // Static panel for completed conversations (seller view)
-          <div className="w-80 flex-shrink-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-border">
-              <h3 className="font-semibold flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-success" />
-                Conversa Concluída
-              </h3>
-            </div>
-            <div className="flex-1 flex items-center justify-center p-4">
-              <div className="text-center">
-                <Badge className={cn(
-                  "text-lg px-4 py-2",
-                  existingSale?.status === "won" ? "bg-success" : "bg-destructive"
-                )}>
-                  {existingSale?.status === "won" ? "Venda Ganha" : "Venda Perdida"}
-                </Badge>
-                {existingSale?.reason && (
-                  <p className="text-sm text-muted-foreground mt-4">
-                    Motivo: {existingSale.reason}
-                  </p>
+                ) : (
+                  <div className="flex items-center justify-center py-8 text-muted-foreground">
+                    <div className="text-center">
+                      <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Aguardando mensagem do cliente</p>
+                      <p className="text-xs mt-1">Os insights aparecerão automaticamente</p>
+                    </div>
+                  </div>
                 )}
+              </ScrollArea>
+            </div>
+          ) : (
+            // Static panel for completed conversations (seller view)
+            <div className="flex-1 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-border">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                  {isViewingHistory ? "Ciclo Anterior" : "Ciclo Encerrado"}
+                </h3>
+              </div>
+              <div className="flex-1 flex items-center justify-center p-4">
+                <div className="text-center">
+                  <Badge className={cn(
+                    "text-lg px-4 py-2",
+                    displayedCycle?.status === "won" ? "bg-success" : "bg-destructive"
+                  )}>
+                    {displayedCycle?.status === "won" ? "Venda Ganha" : "Venda Perdida"}
+                  </Badge>
+                  {displayedCycle?.lost_reason && (
+                    <p className="text-sm text-muted-foreground mt-4">
+                      Motivo: {displayedCycle.lost_reason}
+                    </p>
+                  )}
+                  {displayedCycle?.won_summary && (
+                    <p className="text-sm text-success mt-4">
+                      {displayedCycle.won_summary}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Sale Registration Modal */}
-      {customer && user && (
+      {/* Sale Registration Modal - Now closes cycles */}
+      {customer && user && activeCycle && (
         <SaleRegistrationModal
           open={showSaleModal}
           onOpenChange={setShowSaleModal}
           customerId={customer.id}
-          sellerId={existingSale ? customer.seller_id || user.id : user.id}
+          sellerId={user.id}
           customerName={customer.name}
-          isEditMode={isManager && !!existingSale}
-          existingSaleId={existingSale?.id}
-          existingStatus={existingSale?.status}
-          existingReason={existingSale?.reason || undefined}
-          onSuccess={() => {
+          cycleId={activeCycle.id}
+          onSuccess={async (status, reason, summary) => {
+            await closeCycle(activeCycle.id, status, reason, summary);
             fetchConversation();
           }}
         />

@@ -34,7 +34,8 @@ interface SaleRegistrationModalProps {
   customerId: string;
   sellerId: string;
   customerName: string;
-  onSuccess?: () => void;
+  cycleId?: string;
+  onSuccess?: (status: "won" | "lost", reason?: string, summary?: string) => void;
   isEditMode?: boolean;
   existingSaleId?: string;
   existingStatus?: "won" | "lost";
@@ -63,6 +64,7 @@ const SaleRegistrationModal = ({
   customerId,
   sellerId,
   customerName,
+  cycleId,
   onSuccess,
   isEditMode = false,
   existingSaleId,
@@ -165,7 +167,7 @@ const SaleRegistrationModal = ({
       }
       
       onOpenChange(false);
-      onSuccess?.();
+      onSuccess?.(activeTab, activeTab === "lost" ? selectedReason : undefined, activeTab === "won" ? description : undefined);
     } catch (error) {
       console.error("Error registering sale:", error);
       toast.error(isEditMode ? "Erro ao atualizar status" : "Erro ao registrar venda");
