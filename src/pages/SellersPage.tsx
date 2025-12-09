@@ -41,43 +41,52 @@ const SellersPage = () => {
     if (!user?.id) return;
 
     try {
-      // Get manager's company
-      const { data: managerProfile } = await supabase
+      // Get all sellers from company - using the manager RLS policy
+      // which allows managers to view all profiles in their company
+      const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("company_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
+        .select("id, user_id, name, email, created_at, company_id");
 
-      if (!managerProfile?.company_id) {
-        console.error("Manager has no company");
+      if (profilesError) {
+        console.error("Error fetching profiles:", profilesError);
+        throw profilesError;
+      }
+
+      console.log("Profiles fetched:", profiles);
+
+      if (!profiles || profiles.length === 0) {
+        setSellers([]);
         return;
       }
 
-      // Get all profiles from the same company that are sellers
-      const { data: profiles, error } = await supabase
-        .from("profiles")
-        .select(`
-          id,
-          user_id,
-          name,
-          email,
-          created_at
-        `)
-        .eq("company_id", managerProfile.company_id);
+      // Get manager's company from the profiles we can see
+      const managerProfile = profiles.find(p => p.user_id === user.id);
+      
+      if (!managerProfile?.company_id) {
+        console.error("Manager profile not found or has no company");
+        return;
+      }
 
-      if (error) throw error;
+      // Filter profiles from the same company
+      const companyProfiles = profiles.filter(p => p.company_id === managerProfile.company_id);
+      const userIds = companyProfiles.map((p) => p.user_id);
 
       // Get roles for these users
-      const userIds = profiles?.map((p) => p.user_id) || [];
-      const { data: roles } = await supabase
+      const { data: roles, error: rolesError } = await supabase
         .from("user_roles")
         .select("user_id, role")
         .in("user_id", userIds);
 
-      // Filter only sellers and add is_active (we'll need to track this - for now assume all are active)
+      if (rolesError) {
+        console.error("Error fetching roles:", rolesError);
+      }
+
+      console.log("Roles fetched:", roles);
+
+      // Filter only sellers
       const sellerUserIds = roles?.filter((r) => r.role === "seller").map((r) => r.user_id) || [];
       
-      const sellersData: Seller[] = (profiles || [])
+      const sellersData: Seller[] = companyProfiles
         .filter((p) => sellerUserIds.includes(p.user_id))
         .map((p) => ({
           id: p.id,
@@ -85,9 +94,10 @@ const SellersPage = () => {
           name: p.name,
           email: p.email,
           created_at: p.created_at,
-          is_active: true, // Default to active - we'll add a column later if needed
+          is_active: true,
         }));
 
+      console.log("Sellers data:", sellersData);
       setSellers(sellersData);
     } catch (error) {
       console.error("Error fetching sellers:", error);
