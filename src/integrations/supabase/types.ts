@@ -73,6 +73,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          is_active: boolean
           name: string
           segment: string | null
           updated_at: string
@@ -81,6 +82,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_active?: boolean
           name: string
           segment?: string | null
           updated_at?: string
@@ -89,6 +91,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_active?: boolean
           name?: string
           segment?: string | null
           updated_at?: string
@@ -449,6 +452,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_user_company_active: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "seller" | "manager" | "admin"
