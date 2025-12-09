@@ -12,8 +12,9 @@ import {
   Activity,
   Loader2,
 } from "lucide-react";
-import { format, subDays } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Badge } from "@/components/ui/badge";
 
 interface DashboardStats {
   totalCompanies: number;
@@ -33,6 +34,7 @@ interface RecentCompany {
   name: string;
   created_at: string;
   sellerCount: number;
+  is_active: boolean;
 }
 
 const AdminDashboardPage = () => {
@@ -92,11 +94,9 @@ const AdminDashboardPage = () => {
       const managers = userRoles?.filter((r) => r.role === "manager") || [];
       const sellers = userRoles?.filter((r) => r.role === "seller") || [];
 
-      // Get companies with recent activity
-      const sevenDaysAgo = subDays(new Date(), 7).toISOString();
-      const activeCompanyIds = new Set(
-        profiles?.filter((p) => p.company_id).map((p) => p.company_id) || []
-      );
+      // Count active/inactive companies based on is_active field
+      const activeCompanies = companies?.filter((c) => c.is_active) || [];
+      const inactiveCompanies = companies?.filter((c) => !c.is_active) || [];
 
       // Calculate recent companies with seller counts
       const companiesWithCounts = (companies || []).map((c) => ({
@@ -106,7 +106,7 @@ const AdminDashboardPage = () => {
 
       setStats({
         totalCompanies: companies?.length || 0,
-        activeCompanies: activeCompanyIds.size,
+        activeCompanies: activeCompanies.length,
         totalManagers: managers.length,
         totalSellers: sellers.length,
         totalCustomers: customers?.length || 0,
@@ -114,7 +114,7 @@ const AdminDashboardPage = () => {
         totalCycles: cycles?.length || 0,
         wonCycles: cycles?.filter((c) => c.status === "won").length || 0,
         lostCycles: cycles?.filter((c) => c.status === "lost").length || 0,
-        inactiveCompanies: Math.max(0, (companies?.length || 0) - activeCompanyIds.size),
+        inactiveCompanies: inactiveCompanies.length,
       });
 
       setRecentCompanies(
@@ -238,12 +238,12 @@ const AdminDashboardPage = () => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-400">Empresas Inativas</p>
-                  <p className="text-3xl font-bold text-amber-500">{stats?.inactiveCompanies || 0}</p>
+                  <p className="text-sm text-slate-400">Empresas Desativadas</p>
+                  <p className="text-3xl font-bold text-red-500">{stats?.inactiveCompanies || 0}</p>
                 </div>
-                <AlertTriangle className="h-8 w-8 text-amber-500/30" />
+                <AlertTriangle className="h-8 w-8 text-red-500/30" />
               </div>
-              <p className="mt-3 text-sm text-slate-500">Sem atividade nos últimos 7 dias</p>
+              <p className="mt-3 text-sm text-slate-500">Usuários não conseguem acessar</p>
             </CardContent>
           </Card>
 
@@ -277,14 +277,19 @@ const AdminDashboardPage = () => {
                 recentCompanies.map((company) => (
                   <div
                     key={company.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-slate-700/50"
+                    className={`flex items-center justify-between p-3 rounded-lg ${company.is_active ? 'bg-slate-700/50' : 'bg-red-900/20 border border-red-800/30'}`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                        <Building2 className="h-5 w-5 text-orange-500" />
+                      <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${company.is_active ? 'bg-orange-500/10' : 'bg-red-500/10'}`}>
+                        <Building2 className={`h-5 w-5 ${company.is_active ? 'text-orange-500' : 'text-red-500'}`} />
                       </div>
                       <div>
-                        <p className="font-medium text-white">{company.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-white">{company.name}</p>
+                          {!company.is_active && (
+                            <Badge variant="destructive" className="text-xs">Inativa</Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-slate-400">
                           {company.sellerCount} vendedor{company.sellerCount !== 1 ? "es" : ""}
                         </p>
