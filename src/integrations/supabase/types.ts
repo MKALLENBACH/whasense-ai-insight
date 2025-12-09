@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          awarded_at: string
+          badge_type: string
+          id: string
+          vendor_id: string
+        }
+        Insert: {
+          awarded_at?: string
+          badge_type: string
+          id?: string
+          vendor_id: string
+        }
+        Update: {
+          awarded_at?: string
+          badge_type?: string
+          id?: string
+          vendor_id?: string
+        }
+        Relationships: []
+      }
       ai_scripts: {
         Row: {
           ai_persona: string | null
@@ -313,6 +334,136 @@ export type Database = {
         }
         Relationships: []
       }
+      gamification_points: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          points: number
+          reason: string
+          sale_id: string | null
+          vendor_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          points: number
+          reason: string
+          sale_id?: string | null
+          vendor_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          points?: number
+          reason?: string
+          sale_id?: string | null
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gamification_points_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gamification_points_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goal_vendors: {
+        Row: {
+          current_value: number
+          goal_id: string
+          id: string
+          progress: number | null
+          status: string
+          target_value: number
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          current_value?: number
+          goal_id: string
+          id?: string
+          progress?: number | null
+          status?: string
+          target_value: number
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          current_value?: number
+          goal_id?: string
+          id?: string
+          progress?: number | null
+          status?: string
+          target_value?: number
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_vendors_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goals: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string
+          end_date: string
+          goal_type: string
+          id: string
+          start_date: string
+          target_value: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by: string
+          end_date: string
+          goal_type: string
+          id?: string
+          start_date: string
+          target_value: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string
+          end_date?: string
+          goal_type?: string
+          id?: string
+          start_date?: string
+          target_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       insights: {
         Row: {
           created_at: string
@@ -353,6 +504,47 @@ export type Database = {
             columns: ["message_id"]
             isOneToOne: false
             referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leaderboard: {
+        Row: {
+          company_id: string
+          id: string
+          period: string
+          period_start: string
+          position: number | null
+          total_points: number
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          company_id: string
+          id?: string
+          period: string
+          period_start: string
+          position?: number | null
+          total_points?: number
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          company_id?: string
+          id?: string
+          period?: string
+          period_start?: string
+          position?: number | null
+          total_points?: number
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leaderboard_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]

@@ -18,6 +18,8 @@ import SellersPage from "./pages/SellersPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import FollowupsSettingsPage from "./pages/FollowupsSettingsPage";
+import ManagerGoalsPage from "./pages/ManagerGoalsPage";
+import SellerPerformancePage from "./pages/SellerPerformancePage";
 import NotFound from "./pages/NotFound";
 
 // Admin pages
@@ -96,7 +98,14 @@ const App = () => (
                 </ProtectedRoute>
               } 
             />
-            
+            <Route 
+              path="/vendedor/performance" 
+              element={
+                <ProtectedRoute requiredRole="vendedor">
+                  <SellerPerformancePage />
+                </ProtectedRoute>
+              } 
+            />
             {/* Manager routes */}
             <Route 
               path="/dashboard" 
@@ -135,6 +144,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="gestor">
                   <FollowupsSettingsPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/gestor/metas" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <ManagerGoalsPage />
                 </ProtectedRoute>
               } 
             />
