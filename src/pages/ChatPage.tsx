@@ -44,6 +44,7 @@ import NewLeadModal from "@/components/lead/NewLeadModal";
 import SaleCycleHistory from "@/components/sale/SaleCycleHistory";
 import CurrentCycleBadge from "@/components/sale/CurrentCycleBadge";
 import { useSaleCycles } from "@/hooks/useSaleCycles";
+import { ChatAlertsBanner } from "@/components/conversation/ChatAlertsBanner";
 
 interface Message {
   id: string;
@@ -550,6 +551,14 @@ const ChatPage = () => {
               </>
             )}
           </div>
+
+          {/* Alerts Banner - Only for active conversations */}
+          {isSeller && !isConversationCompleted && !isViewingHistory && (
+            <ChatAlertsBanner 
+              customerId={id || ""} 
+              cycleId={displayedCycleId} 
+            />
+          )}
 
           {/* Messages Area */}
           <ScrollArea className="flex-1 p-4">
