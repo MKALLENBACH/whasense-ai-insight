@@ -52,6 +52,20 @@ serve(async (req) => {
 
     console.log('Registering sale:', { seller_id, customer_id, status, reason });
 
+    // Get seller's company_id
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('user_id', seller_id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error('Error fetching profile:', profileError);
+    }
+
+    const companyId = profile?.company_id || null;
+    console.log('Seller company_id:', companyId);
+
     // Build the reason string
     let finalReason = null;
     if (status === 'lost') {
@@ -66,6 +80,7 @@ serve(async (req) => {
         customer_id,
         status,
         reason: finalReason,
+        company_id: companyId,
       })
       .select()
       .single();
