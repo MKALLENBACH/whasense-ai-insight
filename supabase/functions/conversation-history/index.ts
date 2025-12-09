@@ -38,11 +38,42 @@ serve(async (req) => {
 
     console.log('Fetching conversation history for user:', user.id);
 
-    // Get all customers with their messages and sales
-    const { data: customers, error: customersError } = await supabase
+    // Get user's profile to find their company
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!userProfile?.company_id) {
+      return new Response(
+        JSON.stringify({ error: 'User has no company', conversations: [] }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Get user's role
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const isManager = roleData?.role === 'manager';
+
+    // Get customers based on role
+    let customersQuery = supabase
       .from('customers')
       .select('*')
+      .eq('company_id', userProfile.company_id)
       .order('updated_at', { ascending: false });
+
+    // If seller, only show their customers
+    if (!isManager) {
+      customersQuery = customersQuery.eq('seller_id', user.id);
+    }
+
+    const { data: customers, error: customersError } = await customersQuery;
 
     if (customersError) {
       console.error('Error fetching customers:', customersError);
