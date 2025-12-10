@@ -97,7 +97,7 @@ const ManagerDashboardPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <LeadDistributionChart bySeller={leadDistribution.bySeller} byTemperature={leadDistribution.byTemperature} />
           <RiskCyclesList cycles={riskCycles} />
-          <ObjectionsChart data={objections} />
+          <ObjectionsChart />
         </div>
 
         {/* Charts Row 2 */}
