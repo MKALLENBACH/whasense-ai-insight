@@ -76,12 +76,12 @@ const Client360Emotions = ({ clientId, sellerId }: Client360EmotionsProps) => {
 
       const messageIds = messages.map(m => m.id);
 
-      // Get insights
+      // Get insights ordered by created_at descending to get latest first
       const { data: insights } = await supabase
         .from("insights")
         .select("message_id, temperature, sentiment, created_at")
         .in("message_id", messageIds)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false });
 
       if (!insights || insights.length === 0) {
         setData([]);
@@ -89,14 +89,34 @@ const Client360Emotions = ({ clientId, sellerId }: Client360EmotionsProps) => {
         return;
       }
 
-      // Build chart data
-      const chartData = insights.map((insight: any) => ({
-        date: format(new Date(insight.created_at), "dd/MM", { locale: ptBR }),
-        temperatura: temperatureToNumber(insight.temperature),
-        sentimento: sentimentToNumber(insight.sentiment),
-      }));
+      // Group by day and keep only the last (most recent) insight per day
+      const dayMap = new Map<string, { temperatura: number; sentimento: number; dateObj: Date }>();
+      
+      insights.forEach((insight: any) => {
+        const dateObj = new Date(insight.created_at);
+        const dayKey = format(dateObj, "yyyy-MM-dd");
+        
+        // Only add if we don't have this day yet (first one is the most recent due to ordering)
+        if (!dayMap.has(dayKey)) {
+          dayMap.set(dayKey, {
+            temperatura: temperatureToNumber(insight.temperature),
+            sentimento: sentimentToNumber(insight.sentiment),
+            dateObj,
+          });
+        }
+      });
 
-      setData(chartData);
+      // Convert to array, sort by date ascending, and take last 10 days
+      const sortedDays = Array.from(dayMap.entries())
+        .sort((a, b) => a[1].dateObj.getTime() - b[1].dateObj.getTime())
+        .slice(-10)
+        .map(([_, value]) => ({
+          date: format(value.dateObj, "dd/MM", { locale: ptBR }),
+          temperatura: value.temperatura,
+          sentimento: value.sentimento,
+        }));
+
+      setData(sortedDays);
     } catch (error) {
       console.error("Error fetching emotions:", error);
     } finally {
