@@ -57,6 +57,12 @@ const ChatInput = ({
     }
   }, [initialMessage]);
 
+  // Notify parent when message changes
+  const handleMessageChange = (newValue: string) => {
+    setMessage(newValue);
+    onMessageChange?.(newValue);
+  };
+
   // Adjust height when message changes
   useEffect(() => {
     adjustTextareaHeight();
@@ -260,7 +266,7 @@ const ChatInput = ({
           <Textarea
             ref={textareaRef}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => handleMessageChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Digite sua mensagem..."
             disabled={disabled || isSending}
