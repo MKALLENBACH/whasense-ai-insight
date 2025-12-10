@@ -91,8 +91,7 @@ Deno.serve(async (req) => {
       const audioBuffer = await audioResponse.arrayBuffer();
       const audioBlob = new Blob([audioBuffer], { type: "audio/webm" });
 
-      // Try OpenAI Whisper first
-      let whisperSuccess = false;
+      // Transcribe using OpenAI Whisper
       if (openaiApiKey) {
         console.log("Transcribing with OpenAI Whisper...");
         const formData = new FormData();
@@ -112,79 +111,16 @@ Deno.serve(async (req) => {
           if (whisperResponse.ok) {
             const whisperData = await whisperResponse.json();
             transcription = whisperData.text || "";
-            whisperSuccess = true;
             console.log("Whisper transcription:", transcription);
           } else {
             const errorText = await whisperResponse.text();
             console.error("Whisper error:", errorText);
-            // Check for quota errors
-            if (errorText.includes("insufficient_quota") || errorText.includes("rate_limit")) {
-              console.log("OpenAI quota exceeded, falling back to Gemini...");
-            }
           }
         } catch (whisperErr) {
           console.error("Whisper request failed:", whisperErr);
         }
-      }
-
-      // Fallback to Gemini for transcription if Whisper failed
-      if (!whisperSuccess && lovableApiKey) {
-        console.log("Transcribing with Gemini (fallback)...");
-        
-        // Convert audio to base64 for Gemini using chunked approach to avoid stack overflow
-        const uint8Array = new Uint8Array(audioBuffer);
-        let binaryString = "";
-        const chunkSize = 32768; // Process in 32KB chunks
-        for (let i = 0; i < uint8Array.length; i += chunkSize) {
-          const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
-          binaryString += String.fromCharCode.apply(null, Array.from(chunk));
-        }
-        const base64Audio = btoa(binaryString);
-        
-        try {
-          const geminiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${lovableApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
-              messages: [
-                { 
-                  role: "user", 
-                  content: [
-                    {
-                      type: "text",
-                      text: "Transcreva este áudio em português brasileiro. Retorne APENAS a transcrição, sem nenhum texto adicional, explicações ou formatação. Se não conseguir transcrever, retorne apenas: [Áudio não transcrito]"
-                    },
-                    {
-                      type: "input_audio",
-                      input_audio: {
-                        data: base64Audio,
-                        format: "webm"
-                      }
-                    }
-                  ]
-                }
-              ],
-              temperature: 0.1,
-            }),
-          });
-
-          if (geminiResponse.ok) {
-            const geminiData = await geminiResponse.json();
-            const geminiText = geminiData.choices?.[0]?.message?.content?.trim() || "";
-            if (geminiText && !geminiText.includes("[Áudio não transcrito]")) {
-              transcription = geminiText;
-              console.log("Gemini transcription:", transcription);
-            }
-          } else {
-            console.error("Gemini transcription error:", await geminiResponse.text());
-          }
-        } catch (geminiErr) {
-          console.error("Gemini transcription failed:", geminiErr);
-        }
+      } else {
+        console.log("No OpenAI API key configured for audio transcription");
       }
     }
 
