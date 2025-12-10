@@ -182,8 +182,8 @@ Deno.serve(async (req) => {
             })
             .eq("id", gv.id);
 
-          // Award badge if goal achieved
-          if (progress >= 100) {
+          // Award badge ONLY for sales goals (vendas) when achieved
+          if (progress >= 100 && goal.goal_type === "vendas") {
             const { data: existingBadge } = await supabase
               .from("achievements")
               .select("id")
@@ -200,17 +200,17 @@ Deno.serve(async (req) => {
                   badge_type: "meta_batida",
                 });
 
-              // Award points for achieving goal
+              // Award points for achieving sales goal
               await supabase
                 .from("gamification_points")
                 .insert({
                   company_id: company.id,
                   vendor_id: gv.vendor_id,
                   points: 20,
-                  reason: "Meta atingida",
+                  reason: "Meta de vendas atingida",
                 });
               
-              console.log(`Awarded meta_batida badge to ${gv.vendor_id}`);
+              console.log(`Awarded meta_batida badge to ${gv.vendor_id} for sales goal`);
             }
           }
         }
