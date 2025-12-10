@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Loader2, Target, Trophy, Medal, TrendingUp, Crown, Award, Flame, Zap, Star, Sparkles, Bot, RefreshCw } from "lucide-react";
+import MarkdownText from "@/components/ui/markdown-text";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -556,10 +557,11 @@ const SellerPerformancePage = () => {
                         <div className="p-2 bg-primary/10 rounded-full">
                           <Sparkles className="h-5 w-5 text-primary" />
                         </div>
-                        <div className="flex-1 prose prose-sm dark:prose-invert max-w-none">
-                          <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                            {aiInsights.aiInsights}
-                          </div>
+                        <div className="flex-1">
+                          <MarkdownText 
+                            content={aiInsights.aiInsights} 
+                            className="text-sm leading-relaxed"
+                          />
                         </div>
                       </div>
                     </div>
