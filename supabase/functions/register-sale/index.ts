@@ -66,6 +66,24 @@ serve(async (req) => {
     const companyId = profile?.company_id || null;
     console.log('Seller company_id:', companyId);
 
+    // Check for existing sale for this customer (prevent duplicates)
+    const { data: existingSale } = await supabase
+      .from('sales')
+      .select('id, status')
+      .eq('customer_id', customer_id)
+      .maybeSingle();
+
+    if (existingSale) {
+      console.log('Sale already exists for this customer:', existingSale);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Já existe uma venda registrada para este cliente',
+          existing_sale: existingSale 
+        }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Build the reason string
     let finalReason = null;
     if (status === 'lost') {
@@ -87,6 +105,13 @@ serve(async (req) => {
 
     if (insertError) {
       console.error('Error inserting sale:', insertError);
+      // Handle unique constraint violation
+      if (insertError.code === '23505') {
+        return new Response(
+          JSON.stringify({ error: 'Já existe uma venda registrada para este cliente' }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       throw insertError;
     }
 
