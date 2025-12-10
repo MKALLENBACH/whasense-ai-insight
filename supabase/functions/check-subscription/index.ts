@@ -82,74 +82,82 @@ serve(async (req) => {
     let subscriptionEnd = localSub.next_billing_date || localSub.current_period_end || null;
     let cancelAtPeriodEnd = localSub.cancel_at_period_end || false;
 
-    // Verify with Stripe for the latest status
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    // Check if local status was manually set to inactive - respect it
+    const manualInactiveStatuses = ["inactive", "inactive_due_payment", "canceled"];
+    const isManuallyInactive = manualInactiveStatuses.includes(localSub.status);
 
-    try {
-      const subscriptions = await stripe.subscriptions.list({
-        customer: localSub.stripe_customer_id,
-        status: "all",
-        limit: 1,
-      });
+    // Only verify with Stripe if not manually set to inactive
+    if (!isManuallyInactive) {
+      const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
-      if (subscriptions.data.length > 0) {
-        const stripeSub = subscriptions.data[0];
-        stripeStatus = stripeSub.status;
-        
-        // Safely parse the date
-        if (stripeSub.current_period_end && typeof stripeSub.current_period_end === 'number') {
-          subscriptionEnd = new Date(stripeSub.current_period_end * 1000).toISOString();
-        }
-        cancelAtPeriodEnd = stripeSub.cancel_at_period_end || false;
+      try {
+        const subscriptions = await stripe.subscriptions.list({
+          customer: localSub.stripe_customer_id,
+          status: "all",
+          limit: 1,
+        });
 
-        // Update local status if different
-        if (stripeStatus !== localSub.status || cancelAtPeriodEnd !== localSub.cancel_at_period_end) {
-          logStep("Syncing subscription status", { stripeStatus, localStatus: localSub.status });
+        if (subscriptions.data.length > 0) {
+          const stripeSub = subscriptions.data[0];
+          stripeStatus = stripeSub.status;
           
-          let mappedStatus = stripeStatus;
-          if (stripeStatus === "incomplete" || stripeStatus === "incomplete_expired") {
-            mappedStatus = "inactive";
+          // Safely parse the date
+          if (stripeSub.current_period_end && typeof stripeSub.current_period_end === 'number') {
+            subscriptionEnd = new Date(stripeSub.current_period_end * 1000).toISOString();
           }
+          cancelAtPeriodEnd = stripeSub.cancel_at_period_end || false;
 
-          await supabaseClient
-            .from("company_subscriptions")
-            .update({
-              status: mappedStatus,
-              next_billing_date: subscriptionEnd,
-              current_period_end: subscriptionEnd,
-              cancel_at_period_end: cancelAtPeriodEnd,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", localSub.id);
-        }
-
-        // Check for 7-day past_due inactivation
-        if (stripeStatus === "past_due" && stripeSub.current_period_end) {
-          const periodEnd = new Date(stripeSub.current_period_end * 1000);
-          const daysPastDue = Math.floor((Date.now() - periodEnd.getTime()) / (1000 * 60 * 60 * 24));
-          
-          if (daysPastDue >= 7 && localSub.status !== "inactive_due_payment") {
-            logStep("Company past due for 7+ days, marking as inactive_due_payment");
+          // Update local status if different
+          if (stripeStatus !== localSub.status || cancelAtPeriodEnd !== localSub.cancel_at_period_end) {
+            logStep("Syncing subscription status", { stripeStatus, localStatus: localSub.status });
             
+            let mappedStatus = stripeStatus;
+            if (stripeStatus === "incomplete" || stripeStatus === "incomplete_expired") {
+              mappedStatus = "inactive";
+            }
+
             await supabaseClient
               .from("company_subscriptions")
-              .update({ status: "inactive_due_payment" })
+              .update({
+                status: mappedStatus,
+                next_billing_date: subscriptionEnd,
+                current_period_end: subscriptionEnd,
+                cancel_at_period_end: cancelAtPeriodEnd,
+                updated_at: new Date().toISOString(),
+              })
               .eq("id", localSub.id);
-
-            await supabaseClient
-              .from("companies")
-              .update({ is_active: false })
-              .eq("id", profile.company_id);
-
-            stripeStatus = "inactive_due_payment";
           }
+
+          // Check for 7-day past_due inactivation
+          if (stripeStatus === "past_due" && stripeSub.current_period_end) {
+            const periodEnd = new Date(stripeSub.current_period_end * 1000);
+            const daysPastDue = Math.floor((Date.now() - periodEnd.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (daysPastDue >= 7 && localSub.status !== "inactive_due_payment") {
+              logStep("Company past due for 7+ days, marking as inactive_due_payment");
+              
+              await supabaseClient
+                .from("company_subscriptions")
+                .update({ status: "inactive_due_payment" })
+                .eq("id", localSub.id);
+
+              await supabaseClient
+                .from("companies")
+                .update({ is_active: false })
+                .eq("id", profile.company_id);
+
+              stripeStatus = "inactive_due_payment";
+            }
+          }
+        } else {
+          logStep("No Stripe subscriptions found, using local data");
         }
-      } else {
-        logStep("No Stripe subscriptions found, using local data");
+      } catch (stripeError) {
+        logStep("Stripe API error, using local data", { error: String(stripeError) });
+        // Continue with local data if Stripe fails
       }
-    } catch (stripeError) {
-      logStep("Stripe API error, using local data", { error: String(stripeError) });
-      // Continue with local data if Stripe fails
+    } else {
+      logStep("Using local inactive status, skipping Stripe sync", { status: localSub.status });
     }
 
     const isActive = stripeStatus === "active" || stripeStatus === "trialing";
