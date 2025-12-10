@@ -193,14 +193,20 @@ const handleCheckoutCompleted = async (session: Stripe.Checkout.Session) => {
 
     logStep("Company created for existing user", { companyId: company.id });
 
-    // Create profile
-    await supabaseAdmin.from("profiles").insert({
+    // Create or update profile (may already exist from trigger)
+    const { error: profileError } = await supabaseAdmin.from("profiles").upsert({
       user_id: userExists.id,
       company_id: company.id,
       name: customerName,
       email: customerEmail,
       is_active: true,
-    });
+    }, { onConflict: "user_id" });
+
+    if (profileError) {
+      logStep("ERROR creating/updating profile for existing user", { error: profileError });
+    } else {
+      logStep("Profile created/updated for existing user", { userId: userExists.id, companyId: company.id });
+    }
 
     // Create user role as manager
     await supabaseAdmin.from("user_roles").upsert({
@@ -278,19 +284,21 @@ const handleCheckoutCompleted = async (session: Stripe.Checkout.Session) => {
 
   logStep("Company created", { companyId: company.id });
 
-  // 5. Create profile
+  // 5. Create or update profile (trigger handle_new_user may have already created it without company_id)
   const { error: profileError } = await supabaseAdmin
     .from("profiles")
-    .insert({
+    .upsert({
       user_id: userId,
       company_id: company.id,
       name: customerName,
       email: customerEmail,
       is_active: true,
-    });
+    }, { onConflict: "user_id" });
 
   if (profileError) {
-    logStep("ERROR creating profile", { error: profileError });
+    logStep("ERROR creating/updating profile", { error: profileError });
+  } else {
+    logStep("Profile created/updated with company_id", { userId, companyId: company.id });
   }
 
   // 6. Create user role as manager
@@ -362,11 +370,12 @@ const updateCompanyWithTrial = async (
     }
   }
 
-  // Update company with trial dates
+  // Update company with trial dates and plan
   await supabaseAdmin
     .from("companies")
     .update({
       is_active: true,
+      plan_id: planId,
       trial_ends_at: trialEnd?.toISOString() || null,
       free_start_date: trialStart?.toISOString().split('T')[0] || null,
       free_end_date: trialEnd?.toISOString().split('T')[0] || null,
