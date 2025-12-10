@@ -13,6 +13,7 @@ interface AuthUser {
   email: string;
   role: UserRole;
   companyId: string | null;
+  requiresPasswordChange: boolean;
 }
 
 export interface PlanFeatures {
@@ -248,12 +249,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setSellerLimitInfo(limitInfo);
     }
 
+    // Check if user requires password change from metadata
+    const requiresPasswordChange = supabaseUser.user_metadata?.requires_password_change === true;
+
     setUser({
       id: supabaseUser.id,
       name: profile?.name || supabaseUser.email?.split("@")[0] || "Usuário",
       email: profile?.email || supabaseUser.email || "",
       role,
       companyId: profile?.companyId || null,
+      requiresPasswordChange,
     });
   };
 

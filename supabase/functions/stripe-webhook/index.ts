@@ -320,36 +320,34 @@ const updateCompanyWithTrial = async (
 };
 
 const sendWelcomeEmail = async (email: string, name: string, password: string) => {
-  // For now, just log - in production, integrate with Resend or similar
-  logStep("Sending welcome email", { email, name });
+  logStep("Sending welcome email via edge function", { email, name });
   
-  // TODO: Integrate with Resend to send actual email
-  // The email should contain:
-  // - Email: {email}
-  // - Temporary password: {password}
-  // - Link to login: https://whasense.lovable.app/login
-  // - Instructions to change password on first login
-  
-  console.log(`
-    ========================================
-    WELCOME EMAIL (would be sent to ${email})
-    ========================================
-    Olá ${name}!
-    
-    Sua conta Whasense está pronta!
-    
-    Acesse: https://whasense.lovable.app/login
-    Email: ${email}
-    Senha temporária: ${password}
-    
-    Por segurança, altere sua senha no primeiro acesso.
-    
-    Seu período de teste de 7 dias começou.
-    Aproveite todas as funcionalidades!
-    
-    Equipe Whasense
-    ========================================
-  `);
+  try {
+    const response = await fetch(
+      `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-welcome-email`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+        },
+        body: JSON.stringify({
+          email,
+          name,
+          temporaryPassword: password,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      logStep("Failed to send welcome email", { status: response.status, error: errorBody });
+    } else {
+      logStep("Welcome email sent successfully", { email });
+    }
+  } catch (error) {
+    logStep("Error calling send-welcome-email function", { error: String(error) });
+  }
 };
 
 // ========================================

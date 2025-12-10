@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,6 +72,15 @@ const LoginPage = () => {
     setIsLoading(true);
     try {
       const { role } = await login(email, password);
+      
+      // Check if password change is required (from user metadata)
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser?.user_metadata?.requires_password_change) {
+        toast.success("Bem-vindo! Por favor, altere sua senha.");
+        navigate("/change-password", { replace: true });
+        return;
+      }
+      
       toast.success("Login realizado com sucesso!");
       
       // Redirect based on role
