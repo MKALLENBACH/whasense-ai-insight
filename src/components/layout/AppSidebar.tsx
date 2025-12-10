@@ -57,6 +57,7 @@ const AppSidebar = () => {
   const vendedorLinks: NavLinkItem[] = [
     { to: "/dashboard-vendedor", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/conversas", icon: MessageSquare, label: "Conversas" },
+    { to: "/clientes", icon: Building2, label: "Clientes 360°" },
     { to: "/vendedor/performance", icon: Trophy, label: "Performance" },
     { to: "/alertas", icon: Bell, label: "Alertas", badge: alertCount },
     { to: "/whatsapp-connect", icon: Smartphone, label: "WhatsApp" },

@@ -36,8 +36,8 @@ interface Stats {
 interface Client360HeaderProps {
   client: Client;
   stats: Stats;
-  onEdit: () => void;
-  onNewBuyer: () => void;
+  onEdit?: () => void;
+  onNewBuyer?: () => void;
 }
 
 const Client360Header = ({ client, stats, onEdit, onNewBuyer }: Client360HeaderProps) => {
@@ -67,17 +67,23 @@ const Client360Header = ({ client, stats, onEdit, onNewBuyer }: Client360HeaderP
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onEdit}>
-              <Edit className="h-4 w-4 mr-2" />
-              Editar
-            </Button>
-            <Button size="sm" onClick={onNewBuyer}>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Novo Comprador
-            </Button>
-          </div>
+          {/* Actions - only show if callbacks provided */}
+          {(onEdit || onNewBuyer) && (
+            <div className="flex items-center gap-2">
+              {onEdit && (
+                <Button variant="outline" size="sm" onClick={onEdit}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+              )}
+              {onNewBuyer && (
+                <Button size="sm" onClick={onNewBuyer}>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Novo Comprador
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
