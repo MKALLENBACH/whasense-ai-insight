@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { useManagerDashboard } from "@/hooks/useManagerDashboard";
+import { useAuth } from "@/contexts/AuthContext";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { LeadDistributionChart } from "@/components/dashboard/LeadDistributionChart";
 import { RiskCyclesList } from "@/components/dashboard/RiskCyclesList";
@@ -9,6 +10,7 @@ import { SellerPerformanceChart } from "@/components/dashboard/SellerPerformance
 import { SalesTimelineChart } from "@/components/dashboard/SalesTimelineChart";
 import { RecentSalesTable } from "@/components/dashboard/RecentSalesTable";
 import { PostSaleMetrics } from "@/components/dashboard/PostSaleMetrics";
+import SellerLimitExceededModal from "@/components/seller/SellerLimitExceededModal";
 import { Button } from "@/components/ui/button";
 import { Loader2, RefreshCw, Clock, Target, Flame, TrendingUp, TrendingDown, Users, CheckCircle2, XCircle, Bot, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const ManagerDashboardPage = () => {
   const { isLoading, kpis, leadDistribution, riskCycles, objections, sellerPerformance, salesTimeline, recentSales, followupMetrics, postSaleMetrics, refresh } = useManagerDashboard();
+  const { hasSellerLimitExceeded, sellerLimitInfo, companyPlan } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = async () => {
@@ -39,6 +42,14 @@ const ManagerDashboardPage = () => {
 
   return (
     <AppLayout>
+      {/* Modal bloqueante para limite excedido */}
+      <SellerLimitExceededModal
+        open={hasSellerLimitExceeded}
+        currentActiveCount={sellerLimitInfo?.currentActiveCount || 0}
+        allowedLimit={sellerLimitInfo?.allowedLimit || 0}
+        planName={companyPlan?.planName || null}
+      />
+
       <div className="space-y-6 pb-8">
         {/* Header */}
         <div className="flex items-center justify-between">
