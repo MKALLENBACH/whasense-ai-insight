@@ -107,3 +107,6 @@ verify_jwt = false
 
 [functions.resend-seller-welcome]
 verify_jwt = false
+
+[functions.force-update-email]
+verify_jwt = false
