@@ -22,6 +22,7 @@ interface GoalVendor {
   goal?: {
     goal_type: string;
     end_date: string;
+    start_date: string;
   };
 }
 
@@ -104,6 +105,174 @@ const SellerPerformancePage = () => {
     }
   }, [user?.id]);
 
+  // Real-time subscriptions for automatic updates
+  useEffect(() => {
+    if (!user?.id || !user?.companyId) return;
+
+    // Subscribe to goal_vendors changes
+    const goalsChannel = supabase
+      .channel('seller-goals-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'goal_vendors',
+          filter: `vendor_id=eq.${user.id}`,
+        },
+        () => {
+          console.log('Goal vendors changed, refreshing...');
+          fetchGoals();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to gamification_points changes
+    const pointsChannel = supabase
+      .channel('seller-points-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'gamification_points',
+          filter: `vendor_id=eq.${user.id}`,
+        },
+        () => {
+          console.log('Points changed, refreshing...');
+          fetchPoints();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to achievements changes
+    const achievementsChannel = supabase
+      .channel('seller-achievements-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'achievements',
+          filter: `vendor_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('New achievement!', payload);
+          fetchAchievements();
+          const badgeType = (payload.new as any)?.badge_type;
+          const badgeInfo = BADGE_INFO[badgeType];
+          if (badgeInfo) {
+            toast.success(`🏆 Nova conquista: ${badgeInfo.label}!`);
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscribe to leaderboard changes
+    const leaderboardChannel = supabase
+      .channel('seller-leaderboard-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'leaderboard',
+          filter: `company_id=eq.${user.companyId}`,
+        },
+        () => {
+          console.log('Leaderboard changed, refreshing...');
+          fetchLeaderboard();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(goalsChannel);
+      supabase.removeChannel(pointsChannel);
+      supabase.removeChannel(achievementsChannel);
+      supabase.removeChannel(leaderboardChannel);
+    };
+  }, [user?.id, user?.companyId]);
+
+  const fetchGoals = async () => {
+    if (!user?.id) return;
+    const { data: gvData } = await supabase
+      .from("goal_vendors")
+      .select(`
+        *,
+        goal:goals(goal_type, end_date, start_date)
+      `)
+      .eq("vendor_id", user.id);
+    setMyGoals((gvData || []) as GoalVendor[]);
+  };
+
+  const fetchPoints = async () => {
+    if (!user?.id) return;
+    const { data: pointsData } = await supabase
+      .from("gamification_points")
+      .select("points")
+      .eq("vendor_id", user.id);
+    const total = (pointsData || []).reduce((acc, p) => acc + p.points, 0);
+    setTotalPoints(total);
+
+    const { data: historyData } = await supabase
+      .from("gamification_points")
+      .select("*")
+      .eq("vendor_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    setPointsHistory((historyData || []) as PointsHistory[]);
+  };
+
+  const fetchAchievements = async () => {
+    if (!user?.id) return;
+    const { data: achData } = await supabase
+      .from("achievements")
+      .select("*")
+      .eq("vendor_id", user.id)
+      .order("awarded_at", { ascending: false });
+    setAchievements((achData || []) as Achievement[]);
+  };
+
+  const fetchLeaderboard = async () => {
+    if (!user?.id || !user?.companyId) return;
+    const now = new Date();
+    const dayStart = now.toISOString().split("T")[0];
+    const weekStart = new Date(now.setDate(now.getDate() - now.getDay())).toISOString().split("T")[0];
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, name")
+      .eq("company_id", user.companyId);
+
+    const nameMap = new Map((profiles || []).map(p => [p.user_id, p.name]));
+
+    const { data: lbData } = await supabase
+      .from("leaderboard")
+      .select("*")
+      .eq("company_id", user.companyId);
+
+    const rankings = {
+      daily: (lbData || []).find(l => l.vendor_id === user.id && l.period === "daily" && l.period_start === dayStart),
+      weekly: (lbData || []).find(l => l.vendor_id === user.id && l.period === "weekly" && l.period_start === weekStart),
+      monthly: (lbData || []).find(l => l.vendor_id === user.id && l.period === "monthly" && l.period_start === monthStart),
+    };
+
+    setMyRanking({
+      daily: rankings.daily ? { ...rankings.daily, vendor_name: nameMap.get(rankings.daily.vendor_id) || "" } : null,
+      weekly: rankings.weekly ? { ...rankings.weekly, vendor_name: nameMap.get(rankings.weekly.vendor_id) || "" } : null,
+      monthly: rankings.monthly ? { ...rankings.monthly, vendor_name: nameMap.get(rankings.monthly.vendor_id) || "" } : null,
+    } as any);
+
+    const monthlyLb = (lbData || [])
+      .filter(l => l.period === "monthly" && l.period_start === monthStart)
+      .sort((a, b) => (a.position || 999) - (b.position || 999))
+      .map(l => ({ ...l, vendor_name: nameMap.get(l.vendor_id) || "Vendedor" }));
+
+    setCompanyLeaderboard(monthlyLb as LeaderboardEntry[]);
+  };
+
   const fetchAIInsights = async () => {
     if (!user?.id || !user?.companyId) return;
     setIsLoadingAI(true);
@@ -128,84 +297,12 @@ const SellerPerformancePage = () => {
     setIsLoading(true);
 
     try {
-      // Fetch my goals
-      const { data: gvData } = await supabase
-        .from("goal_vendors")
-        .select(`
-          *,
-          goal:goals(goal_type, end_date)
-        `)
-        .eq("vendor_id", user.id);
-
-      setMyGoals((gvData || []) as GoalVendor[]);
-
-      // Fetch total points
-      const { data: pointsData } = await supabase
-        .from("gamification_points")
-        .select("points")
-        .eq("vendor_id", user.id);
-
-      const total = (pointsData || []).reduce((acc, p) => acc + p.points, 0);
-      setTotalPoints(total);
-
-      // Fetch points history
-      const { data: historyData } = await supabase
-        .from("gamification_points")
-        .select("*")
-        .eq("vendor_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      setPointsHistory((historyData || []) as PointsHistory[]);
-
-      // Fetch achievements
-      const { data: achData } = await supabase
-        .from("achievements")
-        .select("*")
-        .eq("vendor_id", user.id)
-        .order("awarded_at", { ascending: false });
-
-      setAchievements((achData || []) as Achievement[]);
-
-      // Fetch rankings
-      const now = new Date();
-      const dayStart = now.toISOString().split("T")[0];
-      const weekStart = new Date(now.setDate(now.getDate() - now.getDay())).toISOString().split("T")[0];
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-
-      // Fetch company profiles for names
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, name")
-        .eq("company_id", user.companyId);
-
-      const nameMap = new Map((profiles || []).map(p => [p.user_id, p.name]));
-
-      const { data: lbData } = await supabase
-        .from("leaderboard")
-        .select("*")
-        .eq("company_id", user.companyId);
-
-      const rankings = {
-        daily: (lbData || []).find(l => l.vendor_id === user.id && l.period === "daily" && l.period_start === dayStart),
-        weekly: (lbData || []).find(l => l.vendor_id === user.id && l.period === "weekly" && l.period_start === weekStart),
-        monthly: (lbData || []).find(l => l.vendor_id === user.id && l.period === "monthly" && l.period_start === monthStart),
-      };
-
-      setMyRanking({
-        daily: rankings.daily ? { ...rankings.daily, vendor_name: nameMap.get(rankings.daily.vendor_id) || "" } : null,
-        weekly: rankings.weekly ? { ...rankings.weekly, vendor_name: nameMap.get(rankings.weekly.vendor_id) || "" } : null,
-        monthly: rankings.monthly ? { ...rankings.monthly, vendor_name: nameMap.get(rankings.monthly.vendor_id) || "" } : null,
-      } as any);
-
-      // Company leaderboard
-      const monthlyLb = (lbData || [])
-        .filter(l => l.period === "monthly" && l.period_start === monthStart)
-        .sort((a, b) => (a.position || 999) - (b.position || 999))
-        .map(l => ({ ...l, vendor_name: nameMap.get(l.vendor_id) || "Vendedor" }));
-
-      setCompanyLeaderboard(monthlyLb as LeaderboardEntry[]);
-
+      await Promise.all([
+        fetchGoals(),
+        fetchPoints(),
+        fetchAchievements(),
+        fetchLeaderboard(),
+      ]);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Erro ao carregar dados");
@@ -224,9 +321,13 @@ const SellerPerformancePage = () => {
     );
   }
 
-  const activeGoals = myGoals.filter(g => g.progress < 100);
-  const mainGoal = activeGoals[0];
-  const salesLeft = mainGoal ? Math.max(0, mainGoal.target_value - mainGoal.current_value) : 0;
+  // Filter active goals (those with end_date >= today)
+  const today = new Date().toISOString().split('T')[0];
+  const activeGoals = myGoals.filter(g => {
+    const endDate = g.goal?.end_date;
+    return endDate && endDate >= today && g.progress < 100;
+  });
+  const completedGoals = myGoals.filter(g => g.progress >= 100);
 
   return (
     <AppLayout>
@@ -244,38 +345,87 @@ const SellerPerformancePage = () => {
           </div>
         </div>
 
-        {/* Main Goal Card */}
-        {mainGoal && (
-          <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-6 w-6 text-primary" />
-                Meta Atual: {GOAL_TYPES[mainGoal.goal?.goal_type as keyof typeof GOAL_TYPES]}
-              </CardTitle>
-              <CardDescription>
-                {mainGoal.goal?.end_date && `Prazo: ${format(new Date(mainGoal.goal.end_date), "dd 'de' MMMM", { locale: ptBR })}`}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-end justify-between">
-                  <div>
-                    <p className="text-4xl font-bold text-foreground">{mainGoal.current_value}</p>
-                    <p className="text-sm text-muted-foreground">de {mainGoal.target_value}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-3xl font-bold text-primary">{mainGoal.progress.toFixed(0)}%</p>
-                    <p className="text-sm text-muted-foreground">concluído</p>
-                  </div>
-                </div>
-                <Progress value={mainGoal.progress} className="h-4" />
-                {salesLeft > 0 && (
-                  <div className="flex items-center gap-2 text-sm bg-muted/50 p-3 rounded-lg">
-                    <Sparkles className="h-4 w-4 text-primary" />
-                    <span>Faltam <strong>{salesLeft}</strong> para bater sua meta!</span>
-                  </div>
-                )}
-              </div>
+        {/* All Active Goals Section */}
+        {activeGoals.length > 0 ? (
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Target className="h-5 w-5 text-primary" />
+              Metas Ativas ({activeGoals.length})
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {activeGoals.map((goal) => {
+                const remaining = Math.max(0, goal.target_value - goal.current_value);
+                const goalType = GOAL_TYPES[goal.goal?.goal_type as keyof typeof GOAL_TYPES] || goal.goal?.goal_type;
+                const isClose = goal.progress >= 70;
+                const isAlmostThere = goal.progress >= 90;
+                
+                return (
+                  <Card 
+                    key={goal.id} 
+                    className={`border transition-all ${
+                      isAlmostThere ? 'border-green-500/50 bg-gradient-to-br from-green-500/5 to-green-500/10' :
+                      isClose ? 'border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10' :
+                      'border-border'
+                    }`}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Target className={`h-4 w-4 ${isAlmostThere ? 'text-green-500' : 'text-primary'}`} />
+                          {goalType}
+                        </CardTitle>
+                        <Badge 
+                          variant={goal.status === 'achieved' ? 'default' : goal.status === 'on_track' ? 'secondary' : 'outline'}
+                          className={
+                            goal.status === 'achieved' ? 'bg-green-500' :
+                            goal.status === 'on_track' ? 'bg-blue-500 text-white' :
+                            'bg-orange-500/10 text-orange-500 border-orange-500/30'
+                          }
+                        >
+                          {goal.status === 'achieved' ? 'Batida!' : 
+                           goal.status === 'on_track' ? 'No caminho' : 'Atrás'}
+                        </Badge>
+                      </div>
+                      <CardDescription className="text-xs">
+                        {goal.goal?.end_date && `Prazo: ${format(new Date(goal.goal.end_date), "dd 'de' MMMM", { locale: ptBR })}`}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-end justify-between">
+                        <div>
+                          <p className="text-2xl font-bold text-foreground">{goal.current_value}</p>
+                          <p className="text-xs text-muted-foreground">de {goal.target_value}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-xl font-bold ${isAlmostThere ? 'text-green-500' : 'text-primary'}`}>
+                            {goal.progress?.toFixed(0) || 0}%
+                          </p>
+                        </div>
+                      </div>
+                      <Progress value={goal.progress || 0} className="h-2" />
+                      {remaining > 0 && (
+                        <div className="flex items-center gap-2 text-xs bg-muted/50 p-2 rounded">
+                          <Sparkles className={`h-3 w-3 ${isAlmostThere ? 'text-green-500' : 'text-primary'}`} />
+                          <span>
+                            {isAlmostThere ? '🔥 Quase lá! ' : ''}
+                            Faltam <strong>{remaining}</strong> para bater!
+                          </span>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-8">
+              <Target className="h-12 w-12 text-muted-foreground/30 mb-4" />
+              <p className="text-muted-foreground text-center">
+                Nenhuma meta ativa no momento.<br />
+                Aguarde seu gestor definir novas metas!
+              </p>
             </CardContent>
           </Card>
         )}
@@ -304,7 +454,7 @@ const SellerPerformancePage = () => {
             <CardContent className="pt-6">
               <div className="flex flex-col items-center">
                 <Target className="h-8 w-8 text-green-500 mb-2" />
-                <p className="text-2xl font-bold">{myGoals.filter(g => g.progress >= 100).length}</p>
+                <p className="text-2xl font-bold">{completedGoals.length}</p>
                 <p className="text-xs text-muted-foreground">Metas Batidas</p>
               </div>
             </CardContent>
