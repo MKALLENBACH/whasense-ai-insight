@@ -19,7 +19,8 @@ import {
   ArrowUpRight,
   XCircle,
   MessageCircle,
-  Clock
+  Clock,
+  Star
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -437,21 +438,30 @@ export default function FinanceiroPage() {
                 const annualSavings = plan.annual_price > 0 
                   ? Math.round(100 - (plan.annual_price / (plan.monthly_price * 12)) * 100)
                   : 0;
+                const isPopular = plan.name.toLowerCase() === "pro";
                 
                 return (
                   <div 
                     key={plan.id}
-                    className={`relative p-4 rounded-lg border-2 transition-colors ${
+                    className={`relative p-4 rounded-lg border-2 transition-all ${
                       isCurrentPlan 
                         ? "border-primary bg-primary/5" 
-                        : "border-border hover:border-primary/50"
+                        : isPopular
+                          ? "border-amber-500 bg-gradient-to-b from-amber-50/50 to-transparent dark:from-amber-950/20 dark:to-transparent shadow-lg scale-[1.02]"
+                          : "border-border hover:border-primary/50"
                     }`}
                   >
+                    {isPopular && !isCurrentPlan && (
+                      <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0 shadow-md">
+                        <Star className="h-3 w-3 mr-1 fill-current" />
+                        Mais popular
+                      </Badge>
+                    )}
                     {isCurrentPlan && (
                       <Badge className="absolute -top-2 -right-2">Atual</Badge>
                     )}
                     
-                    <h3 className="font-bold text-lg">{plan.name}</h3>
+                    <h3 className={`font-bold text-lg ${isPopular && !isCurrentPlan ? "mt-2" : ""}`}>{plan.name}</h3>
                     <p className="text-2xl font-bold mt-2">
                       {formatCurrency(plan.monthly_price * 100)}
                       <span className="text-sm font-normal text-muted-foreground">/mês</span>
@@ -475,7 +485,7 @@ export default function FinanceiroPage() {
                         {hasMonthly && (
                           <Button 
                             size="sm" 
-                            className="w-full"
+                            className={`w-full ${isPopular ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white" : ""}`}
                             onClick={() => handleSubscribe(plan, "monthly")}
                           >
                             Mensal
@@ -486,7 +496,7 @@ export default function FinanceiroPage() {
                           <Button 
                             size="sm" 
                             variant="outline"
-                            className="w-full"
+                            className={`w-full ${isPopular ? "border-amber-500/50 hover:bg-amber-50 dark:hover:bg-amber-950/30" : ""}`}
                             onClick={() => handleSubscribe(plan, "annual")}
                           >
                             Anual {annualSavings > 0 && `(-${annualSavings}%)`}
