@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import CreateSellerModal from "@/components/seller/CreateSellerModal";
 import EditSellerModal from "@/components/seller/EditSellerModal";
 import PlanLimitBanner from "@/components/seller/PlanLimitBanner";
+import SellerLimitExceededModal from "@/components/seller/SellerLimitExceededModal";
 import AppLayout from "@/components/layout/AppLayout";
 
 interface Seller {
@@ -35,7 +36,7 @@ interface PlanInfo {
 }
 
 const SellersPage = () => {
-  const { user } = useAuth();
+  const { user, hasSellerLimitExceeded, sellerLimitInfo, companyPlan, refreshSellerLimit } = useAuth();
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -48,25 +49,20 @@ const SellersPage = () => {
     if (!user?.id) return;
 
     try {
-      // Get all sellers from company - using the manager RLS policy
-      // which allows managers to view all profiles in their company
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, user_id, name, email, created_at, company_id");
+        .select("id, user_id, name, email, created_at, company_id, is_active");
 
       if (profilesError) {
         console.error("Error fetching profiles:", profilesError);
         throw profilesError;
       }
 
-      console.log("Profiles fetched:", profiles);
-
       if (!profiles || profiles.length === 0) {
         setSellers([]);
         return;
       }
 
-      // Get manager's company from the profiles we can see
       const managerProfile = profiles.find(p => p.user_id === user.id);
       
       if (!managerProfile?.company_id) {
@@ -76,7 +72,6 @@ const SellersPage = () => {
 
       const companyId = managerProfile.company_id;
 
-      // Fetch company's plan info
       const { data: companyData } = await supabase
         .from("companies")
         .select("plan_id")
@@ -98,11 +93,9 @@ const SellersPage = () => {
         }
       }
 
-      // Filter profiles from the same company
       const companyProfiles = profiles.filter(p => p.company_id === companyId);
       const userIds = companyProfiles.map((p) => p.user_id);
 
-      // Get roles for these users
       const { data: roles, error: rolesError } = await supabase
         .from("user_roles")
         .select("user_id, role")
@@ -112,9 +105,6 @@ const SellersPage = () => {
         console.error("Error fetching roles:", rolesError);
       }
 
-      console.log("Roles fetched:", roles);
-
-      // Filter only sellers
       const sellerUserIds = roles?.filter((r) => r.role === "seller").map((r) => r.user_id) || [];
       
       const sellersData: Seller[] = companyProfiles
@@ -125,10 +115,9 @@ const SellersPage = () => {
           name: p.name,
           email: p.email,
           created_at: p.created_at,
-          is_active: true,
+          is_active: p.is_active,
         }));
 
-      console.log("Sellers data:", sellersData);
       setSellers(sellersData);
     } catch (error) {
       console.error("Error fetching sellers:", error);
@@ -150,17 +139,32 @@ const SellersPage = () => {
   const handleToggleStatus = async (seller: Seller) => {
     setTogglingStatus(seller.id);
     try {
-      // For now, we'll just toggle the local state
-      // In a real implementation, you'd call an edge function to disable the user in Auth
+      const newStatus = !seller.is_active;
+
+      // Update profile is_active status in database
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_active: newStatus })
+        .eq("id", seller.id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local state
       setSellers((prev) =>
         prev.map((s) =>
-          s.id === seller.id ? { ...s, is_active: !s.is_active } : s
+          s.id === seller.id ? { ...s, is_active: newStatus } : s
         )
       );
+
+      // Refresh seller limit info in auth context
+      await refreshSellerLimit();
+
       toast.success(
-        seller.is_active
-          ? "Vendedor desativado com sucesso"
-          : "Vendedor ativado com sucesso"
+        newStatus
+          ? "Vendedor ativado com sucesso"
+          : "Vendedor desativado com sucesso"
       );
     } catch (error) {
       console.error("Error toggling status:", error);
@@ -173,9 +177,22 @@ const SellersPage = () => {
   const activeSellerCount = sellers.filter(s => s.is_active).length;
   const isAtLimit = planInfo.sellerLimit !== null && activeSellerCount >= planInfo.sellerLimit;
 
+  // Check if we can activate more sellers (for enable button logic)
+  const canActivateMore = planInfo.sellerLimit === null || activeSellerCount < planInfo.sellerLimit;
+
   return (
     <AppLayout>
       <div className="space-y-6">
+        {/* Seller Limit Exceeded Modal */}
+        {hasSellerLimitExceeded && sellerLimitInfo && (
+          <SellerLimitExceededModal
+            open={hasSellerLimitExceeded}
+            currentActiveCount={sellerLimitInfo.currentActiveCount}
+            allowedLimit={sellerLimitInfo.allowedLimit}
+            planName={companyPlan?.planName || null}
+          />
+        )}
+
         {/* Plan Banner */}
         <PlanLimitBanner
           planName={planInfo.name}
@@ -268,7 +285,15 @@ const SellersPage = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleToggleStatus(seller)}
-                          disabled={togglingStatus === seller.id}
+                          disabled={
+                            togglingStatus === seller.id || 
+                            (!seller.is_active && !canActivateMore)
+                          }
+                          title={
+                            !seller.is_active && !canActivateMore 
+                              ? "Limite de vendedores atingido" 
+                              : undefined
+                          }
                           className={`h-8 w-8 p-0 ${
                             seller.is_active
                               ? "text-destructive hover:text-destructive"
@@ -296,7 +321,10 @@ const SellersPage = () => {
       <CreateSellerModal
         open={isCreateModalOpen}
         onOpenChange={setIsCreateModalOpen}
-        onSuccess={fetchSellers}
+        onSuccess={() => {
+          fetchSellers();
+          refreshSellerLimit();
+        }}
       />
 
       {selectedSeller && (

@@ -18,23 +18,33 @@ interface CompanyPlanInfo {
   planId: string | null;
   planName: string | null;
   isActive: boolean;
-  hasValidPlan: boolean; // true se tem plano e não é "Inativo"
+  hasValidPlan: boolean;
+  sellerLimit: number | null;
+}
+
+interface SellerLimitInfo {
+  isExceeded: boolean;
+  currentActiveCount: number;
+  allowedLimit: number;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   session: Session | null;
   companyPlan: CompanyPlanInfo | null;
+  sellerLimitInfo: SellerLimitInfo | null;
   login: (email: string, password: string) => Promise<{ role: UserRole }>;
   signup: (email: string, password: string, name: string, role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   refreshCompanyPlan: () => Promise<void>;
+  refreshSellerLimit: () => Promise<void>;
   isAuthenticated: boolean;
   isLoading: boolean;
   isManager: boolean;
   isSeller: boolean;
   isAdmin: boolean;
-  hasRestrictedAccess: boolean; // true se empresa está com plano inativo/sem plano
+  hasRestrictedAccess: boolean;
+  hasSellerLimitExceeded: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,6 +53,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [companyPlan, setCompanyPlan] = useState<CompanyPlanInfo | null>(null);
+  const [sellerLimitInfo, setSellerLimitInfo] = useState<SellerLimitInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const mapDbRoleToAppRole = (dbRole: string): UserRole => {
@@ -66,10 +77,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return mapDbRoleToAppRole(data?.role || "seller");
   };
 
-  const fetchUserProfile = async (userId: string): Promise<{ name: string; email: string; companyId: string | null } | null> => {
+  const fetchUserProfile = async (userId: string): Promise<{ name: string; email: string; companyId: string | null; isActive: boolean } | null> => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("name, email, company_id")
+      .select("name, email, company_id, is_active")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -78,7 +89,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return null;
     }
 
-    return data ? { name: data.name, email: data.email, companyId: data.company_id } : null;
+    return data ? { name: data.name, email: data.email, companyId: data.company_id, isActive: data.is_active } : null;
   };
 
   const fetchCompanyPlan = async (companyId: string | null): Promise<CompanyPlanInfo | null> => {
@@ -88,7 +99,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { data: company, error } = await supabase
       .from("companies")
-      .select("id, plan_id, is_active, plans:plan_id(id, name)")
+      .select("id, plan_id, is_active, plans:plan_id(id, name, seller_limit)")
       .eq("id", companyId)
       .maybeSingle();
 
@@ -97,7 +108,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return null;
     }
 
-    const planData = company.plans as { id: string; name: string } | null;
+    const planData = company.plans as { id: string; name: string; seller_limit: number | null } | null;
     const hasValidPlan = company.is_active && 
                          company.plan_id !== null && 
                          company.plan_id !== INACTIVE_PLAN_ID;
@@ -107,6 +118,51 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       planName: planData?.name || null,
       isActive: company.is_active,
       hasValidPlan,
+      sellerLimit: planData?.seller_limit ?? null,
+    };
+  };
+
+  const fetchSellerLimitInfo = async (companyId: string | null, sellerLimit: number | null): Promise<SellerLimitInfo | null> => {
+    if (!companyId || sellerLimit === null) {
+      return null;
+    }
+
+    // Count active sellers in the company
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("user_id, is_active")
+      .eq("company_id", companyId)
+      .eq("is_active", true);
+
+    if (profilesError) {
+      console.error("Error fetching profiles for seller count:", profilesError);
+      return null;
+    }
+
+    if (!profiles || profiles.length === 0) {
+      return { isExceeded: false, currentActiveCount: 0, allowedLimit: sellerLimit };
+    }
+
+    const userIds = profiles.map(p => p.user_id);
+
+    // Get roles to count only sellers
+    const { data: roles, error: rolesError } = await supabase
+      .from("user_roles")
+      .select("user_id, role")
+      .in("user_id", userIds)
+      .eq("role", "seller");
+
+    if (rolesError) {
+      console.error("Error fetching roles:", rolesError);
+      return null;
+    }
+
+    const activeSellerCount = roles?.length || 0;
+
+    return {
+      isExceeded: activeSellerCount > sellerLimit,
+      currentActiveCount: activeSellerCount,
+      allowedLimit: sellerLimit,
     };
   };
 
@@ -114,6 +170,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (user?.companyId) {
       const planInfo = await fetchCompanyPlan(user.companyId);
       setCompanyPlan(planInfo);
+      
+      // Also refresh seller limit info
+      if (planInfo) {
+        const limitInfo = await fetchSellerLimitInfo(user.companyId, planInfo.sellerLimit);
+        setSellerLimitInfo(limitInfo);
+      }
+    }
+  };
+
+  const refreshSellerLimit = async () => {
+    if (user?.companyId && companyPlan) {
+      const limitInfo = await fetchSellerLimitInfo(user.companyId, companyPlan.sellerLimit);
+      setSellerLimitInfo(limitInfo);
     }
   };
 
@@ -126,6 +195,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Fetch company plan info
     const planInfo = await fetchCompanyPlan(profile?.companyId || null);
     setCompanyPlan(planInfo);
+
+    // Fetch seller limit info
+    if (planInfo && profile?.companyId) {
+      const limitInfo = await fetchSellerLimitInfo(profile.companyId, planInfo.sellerLimit);
+      setSellerLimitInfo(limitInfo);
+    }
 
     setUser({
       id: supabaseUser.id,
@@ -148,6 +223,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } else {
           setUser(null);
           setCompanyPlan(null);
+          setSellerLimitInfo(null);
         }
         setIsLoading(false);
       }
@@ -183,41 +259,47 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const role = await fetchUserRole(data.user.id);
 
+    // Check if user profile is active
+    const profile = await fetchUserProfile(data.user.id);
+    if (profile && !profile.isActive && role === "vendedor") {
+      await supabase.auth.signOut();
+      throw new Error("Sua conta está desativada. Entre em contato com seu gestor.");
+    }
+
     // Check if user's company is active (skip for admins)
-    if (role !== "admin") {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("company_id")
-        .eq("user_id", data.user.id)
+    if (role !== "admin" && profile?.companyId) {
+      const { data: company } = await supabase
+        .from("companies")
+        .select("is_active, plan_id")
+        .eq("id", profile.companyId)
         .maybeSingle();
 
-      if (profile?.company_id) {
-        const { data: company } = await supabase
-          .from("companies")
-          .select("is_active, plan_id")
-          .eq("id", profile.company_id)
-          .maybeSingle();
-
-        // Vendedores não podem acessar se empresa inativa ou plano Inativo
-        if (role === "vendedor") {
-          const isInactivePlan = !company?.plan_id || company.plan_id === INACTIVE_PLAN_ID;
-          if (!company?.is_active || isInactivePlan) {
-            await supabase.auth.signOut();
-            throw new Error("Sua empresa está com o plano inativo. Entre em contato com seu gestor.");
-          }
+      // Vendedores não podem acessar se empresa inativa ou plano Inativo
+      if (role === "vendedor") {
+        const isInactivePlan = !company?.plan_id || company.plan_id === INACTIVE_PLAN_ID;
+        if (!company?.is_active || isInactivePlan) {
+          await supabase.auth.signOut();
+          throw new Error("Sua empresa está com o plano inativo. Entre em contato com seu gestor.");
         }
 
-        // Gestores podem acessar mesmo com plano inativo (verão apenas /financeiro)
-        // Mas se is_active = false (bloqueado pelo admin), não podem acessar
-        if (role === "gestor" && company && !company.is_active) {
-          // Verificar se é bloqueio por admin ou por plano
-          const isInactivePlan = !company.plan_id || company.plan_id === INACTIVE_PLAN_ID;
-          if (!isInactivePlan) {
-            // Bloqueado pelo admin, não pelo plano
+        // Check seller limit exceeded
+        const planInfo = await fetchCompanyPlan(profile.companyId);
+        if (planInfo && planInfo.sellerLimit !== null) {
+          const limitInfo = await fetchSellerLimitInfo(profile.companyId, planInfo.sellerLimit);
+          if (limitInfo?.isExceeded) {
             await supabase.auth.signOut();
-            throw new Error("Sua empresa está inativa. Entre em contato com o suporte.");
+            throw new Error("A empresa excedeu o limite de vendedores do plano. Entre em contato com seu gestor.");
           }
-          // Se for plano inativo, permite login mas com acesso restrito
+        }
+      }
+
+      // Gestores podem acessar mesmo com plano inativo (verão apenas /financeiro)
+      // Mas se is_active = false (bloqueado pelo admin), não podem acessar
+      if (role === "gestor" && company && !company.is_active) {
+        const isInactivePlan = !company.plan_id || company.plan_id === INACTIVE_PLAN_ID;
+        if (!isInactivePlan) {
+          await supabase.auth.signOut();
+          throw new Error("Sua empresa está inativa. Entre em contato com o suporte.");
         }
       }
     }
@@ -273,16 +355,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(null);
     setSession(null);
     setCompanyPlan(null);
+    setSellerLimitInfo(null);
   };
 
   // Determina se o acesso é restrito (plano inativo ou sem plano)
   const hasRestrictedAccess = (() => {
-    // Admin nunca tem restrição
     if (user?.role === "admin") return false;
-    // Se não tem empresa, não restringe
     if (!user?.companyId) return false;
-    // Se tem empresa mas plano é inválido
     return companyPlan ? !companyPlan.hasValidPlan : true;
+  })();
+
+  // Determina se o limite de vendedores foi excedido
+  const hasSellerLimitExceeded = (() => {
+    if (user?.role === "admin") return false;
+    if (user?.role !== "gestor") return false;
+    return sellerLimitInfo?.isExceeded || false;
   })();
 
   return (
@@ -291,16 +378,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         user,
         session,
         companyPlan,
+        sellerLimitInfo,
         login,
         signup,
         logout,
         refreshCompanyPlan,
+        refreshSellerLimit,
         isAuthenticated: !!session,
         isLoading,
         isManager: user?.role === "gestor",
         isSeller: user?.role === "vendedor",
         isAdmin: user?.role === "admin",
         hasRestrictedAccess,
+        hasSellerLimitExceeded,
       }}
     >
       {children}

@@ -5,15 +5,17 @@ import { Loader2, AlertTriangle } from "lucide-react";
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRole?: "gestor" | "vendedor" | "any";
-  allowRestrictedAccess?: boolean; // Para rotas que gestores podem acessar mesmo com plano inativo
+  allowRestrictedAccess?: boolean;
+  allowSellerLimitExceeded?: boolean;
 }
 
 const ProtectedRoute = ({ 
   children, 
   requiredRole = "any",
-  allowRestrictedAccess = false 
+  allowRestrictedAccess = false,
+  allowSellerLimitExceeded = false,
 }: ProtectedRouteProps) => {
-  const { isAuthenticated, isLoading, user, hasRestrictedAccess, isAdmin } = useAuth();
+  const { isAuthenticated, isLoading, user, hasRestrictedAccess, hasSellerLimitExceeded, isAdmin } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -36,8 +38,7 @@ const ProtectedRoute = ({
     return <>{children}</>;
   }
 
-  // Vendedor com empresa inativa/plano inativo - não deveria ter logado
-  // Mas por segurança, redireciona para login
+  // Vendedor com empresa inativa/plano inativo
   if (user?.role === "vendedor" && hasRestrictedAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -62,15 +63,27 @@ const ProtectedRoute = ({
 
   // Gestor com empresa inativa/plano inativo - só pode acessar /financeiro
   if (user?.role === "gestor" && hasRestrictedAccess) {
-    // Se a rota permite acesso restrito (como /financeiro), permite
     if (allowRestrictedAccess) {
       return <>{children}</>;
     }
     
-    // Caso contrário, redireciona para /financeiro
     if (location.pathname !== "/financeiro") {
       return <Navigate to="/financeiro" replace />;
     }
+  }
+
+  // Gestor com limite de vendedores excedido
+  if (user?.role === "gestor" && hasSellerLimitExceeded && !hasRestrictedAccess) {
+    // Rotas permitidas quando limite excedido
+    const allowedPaths = ["/dashboard", "/gestor/vendedores", "/financeiro"];
+    const isAllowedPath = allowedPaths.some(path => location.pathname.startsWith(path));
+    
+    if (allowSellerLimitExceeded || isAllowedPath) {
+      return <>{children}</>;
+    }
+    
+    // Redireciona para dashboard se tentar acessar outra rota
+    return <Navigate to="/dashboard" replace />;
   }
 
   // Verificação de role normal

@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const AppSidebar = () => {
-  const { user, logout, hasRestrictedAccess } = useAuth();
+  const { user, logout, hasRestrictedAccess, hasSellerLimitExceeded, sellerLimitInfo } = useAuth();
   const [alertCount, setAlertCount] = useState(0);
 
   useEffect(() => {
@@ -26,7 +26,6 @@ const AppSidebar = () => {
 
     fetchAlertCount();
 
-    // Subscribe to realtime changes
     const channel = supabase
       .channel('sidebar-alerts')
       .on(
@@ -74,20 +73,58 @@ const AppSidebar = () => {
     { to: "/dashboard/whatsapp-status", icon: Smartphone, label: "Status WhatsApp" },
   ];
 
-  // Se gestor com acesso restrito, mostra apenas Financeiro
+  // Se gestor com acesso restrito por plano inativo, mostra apenas Financeiro
   const gestorRestrictedLinks: NavLinkItem[] = [
+    { to: "/financeiro", icon: CreditCard, label: "Financeiro" },
+  ];
+
+  // Se gestor com limite de vendedores excedido, mostra dashboard, vendedores e financeiro
+  const gestorSellerLimitLinks: NavLinkItem[] = [
+    { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    { to: "/gestor/vendedores", icon: Users, label: "Vendedores" },
     { to: "/financeiro", icon: CreditCard, label: "Financeiro" },
   ];
 
   // Determina quais links mostrar
   const getLinks = () => {
     if (user?.role === "gestor") {
-      return hasRestrictedAccess ? gestorRestrictedLinks : gestorLinks;
+      if (hasRestrictedAccess) {
+        return gestorRestrictedLinks;
+      }
+      if (hasSellerLimitExceeded) {
+        return gestorSellerLimitLinks;
+      }
+      return gestorLinks;
     }
     return vendedorLinks;
   };
 
   const links = getLinks();
+
+  // Determina qual aviso mostrar
+  const getWarning = () => {
+    if (user?.role !== "gestor") return null;
+    
+    if (hasRestrictedAccess) {
+      return {
+        title: "Plano Inativo",
+        message: "Regularize seu plano para ter acesso completo.",
+        color: "yellow"
+      };
+    }
+    
+    if (hasSellerLimitExceeded && sellerLimitInfo) {
+      return {
+        title: "Limite Excedido",
+        message: `Desative ${sellerLimitInfo.currentActiveCount - sellerLimitInfo.allowedLimit} vendedor(es) para liberar o acesso.`,
+        color: "red"
+      };
+    }
+    
+    return null;
+  };
+
+  const warning = getWarning();
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col">
@@ -103,14 +140,30 @@ const AppSidebar = () => {
       </div>
 
       {/* Restricted Access Warning */}
-      {hasRestrictedAccess && user?.role === "gestor" && (
-        <div className="mx-3 mt-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+      {warning && (
+        <div className={cn(
+          "mx-3 mt-4 p-3 rounded-lg border",
+          warning.color === "yellow" 
+            ? "bg-yellow-500/10 border-yellow-500/30" 
+            : "bg-destructive/10 border-destructive/30"
+        )}>
           <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+            <AlertTriangle className={cn(
+              "h-4 w-4 mt-0.5 flex-shrink-0",
+              warning.color === "yellow" ? "text-yellow-500" : "text-destructive"
+            )} />
             <div>
-              <p className="text-xs font-medium text-yellow-500">Plano Inativo</p>
-              <p className="text-xs text-yellow-500/80 mt-0.5">
-                Regularize seu plano para ter acesso completo.
+              <p className={cn(
+                "text-xs font-medium",
+                warning.color === "yellow" ? "text-yellow-500" : "text-destructive"
+              )}>
+                {warning.title}
+              </p>
+              <p className={cn(
+                "text-xs mt-0.5",
+                warning.color === "yellow" ? "text-yellow-500/80" : "text-destructive/80"
+              )}>
+                {warning.message}
               </p>
             </div>
           </div>
