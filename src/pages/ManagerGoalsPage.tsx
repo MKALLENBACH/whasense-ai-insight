@@ -54,8 +54,6 @@ interface Achievement {
 
 const GOAL_TYPES = {
   vendas: "Vendas",
-  conversas_ativas: "Conversas Ativas",
-  taxa_resposta: "Taxa de Resposta (%)",
 };
 
 const BADGE_INFO: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
@@ -277,26 +275,14 @@ const ManagerGoalsPage = () => {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Tipo de Meta</Label>
-                  <Select value={goalType} onValueChange={setGoalType}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(GOAL_TYPES).map(([key, label]) => (
-                        <SelectItem key={key} value={key}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Valor Alvo</Label>
+                  <Label>Meta de Vendas</Label>
                   <Input
                     type="number"
-                    placeholder={goalType === "taxa_resposta" ? "80" : "20"}
+                    placeholder="10"
                     value={targetValue}
                     onChange={(e) => setTargetValue(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">Quantidade de vendas a serem realizadas</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
