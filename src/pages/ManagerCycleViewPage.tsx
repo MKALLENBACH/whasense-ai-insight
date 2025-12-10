@@ -21,6 +21,12 @@ import {
   Play,
   AlertTriangle,
   ChevronRight,
+  Thermometer,
+  Target,
+  Brain,
+  TrendingUp,
+  Building2,
+  Phone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -38,6 +44,17 @@ interface Message {
   attachment_name?: string | null;
 }
 
+interface Insight {
+  id: string;
+  message_id: string;
+  sentiment: string | null;
+  temperature: string | null;
+  objection: string | null;
+  intention: string | null;
+  suggestion: string | null;
+  next_action: string | null;
+}
+
 interface Cycle {
   id: string;
   status: string;
@@ -48,6 +65,8 @@ interface Cycle {
   won_summary: string | null;
   customer_id: string;
   seller_id: string;
+  buyer_id: string | null;
+  client_id: string | null;
 }
 
 interface Customer {
@@ -61,10 +80,19 @@ interface Seller {
   name: string;
 }
 
-interface CycleInsight {
-  sentiment: string;
-  temperature: string;
-  objection: string;
+interface Buyer {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  role: string | null;
+}
+
+interface Client {
+  id: string;
+  name: string;
+  cnpj: string | null;
+  segment: string | null;
 }
 
 const statusConfig = {
@@ -83,8 +111,40 @@ const lossReasonLabels: Record<string, string> = {
   other: "Outro motivo",
 };
 
+const objectionLabels: Record<string, string> = {
+  price: "Preço",
+  delivery: "Prazo de entrega",
+  competitor: "Concorrência",
+  doubt: "Dúvida sobre produto",
+  timing: "Momento inadequado",
+  trust: "Confiança",
+  need: "Necessidade",
+  none: "Nenhuma",
+};
+
+const intentionLabels: Record<string, string> = {
+  doubt: "Dúvida",
+  evaluating: "Avaliando",
+  "ready-to-buy": "Pronto para comprar",
+  comparing: "Comparando",
+  complaining: "Reclamando",
+  canceling: "Cancelando",
+};
+
+const temperatureLabels: Record<string, { label: string; color: string }> = {
+  hot: { label: "Quente", color: "text-orange-500" },
+  warm: { label: "Morno", color: "text-yellow-500" },
+  cold: { label: "Frio", color: "text-blue-500" },
+};
+
+const sentimentLabels: Record<string, { label: string; color: string }> = {
+  positive: { label: "Positivo", color: "text-success" },
+  neutral: { label: "Neutro", color: "text-muted-foreground" },
+  negative: { label: "Negativo", color: "text-destructive" },
+};
+
 export default function ManagerCycleViewPage() {
-  const { id } = useParams<{ id: string }>();
+  const { cycleId } = useParams<{ cycleId: string }>();
   const navigate = useNavigate();
   const { isManager } = useAuth();
   
@@ -92,18 +152,20 @@ export default function ManagerCycleViewPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [seller, setSeller] = useState<Seller | null>(null);
+  const [buyer, setBuyer] = useState<Buyer | null>(null);
+  const [client, setClient] = useState<Client | null>(null);
   const [allCycles, setAllCycles] = useState<Cycle[]>([]);
-  const [insights, setInsights] = useState<CycleInsight[]>([]);
+  const [insights, setInsights] = useState<Insight[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (id && isManager) {
+    if (cycleId && isManager) {
       fetchCycleData();
     }
-  }, [id, isManager]);
+  }, [cycleId, isManager]);
 
   const fetchCycleData = async () => {
-    if (!id) return;
+    if (!cycleId) return;
 
     setIsLoading(true);
     try {
@@ -111,7 +173,7 @@ export default function ManagerCycleViewPage() {
       const { data: cycleData, error: cycleError } = await supabase
         .from("sale_cycles")
         .select("*")
-        .eq("id", id)
+        .eq("id", cycleId)
         .single();
 
       if (cycleError) throw cycleError;
@@ -121,7 +183,7 @@ export default function ManagerCycleViewPage() {
       const { data: messagesData, error: messagesError } = await supabase
         .from("messages")
         .select("id, content, direction, timestamp, attachment_url, attachment_type, attachment_name")
-        .eq("cycle_id", id)
+        .eq("cycle_id", cycleId)
         .order("timestamp", { ascending: true });
 
       if (messagesError) throw messagesError;
@@ -145,12 +207,32 @@ export default function ManagerCycleViewPage() {
         setSeller({ id: sellerData.user_id, name: sellerData.name });
       }
 
-      // Fetch all cycles for this customer (for navigation)
+      // Fetch buyer if exists
+      if (cycleData.buyer_id) {
+        const { data: buyerData } = await supabase
+          .from("buyers")
+          .select("id, name, phone, email, role")
+          .eq("id", cycleData.buyer_id)
+          .single();
+        setBuyer(buyerData);
+      }
+
+      // Fetch client if exists
+      if (cycleData.client_id) {
+        const { data: clientData } = await supabase
+          .from("clients")
+          .select("id, name, cnpj, segment")
+          .eq("id", cycleData.client_id)
+          .single();
+        setClient(clientData);
+      }
+
+      // Fetch all cycles for this customer (for navigation) - sorted by created_at ASC
       const { data: allCyclesData } = await supabase
         .from("sale_cycles")
         .select("*")
         .eq("customer_id", cycleData.customer_id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: true });
       setAllCycles(allCyclesData || []);
 
       // Fetch insights for messages in this cycle
@@ -158,7 +240,7 @@ export default function ManagerCycleViewPage() {
         const messageIds = messagesData.map(m => m.id);
         const { data: insightsData } = await supabase
           .from("insights")
-          .select("sentiment, temperature, objection")
+          .select("id, message_id, sentiment, temperature, objection, intention, suggestion, next_action")
           .in("message_id", messageIds);
         setInsights(insightsData || []);
       }
@@ -172,8 +254,7 @@ export default function ManagerCycleViewPage() {
   };
 
   const getCycleNumber = (cycleId: string) => {
-    const reversed = [...allCycles].reverse();
-    const index = reversed.findIndex(c => c.id === cycleId);
+    const index = allCycles.findIndex(c => c.id === cycleId);
     return index >= 0 ? index + 1 : 1;
   };
 
@@ -181,17 +262,45 @@ export default function ManagerCycleViewPage() {
     return insights.filter(i => i.objection && i.objection !== "none").length;
   };
 
-  const getAverageTemperature = () => {
-    const temps = insights.filter(i => i.temperature).map(i => {
-      if (i.temperature === "hot") return 3;
-      if (i.temperature === "warm") return 2;
-      return 1;
+  const getUniqueObjections = () => {
+    const objections = insights
+      .filter(i => i.objection && i.objection !== "none")
+      .map(i => i.objection as string);
+    return [...new Set(objections)];
+  };
+
+  const getFinalTemperature = () => {
+    const temps = insights.filter(i => i.temperature);
+    if (temps.length === 0) return null;
+    // Get the last temperature
+    const lastTemp = temps[temps.length - 1].temperature;
+    return lastTemp;
+  };
+
+  const getAverageIntention = () => {
+    const intentions = insights.filter(i => i.intention).map(i => i.intention as string);
+    if (intentions.length === 0) return null;
+    // Get the most common intention
+    const intentionCount: Record<string, number> = {};
+    intentions.forEach(i => {
+      intentionCount[i] = (intentionCount[i] || 0) + 1;
     });
-    if (temps.length === 0) return "N/A";
-    const avg = temps.reduce((a, b) => a + b, 0) / temps.length;
-    if (avg >= 2.5) return "Quente";
-    if (avg >= 1.5) return "Morno";
-    return "Frio";
+    return Object.entries(intentionCount).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  };
+
+  const getSentimentTrend = () => {
+    const sentiments = insights.filter(i => i.sentiment).map(i => i.sentiment as string);
+    if (sentiments.length === 0) return [];
+    return sentiments;
+  };
+
+  const getCriticalMoments = () => {
+    return insights.filter(i => 
+      i.sentiment === "negative" || 
+      (i.objection && i.objection !== "none") ||
+      i.intention === "complaining" ||
+      i.intention === "canceling"
+    );
   };
 
   if (!isManager) {
@@ -228,27 +337,35 @@ export default function ManagerCycleViewPage() {
   const StatusIcon = config.icon;
   const cycleNumber = getCycleNumber(cycle.id);
   const startDate = cycle.start_message_timestamp || cycle.created_at;
+  const finalTemp = getFinalTemperature();
+  const avgIntention = getAverageIntention();
+  const uniqueObjections = getUniqueObjections();
+  const criticalMoments = getCriticalMoments();
+  const sentimentTrend = getSentimentTrend();
 
   return (
     <AppLayout>
       <div className="h-[calc(100vh-3rem)] flex gap-4 p-4">
         {/* Left Sidebar - Cycle Navigation */}
-        <div className="w-64 flex-shrink-0">
+        <div className="w-56 flex-shrink-0">
           <Card className="h-full">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Hash className="h-4 w-4" />
-                Ciclos de {customer?.name}
+                Ciclos
               </CardTitle>
+              <p className="text-xs text-muted-foreground truncate">
+                {customer?.name || "Lead"}
+              </p>
             </CardHeader>
             <CardContent className="p-0">
-              <ScrollArea className="h-[calc(100%-4rem)]">
+              <ScrollArea className="h-[calc(100%-5rem)]">
                 <div className="space-y-1 p-2">
-                  {allCycles.map((c) => {
-                    const cNum = getCycleNumber(c.id);
+                  {allCycles.map((c, index) => {
+                    const cNum = index + 1;
                     const cConfig = statusConfig[c.status as keyof typeof statusConfig] || statusConfig.pending;
                     const CIcon = cConfig.icon;
-                    const isActive = c.id === id;
+                    const isActive = c.id === cycleId;
                     
                     return (
                       <Button
@@ -258,16 +375,16 @@ export default function ManagerCycleViewPage() {
                           "w-full justify-start gap-2 h-auto py-2",
                           isActive && "bg-primary/10"
                         )}
-                        onClick={() => navigate(`/gestor/ciclo/${c.id}`)}
+                        onClick={() => navigate(`/gestor/ciclos/${c.id}`)}
                       >
-                        <CIcon className={cn("h-4 w-4", cConfig.color.split(" ")[1])} />
-                        <div className="flex-1 text-left">
+                        <CIcon className={cn("h-4 w-4 flex-shrink-0", cConfig.color.split(" ")[1])} />
+                        <div className="flex-1 text-left min-w-0">
                           <div className="text-sm font-medium">Ciclo #{cNum}</div>
                           <div className="text-xs text-muted-foreground">
                             {format(new Date(c.start_message_timestamp || c.created_at), "dd/MM/yy", { locale: ptBR })}
                           </div>
                         </div>
-                        {isActive && <ChevronRight className="h-4 w-4" />}
+                        {isActive && <ChevronRight className="h-4 w-4 flex-shrink-0" />}
                       </Button>
                     );
                   })}
@@ -278,76 +395,103 @@ export default function ManagerCycleViewPage() {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col gap-4">
+        <div className="flex-1 flex flex-col gap-4 min-w-0">
           {/* Header */}
           <Card>
             <CardContent className="p-4">
-              <div className="flex items-center gap-4">
+              <div className="flex items-start gap-4">
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => navigate(-1)}
-                  className="h-8 w-8"
+                  className="h-8 w-8 flex-shrink-0"
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
 
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <h1 className="text-xl font-semibold">Ciclo #{cycleNumber}</h1>
                     <Badge className={config.color}>
                       <StatusIcon className="h-3.5 w-3.5 mr-1" />
                       {config.label}
                     </Badge>
+                    {finalTemp && (
+                      <Badge variant="outline" className={temperatureLabels[finalTemp]?.color}>
+                        <Thermometer className="h-3.5 w-3.5 mr-1" />
+                        {temperatureLabels[finalTemp]?.label || finalTemp}
+                      </Badge>
+                    )}
+                    {avgIntention && (
+                      <Badge variant="outline">
+                        <Target className="h-3.5 w-3.5 mr-1" />
+                        {intentionLabels[avgIntention] || avgIntention}
+                      </Badge>
+                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {customer?.name} • {customer?.phone || "Sem telefone"}
-                  </p>
+                  
+                  {/* Customer/Buyer/Client info */}
+                  <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground flex-wrap">
+                    {client && (
+                      <div className="flex items-center gap-1">
+                        <Building2 className="h-3.5 w-3.5" />
+                        <span>{client.name}</span>
+                        {client.segment && <span className="text-xs">({client.segment})</span>}
+                      </div>
+                    )}
+                    {buyer && (
+                      <div className="flex items-center gap-1">
+                        <User className="h-3.5 w-3.5" />
+                        <span>{buyer.name}</span>
+                        {buyer.role && <span className="text-xs">({buyer.role})</span>}
+                      </div>
+                    )}
+                    {!buyer && customer && (
+                      <div className="flex items-center gap-1">
+                        <User className="h-3.5 w-3.5" />
+                        <span>{customer.name}</span>
+                      </div>
+                    )}
+                    {(buyer?.phone || customer?.phone) && (
+                      <div className="flex items-center gap-1">
+                        <Phone className="h-3.5 w-3.5" />
+                        <span>{buyer?.phone || customer?.phone}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Cycle Info */}
-                <div className="flex items-center gap-6 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <div className="text-muted-foreground">Período</div>
-                      <div className="font-medium">
-                        {format(new Date(startDate), "dd/MM/yy", { locale: ptBR })}
-                        {cycle.closed_at && (
-                          <> → {format(new Date(cycle.closed_at), "dd/MM/yy", { locale: ptBR })}</>
-                        )}
-                      </div>
+                {/* Cycle Metrics */}
+                <div className="flex items-center gap-4 text-sm flex-shrink-0">
+                  <div className="text-center">
+                    <div className="text-muted-foreground text-xs">Período</div>
+                    <div className="font-medium">
+                      {format(new Date(startDate), "dd/MM", { locale: ptBR })}
+                      {cycle.closed_at && (
+                        <> → {format(new Date(cycle.closed_at), "dd/MM", { locale: ptBR })}</>
+                      )}
                     </div>
                   </div>
 
-                  <Separator orientation="vertical" className="h-10" />
+                  <Separator orientation="vertical" className="h-8" />
 
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <div className="text-muted-foreground">Vendedor</div>
-                      <div className="font-medium">{seller?.name || "N/A"}</div>
-                    </div>
+                  <div className="text-center">
+                    <div className="text-muted-foreground text-xs">Vendedor</div>
+                    <div className="font-medium">{seller?.name || "N/A"}</div>
                   </div>
 
-                  <Separator orientation="vertical" className="h-10" />
+                  <Separator orientation="vertical" className="h-8" />
 
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <div className="text-muted-foreground">Mensagens</div>
-                      <div className="font-medium">{messages.length}</div>
-                    </div>
+                  <div className="text-center">
+                    <div className="text-muted-foreground text-xs">Msgs</div>
+                    <div className="font-medium">{messages.length}</div>
                   </div>
 
-                  <Separator orientation="vertical" className="h-10" />
+                  <Separator orientation="vertical" className="h-8" />
 
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <div className="text-muted-foreground">Objeções</div>
-                      <div className="font-medium">{getObjectionsCount()}</div>
-                    </div>
+                  <div className="text-center">
+                    <div className="text-muted-foreground text-xs">Objeções</div>
+                    <div className="font-medium">{getObjectionsCount()}</div>
                   </div>
                 </div>
               </div>
@@ -380,41 +524,210 @@ export default function ManagerCycleViewPage() {
             </CardContent>
           </Card>
 
-          {/* Messages */}
-          <Card className="flex-1 flex flex-col overflow-hidden">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
-                Mensagens do Ciclo
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 p-0 overflow-hidden">
-              <ScrollArea className="h-full p-4">
-                {messages.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    <div className="text-center">
-                      <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>Nenhuma mensagem neste ciclo</p>
+          {/* Messages and Insights */}
+          <div className="flex-1 flex gap-4 overflow-hidden">
+            {/* Messages */}
+            <Card className="flex-1 flex flex-col overflow-hidden">
+              <CardHeader className="pb-2 flex-shrink-0">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Mensagens do Ciclo
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 p-0 overflow-hidden">
+                <ScrollArea className="h-full p-4">
+                  {messages.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      <div className="text-center">
+                        <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>Nenhuma mensagem neste ciclo</p>
+                      </div>
                     </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {messages.map((message) => (
+                        <MessageBubble
+                          key={message.id}
+                          content={message.content}
+                          direction={message.direction}
+                          timestamp={message.timestamp}
+                          attachmentUrl={message.attachment_url}
+                          attachmentType={message.attachment_type}
+                          attachmentName={message.attachment_name}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </CardContent>
+            </Card>
+
+            {/* Insights Panel */}
+            <div className="w-72 flex-shrink-0 flex flex-col gap-4">
+              {/* AI Summary */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Brain className="h-4 w-4" />
+                    Resumo IA
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {/* Temperature */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Temperatura Final</span>
+                    {finalTemp ? (
+                      <Badge variant="outline" className={temperatureLabels[finalTemp]?.color}>
+                        {temperatureLabels[finalTemp]?.label}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">N/A</span>
+                    )}
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {messages.map((message) => (
-                      <MessageBubble
-                        key={message.id}
-                        content={message.content}
-                        direction={message.direction}
-                        timestamp={message.timestamp}
-                        attachmentUrl={message.attachment_url}
-                        attachmentType={message.attachment_type}
-                        attachmentName={message.attachment_name}
-                      />
-                    ))}
+
+                  {/* Intention */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Intenção Principal</span>
+                    {avgIntention ? (
+                      <Badge variant="outline">
+                        {intentionLabels[avgIntention] || avgIntention}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">N/A</span>
+                    )}
                   </div>
-                )}
-              </ScrollArea>
-            </CardContent>
-          </Card>
+
+                  {/* Sentiment Trend */}
+                  {sentimentTrend.length > 0 && (
+                    <div>
+                      <span className="text-xs text-muted-foreground block mb-1">Evolução do Sentimento</span>
+                      <div className="flex gap-1 flex-wrap">
+                        {sentimentTrend.slice(-10).map((s, i) => (
+                          <div
+                            key={i}
+                            className={cn(
+                              "w-2 h-2 rounded-full",
+                              s === "positive" && "bg-success",
+                              s === "neutral" && "bg-muted-foreground",
+                              s === "negative" && "bg-destructive"
+                            )}
+                            title={sentimentLabels[s]?.label || s}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Objections */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Objeções Detectadas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {uniqueObjections.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Nenhuma objeção detectada</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {uniqueObjections.map((obj, i) => (
+                        <Badge key={i} variant="secondary" className="mr-1 mb-1">
+                          {objectionLabels[obj] || obj}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Critical Moments */}
+              <Card className="flex-1 overflow-hidden">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    Momentos Críticos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <ScrollArea className="h-[180px]">
+                    {criticalMoments.length === 0 ? (
+                      <p className="text-xs text-muted-foreground px-4 py-2">
+                        Nenhum momento crítico identificado
+                      </p>
+                    ) : (
+                      <div className="space-y-2 p-4 pt-0">
+                        {criticalMoments.slice(0, 5).map((insight, i) => {
+                          const message = messages.find(m => m.id === insight.message_id);
+                          return (
+                            <div key={i} className="text-xs border rounded-md p-2">
+                              <div className="flex gap-2 mb-1">
+                                {insight.sentiment === "negative" && (
+                                  <Badge variant="destructive" className="text-[10px] px-1 py-0">
+                                    Negativo
+                                  </Badge>
+                                )}
+                                {insight.objection && insight.objection !== "none" && (
+                                  <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                                    {objectionLabels[insight.objection] || insight.objection}
+                                  </Badge>
+                                )}
+                                {insight.intention && (insight.intention === "complaining" || insight.intention === "canceling") && (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 text-destructive">
+                                    {intentionLabels[insight.intention]}
+                                  </Badge>
+                                )}
+                              </div>
+                              {message && (
+                                <p className="text-muted-foreground line-clamp-2">
+                                  {message.content.substring(0, 100)}...
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+
+              {/* Win/Loss Analysis */}
+              {(cycle.status === "won" || cycle.status === "lost") && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      {cycle.status === "won" ? (
+                        <Trophy className="h-4 w-4 text-success" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-destructive" />
+                      )}
+                      {cycle.status === "won" ? "Análise da Venda" : "Razão da Perda"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {cycle.status === "won" && (
+                      <p className="text-xs text-muted-foreground">
+                        {cycle.won_summary || "Sem resumo disponível"}
+                      </p>
+                    )}
+                    {cycle.status === "lost" && (
+                      <div>
+                        <Badge variant="destructive" className="mb-2">
+                          {lossReasonLabels[cycle.lost_reason || ""] || cycle.lost_reason || "Motivo não especificado"}
+                        </Badge>
+                        <p className="text-xs text-muted-foreground">
+                          Objeções não resolvidas: {uniqueObjections.length}
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </AppLayout>

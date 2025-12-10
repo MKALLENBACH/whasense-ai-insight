@@ -159,7 +159,7 @@ const App = () => (
               } 
             />
             <Route 
-              path="/gestor/ciclo/:id" 
+              path="/gestor/ciclos/:cycleId" 
               element={
                 <ProtectedRoute requiredRole="gestor">
                   <ManagerCycleViewPage />
