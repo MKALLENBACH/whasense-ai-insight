@@ -142,22 +142,27 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { name, email, password } = body;
+    const { name, email } = body;
 
     // Validate input
-    if (!name || !email || !password) {
+    if (!name || !email) {
       return new Response(
-        JSON.stringify({ error: 'name, email, and password are required' }),
+        JSON.stringify({ error: 'name and email are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (password.length < 6) {
-      return new Response(
-        JSON.stringify({ error: 'Password must be at least 6 characters' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // Generate random password (12 characters with letters, numbers, and special chars)
+    const generateRandomPassword = () => {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+      let password = '';
+      for (let i = 0; i < 12; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return password;
+    };
+    
+    const password = generateRandomPassword();
 
     logStep('Creating seller', { name, email, companyId });
 
