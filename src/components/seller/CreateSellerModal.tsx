@@ -81,9 +81,14 @@ const CreateSellerModal = ({ open, onOpenChange, onSuccess }: CreateSellerModalP
         body: { name, email, password },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Try to parse error message from response
+        const errorMessage = error.message || "Erro ao cadastrar vendedor";
+        toast.error(errorMessage);
+        return;
+      }
 
-      if (data.error) {
+      if (data?.error) {
         toast.error(data.error);
         return;
       }
@@ -92,9 +97,19 @@ const CreateSellerModal = ({ open, onOpenChange, onSuccess }: CreateSellerModalP
       resetForm();
       onOpenChange(false);
       onSuccess();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating seller:", error);
-      toast.error("Erro ao cadastrar vendedor");
+      // Handle FunctionsHttpError which contains the response body
+      if (error?.context?.body) {
+        try {
+          const body = JSON.parse(error.context.body);
+          toast.error(body.error || "Erro ao cadastrar vendedor");
+        } catch {
+          toast.error("Erro ao cadastrar vendedor");
+        }
+      } else {
+        toast.error(error?.message || "Erro ao cadastrar vendedor");
+      }
     } finally {
       setIsSubmitting(false);
     }
