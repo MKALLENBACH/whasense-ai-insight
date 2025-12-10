@@ -285,32 +285,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const updateAuthUser = async (supabaseUser: User) => {
-    const [role, profile] = await Promise.all([
-      fetchUserRole(supabaseUser.id),
-      fetchUserProfile(supabaseUser.id),
-    ]);
+    try {
+      const [role, profile] = await Promise.all([
+        fetchUserRole(supabaseUser.id),
+        fetchUserProfile(supabaseUser.id),
+      ]);
 
-    // Fetch company plan info
-    const planInfo = await fetchCompanyPlan(profile?.companyId || null);
-    setCompanyPlan(planInfo);
+      // Fetch company plan info
+      const planInfo = await fetchCompanyPlan(profile?.companyId || null);
+      setCompanyPlan(planInfo);
 
-    // Fetch seller limit info
-    if (planInfo && profile?.companyId) {
-      const limitInfo = await fetchSellerLimitInfo(profile.companyId, planInfo.sellerLimit);
-      setSellerLimitInfo(limitInfo);
+      // Fetch seller limit info
+      if (planInfo && profile?.companyId) {
+        const limitInfo = await fetchSellerLimitInfo(profile.companyId, planInfo.sellerLimit);
+        setSellerLimitInfo(limitInfo);
+      }
+
+      // Check if user requires password change from metadata
+      const requiresPasswordChange = supabaseUser.user_metadata?.requires_password_change === true;
+
+      setUser({
+        id: supabaseUser.id,
+        name: profile?.name || supabaseUser.email?.split("@")[0] || "Usuário",
+        email: profile?.email || supabaseUser.email || "",
+        role,
+        companyId: profile?.companyId || null,
+        requiresPasswordChange,
+      });
+    } finally {
+      setIsLoading(false);
     }
-
-    // Check if user requires password change from metadata
-    const requiresPasswordChange = supabaseUser.user_metadata?.requires_password_change === true;
-
-    setUser({
-      id: supabaseUser.id,
-      name: profile?.name || supabaseUser.email?.split("@")[0] || "Usuário",
-      email: profile?.email || supabaseUser.email || "",
-      role,
-      companyId: profile?.companyId || null,
-      requiresPasswordChange,
-    });
   };
 
   useEffect(() => {
