@@ -140,6 +140,7 @@ const SellersPage = () => {
     setTogglingStatus(seller.id);
     try {
       const newStatus = !seller.is_active;
+      console.log("Toggle seller:", seller.id, "to", newStatus);
 
       // Update profile is_active status in database
       const { error } = await supabase
@@ -151,15 +152,22 @@ const SellersPage = () => {
         throw error;
       }
 
-      // Update local state
+      console.log("Database updated successfully");
+
+      // Update local state first
       setSellers((prev) =>
         prev.map((s) =>
           s.id === seller.id ? { ...s, is_active: newStatus } : s
         )
       );
 
+      // Wait a bit for database to propagate
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Refresh seller limit info in auth context
+      console.log("Calling refreshSellerLimit...");
       await refreshSellerLimit();
+      console.log("refreshSellerLimit completed");
 
       toast.success(
         newStatus
