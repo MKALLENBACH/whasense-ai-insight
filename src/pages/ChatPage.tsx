@@ -196,7 +196,7 @@ const ChatPage = () => {
         setShowLeadModal(true);
       }
 
-      // Fetch messages for this customer (filtered by cycle if viewing history)
+      // Fetch messages for this customer (filtered by cycle only when viewing history)
       let messagesQuery = supabase
         .from("messages")
         .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
@@ -207,17 +207,16 @@ const ChatPage = () => {
         messagesQuery = messagesQuery.eq("seller_id", user?.id);
       }
 
-      // Filter by cycle if selected
-      if (displayedCycleId) {
-        messagesQuery = messagesQuery.eq("cycle_id", displayedCycleId);
+      // Only filter by cycle if viewing historical cycle (selectedCycleId is set)
+      // For active cycle or when no cycle is selected, show all messages
+      if (selectedCycleId) {
+        messagesQuery = messagesQuery.eq("cycle_id", selectedCycleId);
       }
 
       const { data: messagesData, error: messagesError } = await messagesQuery;
 
       if (messagesError) throw messagesError;
       
-      // Cast to Message type since attachment columns were just added
-      // Cast to Message type since attachment columns were just added
       const typedMessages = (messagesData as unknown as Message[]) || [];
       setMessages(typedMessages);
 
