@@ -66,24 +66,21 @@ Deno.serve(async (req) => {
       return endDate && endDate >= today;
     });
 
-    // Get hot leads
-    const { data: messages } = await supabase
+    // Get hot leads - count unique customers with at least one hot insight
+    const { data: messagesWithInsights } = await supabase
       .from("messages")
-      .select("id")
-      .eq("seller_id", vendor_id);
+      .select(`
+        customer_id,
+        insights!inner(temperature)
+      `)
+      .eq("seller_id", vendor_id)
+      .eq("insights.temperature", "hot");
 
-    const messageIds = (messages || []).map(m => m.id);
-    let hotLeadsCount = 0;
-
-    if (messageIds.length > 0) {
-      const { count } = await supabase
-        .from("insights")
-        .select("*", { count: "exact", head: true })
-        .in("message_id", messageIds)
-        .eq("temperature", "hot");
-      
-      hotLeadsCount = count || 0;
-    }
+    // Count unique customers with hot temperature
+    const uniqueHotCustomers = new Set(
+      (messagesWithInsights || []).map(m => m.customer_id)
+    );
+    const hotLeadsCount = uniqueHotCustomers.size;
 
     // Get gamification points
     const { data: points } = await supabase
