@@ -436,14 +436,16 @@ export default function FinanceiroPage() {
               <p className="text-sm text-muted-foreground">
                 Nossa equipe está pronta para ajudá-lo com o processo de cancelamento e esclarecer qualquer dúvida.
               </p>
-              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+              <div className="bg-muted/50 p-4 rounded-lg">
                 <p className="text-sm font-medium">Entre em contato:</p>
-                <p className="text-sm text-muted-foreground">
-                  📧 Email: suporte@whasense.com.br
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  💬 WhatsApp: (11) 99999-9999
-                </p>
+                <a 
+                  href="https://wa.me/5551995087130" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary hover:underline flex items-center gap-2 mt-2"
+                >
+                  💬 WhatsApp: (51) 99508-7130
+                </a>
               </div>
             </div>
             <div className="flex justify-end">
