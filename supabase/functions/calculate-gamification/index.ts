@@ -146,7 +146,7 @@ Deno.serve(async (req) => {
               .in("status", ["pending", "in_progress"]);
             currentValue = count || 0;
           } else if (goal.goal_type === "taxa_resposta") {
-            // For response rate, calculate as percentage
+            // For response rate, calculate as percentage (target is already in %)
             const { count: totalMessages } = await supabase
               .from("messages")
               .select("id", { count: "exact", head: true })
@@ -161,10 +161,13 @@ Deno.serve(async (req) => {
               .eq("direction", "outgoing")
               .gte("timestamp", `${goal.start_date}T00:00:00Z`);
             
-            // Simple ratio as percentage
+            // Calculate percentage (0-100)
             if ((totalMessages || 0) > 0) {
               currentValue = Math.round(((respondedMessages || 0) / (totalMessages || 1)) * 100);
+            } else {
+              currentValue = 0;
             }
+            console.log(`Vendor ${gv.vendor_id} response rate: ${currentValue}% (target: ${gv.target_value}%)`);
           }
 
           const progress = gv.target_value > 0 ? Math.min((currentValue / gv.target_value) * 100, 100) : 0;
