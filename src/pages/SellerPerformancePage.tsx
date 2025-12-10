@@ -385,7 +385,7 @@ const SellerPerformancePage = () => {
                         </Badge>
                       </div>
                       <CardDescription className="text-xs">
-                        {goal.goal?.end_date && `Prazo: ${format(new Date(goal.goal.end_date), "dd 'de' MMMM", { locale: ptBR })}`}
+                        {goal.goal?.end_date && `Prazo: ${format(new Date(goal.goal.end_date + 'T12:00:00'), "dd 'de' MMMM", { locale: ptBR })}`}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">

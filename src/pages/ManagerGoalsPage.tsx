@@ -365,7 +365,7 @@ const ManagerGoalsPage = () => {
                             {GOAL_TYPES[goal.goal_type as keyof typeof GOAL_TYPES]}
                           </CardTitle>
                           <CardDescription>
-                            Meta: {goal.target_value} • {format(new Date(goal.start_date), "dd/MM", { locale: ptBR })} - {format(new Date(goal.end_date), "dd/MM/yyyy", { locale: ptBR })}
+                            Meta: {goal.target_value} • {format(new Date(goal.start_date + 'T12:00:00'), "dd/MM", { locale: ptBR })} - {format(new Date(goal.end_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
                           </CardDescription>
                         </div>
                         <div className="text-right">
