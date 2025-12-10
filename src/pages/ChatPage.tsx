@@ -338,6 +338,7 @@ const ChatPage = () => {
     content: string, 
     _attachments?: { url: string; type: string; name: string }[]
   ) => {
+    // Allow sending if there's content OR attachments (currently attachments not stored in DB)
     if (!content.trim() || !id || !user || isSending || isViewingHistory) return;
 
     setIsSending(true);
