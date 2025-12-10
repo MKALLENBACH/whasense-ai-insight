@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.check-subscription]
 verify_jwt = false
+
+[functions.expire-free-trials]
+verify_jwt = false

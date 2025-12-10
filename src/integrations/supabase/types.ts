@@ -409,6 +409,8 @@ export type Database = {
           cnpj: string | null
           created_at: string
           description: string | null
+          free_end_date: string | null
+          free_start_date: string | null
           id: string
           is_active: boolean
           name: string
@@ -422,6 +424,8 @@ export type Database = {
           cnpj?: string | null
           created_at?: string
           description?: string | null
+          free_end_date?: string | null
+          free_start_date?: string | null
           id?: string
           is_active?: boolean
           name: string
@@ -435,6 +439,8 @@ export type Database = {
           cnpj?: string | null
           created_at?: string
           description?: string | null
+          free_end_date?: string | null
+          free_start_date?: string | null
           id?: string
           is_active?: boolean
           name?: string
