@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import AppSidebar from "./AppSidebar";
 import { FreeTrialExpiringModal } from "@/components/plan/FreeTrialExpiringModal";
+import { TrialBanner } from "@/components/plan/TrialBanner";
 import { differenceInDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -13,7 +14,7 @@ interface AppLayoutProps {
 }
 
 const AppLayout = ({ children }: AppLayoutProps) => {
-  const { isAuthenticated, isManager, companyPlan } = useAuth();
+  const { isAuthenticated, isManager, companyPlan, user } = useAuth();
   const [showExpiringModal, setShowExpiringModal] = useState(false);
 
   useEffect(() => {
@@ -45,6 +46,11 @@ const AppLayout = ({ children }: AppLayoutProps) => {
     return <Navigate to="/login" replace />;
   }
 
+  // Redirect to change password if required
+  if (user?.requiresPasswordChange) {
+    return <Navigate to="/change-password" replace />;
+  }
+
   // Calculate days remaining for modal
   const freeEndDate = companyPlan?.freeEndDate ? new Date(companyPlan.freeEndDate) : null;
   const today = new Date();
@@ -56,7 +62,10 @@ const AppLayout = ({ children }: AppLayoutProps) => {
     <div className="min-h-screen bg-background">
       <AppSidebar />
       <main className="pl-64">
-        <div className="p-6">{children}</div>
+        <div className="p-6">
+          <TrialBanner />
+          {children}
+        </div>
       </main>
       
       <FreeTrialExpiringModal

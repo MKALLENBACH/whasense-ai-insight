@@ -43,6 +43,7 @@ import FinanceiroPage from "./pages/FinanceiroPage";
 // Trial pages
 import TrialPage from "./pages/TrialPage";
 import TrialSuccessPage from "./pages/TrialSuccessPage";
+import ChangePasswordPage from "./pages/ChangePasswordPage";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/trial" element={<TrialPage />} />
             <Route path="/trial-success" element={<TrialSuccessPage />} />
+            <Route path="/change-password" element={<ChangePasswordPage />} />
             
             {/* Admin routes */}
             <Route path="/admin/login" element={<AdminLoginPage />} />
