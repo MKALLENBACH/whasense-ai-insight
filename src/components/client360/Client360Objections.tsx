@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 interface Client360ObjectionsProps {
   clientId: string;
+  sellerId?: string; // If provided, filter by this seller only
 }
 
 const objectionLabels: Record<string, string> = {
@@ -17,22 +18,28 @@ const objectionLabels: Record<string, string> = {
   none: "Nenhuma",
 };
 
-const Client360Objections = ({ clientId }: Client360ObjectionsProps) => {
+const Client360Objections = ({ clientId, sellerId }: Client360ObjectionsProps) => {
   const [data, setData] = useState<{ name: string; count: number }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchObjections();
-  }, [clientId]);
+  }, [clientId, sellerId]);
 
   const fetchObjections = async () => {
     setIsLoading(true);
     try {
-      // Get all message IDs for this client
-      const { data: messages } = await supabase
+      // Get all message IDs for this client (filtered by seller if needed)
+      let messagesQuery = supabase
         .from("messages")
         .select("id")
         .eq("client_id", clientId);
+      
+      if (sellerId) {
+        messagesQuery = messagesQuery.eq("seller_id", sellerId);
+      }
+
+      const { data: messages } = await messagesQuery;
 
       if (!messages || messages.length === 0) {
         setData([]);

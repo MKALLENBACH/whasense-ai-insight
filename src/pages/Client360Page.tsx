@@ -284,7 +284,7 @@ const Client360Page = () => {
           </TabsContent>
 
           <TabsContent value="timeline">
-            <Client360Timeline clientId={clientId!} />
+            <Client360Timeline clientId={clientId!} sellerId={isSeller ? user?.id : undefined} />
           </TabsContent>
 
           <TabsContent value="cycles">
@@ -292,19 +292,19 @@ const Client360Page = () => {
           </TabsContent>
 
           <TabsContent value="objections">
-            <Client360Objections clientId={clientId!} />
+            <Client360Objections clientId={clientId!} sellerId={isSeller ? user?.id : undefined} />
           </TabsContent>
 
           <TabsContent value="emotions">
-            <Client360Emotions clientId={clientId!} />
+            <Client360Emotions clientId={clientId!} sellerId={isSeller ? user?.id : undefined} />
           </TabsContent>
 
           <TabsContent value="financial">
-            <Client360Financial clientId={clientId!} />
+            <Client360Financial clientId={clientId!} sellerId={isSeller ? user?.id : undefined} />
           </TabsContent>
 
           <TabsContent value="ai">
-            <Client360AISummary clientId={clientId!} client={client} />
+            <Client360AISummary clientId={clientId!} client={client} sellerId={isSeller ? user?.id : undefined} />
           </TabsContent>
         </Tabs>
       </div>
