@@ -30,7 +30,9 @@ const config = {
 };
 
 const LeadTemperatureBadge = ({ temperature, showLabel = true, size = "md" }: LeadTemperatureBadgeProps) => {
-  const { icon: Icon, label, className, dotClassName } = config[temperature];
+  // Fallback for undefined or unknown temperature values
+  const validTemperature = temperature && config[temperature] ? temperature : "warm";
+  const { icon: Icon, label, className, dotClassName } = config[validTemperature];
 
   if (!showLabel) {
     return (
