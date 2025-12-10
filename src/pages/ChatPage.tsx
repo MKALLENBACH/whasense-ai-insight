@@ -316,6 +316,7 @@ const ChatPage = () => {
           message_id: messageId,
           cycleMessages,
           companyId: user?.companyId, // Pass company ID for script lookup
+          cycleType: isPostSaleCycle ? "post_sale" : "pre_sale", // Pass cycle type for context
         },
       });
 
@@ -813,24 +814,68 @@ const ChatPage = () => {
             {/* Sale registration buttons - Only for sellers when cycle is active */}
             {isSeller && activeCycle && !isConversationCompleted && !isViewingHistory && (
               <>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => setShowSaleModal(true)}
-                  className="gap-2 bg-success hover:bg-success/90"
-                >
-                  <Trophy className="h-4 w-4" />
-                  Venda
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowSaleModal(true)}
-                  className="gap-2"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Perda
-                </Button>
+                {/* Pre-sale actions */}
+                {!isPostSaleCycle && (
+                  <>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => setShowSaleModal(true)}
+                      className="gap-2 bg-success hover:bg-success/90"
+                    >
+                      <Trophy className="h-4 w-4" />
+                      Venda
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowSaleModal(true)}
+                      className="gap-2"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Perda
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await markAsPostSale(activeCycle.id);
+                          toast.success("Ciclo marcado como pós-venda");
+                          await fetchCycles();
+                        } catch (error) {
+                          console.error("Error marking as post-sale:", error);
+                          toast.error("Erro ao marcar como pós-venda");
+                        }
+                      }}
+                      className="gap-2 border-blue-500 text-blue-500 hover:bg-blue-500/10"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Pós-venda
+                    </Button>
+                  </>
+                )}
+                {/* Post-sale actions */}
+                {isPostSaleCycle && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        await closePostSaleCycle(activeCycle.id);
+                        toast.success("Atendimento pós-venda concluído");
+                        await fetchCycles();
+                      } catch (error) {
+                        console.error("Error closing post-sale cycle:", error);
+                        toast.error("Erro ao concluir pós-venda");
+                      }
+                    }}
+                    className="gap-2 bg-blue-600 hover:bg-blue-700"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Concluir Pós-venda
+                  </Button>
+                )}
               </>
             )}
           </div>

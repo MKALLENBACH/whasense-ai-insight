@@ -19,35 +19,55 @@ interface AIScript {
   example_responses: string | null;
 }
 
-// Build dynamic prompt based on company script
-function buildAnalysisPrompt(script: AIScript | null): string {
+// Build dynamic prompt based on company script and cycle type
+function buildAnalysisPrompt(script: AIScript | null, cycleType: string = "pre_sale"): string {
   // Use script values or defaults
   const aiPersona = script?.ai_persona || `Você é um assistente de vendas profissional, consultivo e atencioso. Seu objetivo é entender as necessidades do cliente e oferecer soluções adequadas.`;
   
-  const salesPlaybook = script?.sales_playbook || `1. Saudação cordial e apresentação
+  // For post-sale cycles, use support-focused playbook
+  const salesPlaybook = cycleType === "post_sale" 
+    ? `1. Saudação cordial e escuta ativa
+2. Identificar problema ou dúvida do cliente
+3. Demonstrar empatia e compreensão
+4. Oferecer solução clara e prática
+5. Verificar satisfação com a solução
+6. Confirmar se há mais alguma dúvida
+7. Encerrar de forma positiva`
+    : (script?.sales_playbook || `1. Saudação cordial e apresentação
 2. Identificar necessidade do cliente
 3. Fazer perguntas consultivas
 4. Apresentar soluções relevantes
 5. Lidar com objeções
 6. Fechar a venda
-7. Confirmar próximos passos`;
+7. Confirmar próximos passos`);
 
-  const forbiddenPhrases = script?.forbidden_phrases || `Nunca use: "infelizmente", "não posso", "impossível", linguagem negativa, gírias excessivas, promessas que não pode cumprir.`;
+  const forbiddenPhrases = cycleType === "post_sale"
+    ? `Nunca use: técnicas de fechamento de venda, urgência para comprar, "aproveite agora", menção a promoções, tentativas de upsell agressivo.`
+    : (script?.forbidden_phrases || `Nunca use: "infelizmente", "não posso", "impossível", linguagem negativa, gírias excessivas, promessas que não pode cumprir.`);
 
-  const recommendedPhrases = script?.recommended_phrases || `Use frequentemente: "excelente escolha", "perfeito para você", "vou te ajudar", "entendo perfeitamente", "ótima pergunta".`;
+  const recommendedPhrases = cycleType === "post_sale"
+    ? `Use frequentemente: "entendo sua preocupação", "vou resolver isso", "fico feliz em ajudar", "me conta mais sobre", "posso ajudar com mais algo?".`
+    : (script?.recommended_phrases || `Use frequentemente: "excelente escolha", "perfeito para você", "vou te ajudar", "entendo perfeitamente", "ótima pergunta".`);
 
   const toneOfVoice = script?.tone_of_voice || `Profissional, amigável, consultivo. Transmita confiança sem ser arrogante. Seja empático e atencioso.`;
 
   const productContext = script?.product_context || `Produto/serviço da empresa. Adapte conforme contexto da conversa.`;
 
-  const objectionHandling = script?.objection_handling || `Técnica Feel-Felt-Found: Entendo como você se sente, outros clientes sentiram o mesmo, e descobriram que...`;
+  const objectionHandling = cycleType === "post_sale"
+    ? `Técnica de resolução empática: Acolha a frustração, peça desculpas se necessário, proponha solução concreta, e confirme se resolve.`
+    : (script?.objection_handling || `Técnica Feel-Felt-Found: Entendo como você se sente, outros clientes sentiram o mesmo, e descobriram que...`);
 
-  const closingTechniques = script?.closing_techniques || `Pergunte sobre próximos passos, ofereça opções claras, crie senso de urgência moderado sem pressão excessiva.`;
+  const closingTechniques = cycleType === "post_sale"
+    ? `Encerre com: confirmação de satisfação, oferta de suporte adicional, agradecimento pela confiança.`
+    : (script?.closing_techniques || `Pergunte sobre próximos passos, ofereça opções claras, crie senso de urgência moderado sem pressão excessiva.`);
 
   const openingMessages = script?.opening_messages || `Olá! Tudo bem? Como posso te ajudar hoje?`;
 
-  const exampleResponses = script?.example_responses || `Cliente: Está caro.
-Resposta: Entendo sua preocupação com o investimento. Muitos clientes tinham a mesma dúvida e perceberam que o valor se paga rapidamente pelos benefícios. Posso explicar melhor como isso funciona?`;
+  const exampleResponses = cycleType === "post_sale"
+    ? `Cliente: Meu produto veio com defeito.
+Resposta: Sinto muito por esse transtorno! Vamos resolver isso agora mesmo. Pode me enviar uma foto do defeito? Assim consigo agilizar a troca ou reembolso pra você.`
+    : (script?.example_responses || `Cliente: Está caro.
+Resposta: Entendo sua preocupação com o investimento. Muitos clientes tinham a mesma dúvida e perceberam que o valor se paga rapidamente pelos benefícios. Posso explicar melhor como isso funciona?`);
 
   return `
 ═══════════════════════════════════════════════════════════════
@@ -99,9 +119,35 @@ MENSAGEM ATUAL DO CLIENTE:
 """
 
 ═══════════════════════════════════════════════════════════════
-🎯 TÉCNICAS DE VENDAS A APLICAR:
+🎯 TÉCNICAS ${cycleType === "post_sale" ? "DE SUPORTE" : "DE VENDAS"} A APLICAR:
 ═══════════════════════════════════════════════════════════════
 
+${cycleType === "post_sale" ? `
+1. **Escuta Ativa**
+   - Ouvir completamente antes de responder
+   - Demonstrar que entendeu o problema
+   - Fazer perguntas esclarecedoras
+
+2. **Empatia Genuína**
+   - Validar sentimentos do cliente
+   - Pedir desculpas quando apropriado
+   - Mostrar que se importa com a resolução
+
+3. **Resolução Focada**
+   - Propor soluções práticas e claras
+   - Oferecer alternativas quando possível
+   - Não criar expectativas irreais
+
+4. **Acompanhamento**
+   - Verificar se a solução funcionou
+   - Oferecer suporte adicional
+   - Garantir satisfação antes de encerrar
+
+5. **Retenção Suave**
+   - Agradecer pela confiança
+   - Reforçar disponibilidade para ajudar
+   - NÃO tentar vender neste momento
+` : `
 1. **SPIN Selling**
    - Situação: entender contexto atual do cliente
    - Problema: identificar dores ou necessidades
@@ -127,11 +173,22 @@ MENSAGEM ATUAL DO CLIENTE:
 6. **Next Step Coaching**
    - Sempre mover a conversa para frente
    - Sugerir próximo passo claro
+`}
 
 ═══════════════════════════════════════════════════════════════
-🎯 FASES DA VENDA (classifique):
+🎯 FASES ${cycleType === "post_sale" ? "DO ATENDIMENTO" : "DA VENDA"} (classifique):
 ═══════════════════════════════════════════════════════════════
 
+${cycleType === "post_sale" ? `
+- abertura_suporte
+- identificacao_problema
+- investigacao
+- proposta_solucao
+- execucao_solucao
+- validacao_satisfacao
+- encerramento
+- escalacao
+` : `
 - abertura
 - descoberta
 - diagnostico
@@ -142,6 +199,7 @@ MENSAGEM ATUAL DO CLIENTE:
 - objeção
 - pos_venda
 - reativacao
+`}
 
 ═══════════════════════════════════════════════════════════════
 🧠 REGRAS IMPORTANTES:
@@ -149,11 +207,19 @@ MENSAGEM ATUAL DO CLIENTE:
 
 - Responda como humano (natural e simpático)
 - Use no máximo 1–3 frases na sugestão
+${cycleType === "post_sale" ? `
+- NUNCA sugira técnicas de fechamento de venda
+- NUNCA aumente a temperatura artificialmente
+- NUNCA trate como oportunidade de venda
+- Foque em SUPORTE, SATISFAÇÃO e RETENÇÃO
+- Se cliente mencionar novo interesse, apenas anote
+` : `
 - Nunca ofereça desconto espontaneamente
+`}
 - Nunca invente informações sobre produtos
 - Não repita a mensagem do cliente
 - Não seja robótico
-- SE houver objeção, acolha antes de redirecionar
+- SE houver ${cycleType === "post_sale" ? "reclamação" : "objeção"}, acolha antes de redirecionar
 - Personalize conforme contexto do cliente
 - SIGA FIELMENTE O SCRIPT DA EMPRESA ACIMA
 
@@ -162,14 +228,14 @@ MENSAGEM ATUAL DO CLIENTE:
 ═══════════════════════════════════════════════════════════════
 
 {
-  "sales_stage": "fase_da_venda",
+  "sales_stage": "fase_${cycleType === "post_sale" ? "do_atendimento" : "da_venda"}",
   "sentiment": "positive | neutral | negative | angry | insecure | excited",
-  "intention": 0-100,
+  "intention": ${cycleType === "post_sale" ? "0" : "0-100"},
   "analysis": "Resumo em 1-2 frases do que está acontecendo.",
   "suggestion": "Melhor resposta seguindo o script da empresa (1-3 frases).",
-  "next_action": "Próxima ação recomendada para avançar.",
-  "objection": "price | delay | trust | doubt | none",
-  "temperature": "cold | warm | hot"
+  "next_action": "Próxima ação recomendada para ${cycleType === "post_sale" ? "resolver" : "avançar"}.",
+  "objection": "${cycleType === "post_sale" ? "problem | question | complaint | none" : "price | delay | trust | doubt | none"}",
+  "temperature": "${cycleType === "post_sale" ? "cold" : "cold | warm | hot"}"
 }
 `;
 }
@@ -240,7 +306,8 @@ async function getCompanyScript(supabaseUrl: string, serviceKey: string, company
 async function analyzeMessage(
   message: string, 
   cycleMessages: CycleMessage[] = [],
-  script: AIScript | null = null
+  script: AIScript | null = null,
+  cycleType: string = "pre_sale"
 ): Promise<{
   sales_stage: string;
   sentiment: string;
@@ -260,8 +327,8 @@ async function analyzeMessage(
   // Format the cycle messages for the prompt
   const formattedCycleMessages = formatCycleMessages(cycleMessages);
 
-  // Build the prompt with the company script
-  const basePrompt = buildAnalysisPrompt(script);
+  // Build the prompt with the company script and cycle type
+  const basePrompt = buildAnalysisPrompt(script, cycleType);
   const systemPrompt = basePrompt
     .replace("{{cycleMessages}}", formattedCycleMessages)
     .replace("{{message}}", message);
@@ -378,7 +445,7 @@ serve(async (req) => {
 
     // Parse request body
     const body = await req.json();
-    const { message, message_id, cycleMessages, companyId } = body;
+    const { message, message_id, cycleMessages, companyId, cycleType } = body;
 
     // Validate input
     if (!message || typeof message !== 'string') {
@@ -406,6 +473,7 @@ serve(async (req) => {
       message: message.substring(0, 100) + '...',
       cycleMessagesCount: cycleMessages?.length || 0,
       companyId: companyId || 'not provided',
+      cycleType: cycleType || 'pre_sale',
     });
 
     // Fetch company script if companyId is provided
@@ -414,8 +482,8 @@ serve(async (req) => {
       script = await getCompanyScript(supabaseUrl, supabaseServiceKey, companyId);
     }
 
-    // Call IA Service to analyze the message with full cycle context and company script
-    const analysis = await analyzeMessage(message, cycleMessages || [], script);
+    // Call IA Service to analyze the message with full cycle context, company script, and cycle type
+    const analysis = await analyzeMessage(message, cycleMessages || [], script, cycleType || "pre_sale");
 
     console.log('Analysis result:', {
       sales_stage: analysis.sales_stage,

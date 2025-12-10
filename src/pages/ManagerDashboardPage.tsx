@@ -8,13 +8,14 @@ import { ObjectionsChart } from "@/components/dashboard/ObjectionsChart";
 import { SellerPerformanceChart } from "@/components/dashboard/SellerPerformanceChart";
 import { SalesTimelineChart } from "@/components/dashboard/SalesTimelineChart";
 import { RecentSalesTable } from "@/components/dashboard/RecentSalesTable";
+import { PostSaleMetrics } from "@/components/dashboard/PostSaleMetrics";
 import { Button } from "@/components/ui/button";
 import { Loader2, RefreshCw, Clock, Target, Flame, TrendingUp, TrendingDown, Users, CheckCircle2, XCircle, Bot, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const ManagerDashboardPage = () => {
-  const { isLoading, kpis, leadDistribution, riskCycles, objections, sellerPerformance, salesTimeline, recentSales, followupMetrics, refresh } = useManagerDashboard();
+  const { isLoading, kpis, leadDistribution, riskCycles, objections, sellerPerformance, salesTimeline, recentSales, followupMetrics, postSaleMetrics, refresh } = useManagerDashboard();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = async () => {
@@ -90,6 +91,8 @@ const ManagerDashboardPage = () => {
           </Card>
         )}
 
+        {/* Post-Sale Metrics */}
+        <PostSaleMetrics data={postSaleMetrics} />
         {/* Charts Row 1 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <LeadDistributionChart bySeller={leadDistribution.bySeller} byTemperature={leadDistribution.byTemperature} />
