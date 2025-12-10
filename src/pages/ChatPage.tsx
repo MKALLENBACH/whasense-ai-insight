@@ -772,7 +772,8 @@ const ChatPage = () => {
             {displayedCycle && (
               <CurrentCycleBadge
                 cycleNumber={currentCycleNumber}
-                status={displayedCycle.status as "pending" | "in_progress" | "won" | "lost"}
+                status={displayedCycle.status as "pending" | "in_progress" | "won" | "lost" | "closed"}
+                cycleType={(displayedCycle as any).cycle_type as "pre_sale" | "post_sale" | undefined}
               />
             )}
 
@@ -919,9 +920,10 @@ const ChatPage = () => {
                       >
                         <CycleDivider
                           cycleNumber={cycleNum}
-                          status={cycle.status as "pending" | "in_progress" | "won" | "lost"}
+                          status={cycle.status as "pending" | "in_progress" | "won" | "lost" | "closed"}
                           startDate={cycle.start_message_timestamp || cycle.created_at}
                           endDate={cycle.closed_at}
+                          cycleType={(cycle as any).cycle_type as "pre_sale" | "post_sale" | undefined}
                         />
                         <div className="space-y-4">
                           {cycleMessages.map((message) => (
