@@ -432,6 +432,11 @@ export default function FinanceiroPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {plans.map((plan) => {
                 const isCurrentPlan = currentPlan?.id === plan.id;
+                const hasMonthly = !!plan.stripe_monthly_price_id;
+                const hasAnnual = !!plan.stripe_annual_price_id;
+                const annualSavings = plan.annual_price > 0 
+                  ? Math.round(100 - (plan.annual_price / (plan.monthly_price * 12)) * 100)
+                  : 0;
                 
                 return (
                   <div 
@@ -451,25 +456,47 @@ export default function FinanceiroPage() {
                       {formatCurrency(plan.monthly_price * 100)}
                       <span className="text-sm font-normal text-muted-foreground">/mês</span>
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      ou {formatCurrency(plan.annual_price * 100)}/ano
-                    </p>
+                    {plan.annual_price > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        ou {formatCurrency(plan.annual_price * 100)}/ano
+                        {annualSavings > 0 && (
+                          <span className="text-green-600 dark:text-green-400 font-medium ml-1">
+                            (-{annualSavings}%)
+                          </span>
+                        )}
+                      </p>
+                    )}
                     <p className="text-sm text-muted-foreground mt-2">
                       {plan.seller_limit ? `Até ${plan.seller_limit} vendedores` : "Vendedores ilimitados"}
                     </p>
                     
-                    {!isCurrentPlan && plan.stripe_monthly_price_id && (
-                      <Button 
-                        size="sm" 
-                        className="w-full mt-4"
-                        onClick={() => handleSubscribe(plan, "monthly")}
-                      >
-                        {currentPlan ? "Trocar plano" : "Assinar"}
-                        <ArrowUpRight className="h-3 w-3 ml-1" />
-                      </Button>
+                    {!isCurrentPlan && (hasMonthly || hasAnnual) && (
+                      <div className="flex flex-col gap-2 mt-4">
+                        {hasMonthly && (
+                          <Button 
+                            size="sm" 
+                            className="w-full"
+                            onClick={() => handleSubscribe(plan, "monthly")}
+                          >
+                            Mensal
+                            <ArrowUpRight className="h-3 w-3 ml-1" />
+                          </Button>
+                        )}
+                        {hasAnnual && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => handleSubscribe(plan, "annual")}
+                          >
+                            Anual {annualSavings > 0 && `(-${annualSavings}%)`}
+                            <ArrowUpRight className="h-3 w-3 ml-1" />
+                          </Button>
+                        )}
+                      </div>
                     )}
                     
-                    {!isCurrentPlan && !plan.stripe_monthly_price_id && (
+                    {!isCurrentPlan && !hasMonthly && !hasAnnual && (
                       <p className="text-xs text-muted-foreground mt-4 text-center">
                         Entre em contato para assinar
                       </p>
