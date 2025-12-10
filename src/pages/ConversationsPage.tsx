@@ -30,6 +30,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import NewLeadModal from "@/components/lead/NewLeadModal";
+import LinkClientModal from "@/components/conversation/LinkClientModal";
 
 interface AlertData {
   id: string;
@@ -97,6 +98,10 @@ const ConversationsPage = () => {
   // Modal state for incomplete leads
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [selectedIncompleteConv, setSelectedIncompleteConv] = useState<ConversationData | null>(null);
+  
+  // Modal state for linking client
+  const [showLinkClientModal, setShowLinkClientModal] = useState(false);
+  const [selectedLinkConv, setSelectedLinkConv] = useState<{id: string; name: string} | null>(null);
 
   const fetchConversations = async () => {
     if (!session?.access_token) {
@@ -386,7 +391,8 @@ const ConversationsPage = () => {
                 className="h-5 px-1.5 text-[10px] text-primary hover:text-primary/80 mt-0.5 -ml-1.5"
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(`/cliente360/${conv.customer.id}`);
+                  setSelectedLinkConv({ id: conv.customer.id, name: conv.customer.name });
+                  setShowLinkClientModal(true);
                 }}
               >
                 <Building2 className="h-3 w-3 mr-1" />
@@ -581,6 +587,17 @@ const ConversationsPage = () => {
             fetchConversations();
             navigate(`/chat/${selectedIncompleteConv.id}`);
           }}
+        />
+      )}
+
+      {/* Link Client Modal */}
+      {selectedLinkConv && (
+        <LinkClientModal
+          open={showLinkClientModal}
+          onOpenChange={setShowLinkClientModal}
+          customerId={selectedLinkConv.id}
+          customerName={selectedLinkConv.name}
+          onSuccess={fetchConversations}
         />
       )}
     </AppLayout>
