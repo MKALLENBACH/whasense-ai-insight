@@ -37,6 +37,7 @@ serve(async (req) => {
 
     // Create checkout session with 7-day trial
     // No user auth required - this is for new signups
+    // Note: customer_creation is not allowed in subscription mode, Stripe creates customer automatically
     const session = await stripe.checkout.sessions.create({
       line_items: [{ price: STARTER_PRICE_ID, quantity: 1 }],
       mode: "subscription",
@@ -56,11 +57,7 @@ serve(async (req) => {
       success_url: successUrl || `${origin}/trial-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl || `${origin}/login`,
       billing_address_collection: "required",
-      customer_creation: "always",
       allow_promotion_codes: true,
-      consent_collection: {
-        terms_of_service: "none",
-      },
       custom_text: {
         submit: {
           message: "Você terá 7 dias de acesso grátis. A cobrança só será realizada após o período de teste.",
