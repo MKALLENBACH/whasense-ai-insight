@@ -196,26 +196,18 @@ const ChatPage = () => {
         setShowLeadModal(true);
       }
 
-      // Fetch messages for this customer (filtered by cycle only when viewing history)
-      let messagesQuery = supabase
+      // Fetch messages for this customer
+      // Note: We don't filter by seller_id anymore since we already verified the seller owns this customer
+      // and this was causing issues when user.id wasn't loaded yet
+      const { data: messagesData, error: messagesError } = await supabase
         .from("messages")
         .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
         .eq("customer_id", id)
         .order("timestamp", { ascending: true });
 
-      if (isSeller) {
-        messagesQuery = messagesQuery.eq("seller_id", user?.id);
-      }
-
-      // Only filter by cycle if viewing historical cycle (selectedCycleId is set)
-      // For active cycle or when no cycle is selected, show all messages
-      if (selectedCycleId) {
-        messagesQuery = messagesQuery.eq("cycle_id", selectedCycleId);
-      }
-
-      const { data: messagesData, error: messagesError } = await messagesQuery;
-
       if (messagesError) throw messagesError;
+      
+      console.log("Fetched messages:", messagesData?.length, "for customer:", id);
       
       const typedMessages = (messagesData as unknown as Message[]) || [];
       setMessages(typedMessages);
