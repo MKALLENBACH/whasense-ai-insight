@@ -29,14 +29,18 @@ const Client360Objections = ({ clientId, sellerId }: Client360ObjectionsProps) =
   const fetchObjections = async () => {
     setIsLoading(true);
     try {
-      // Get all message IDs for this client (filtered by seller if needed)
+      // For sellers, we need to get messages from ALL buyers they have contacted
+      // For managers, we get all messages for this client
       let messagesQuery = supabase
         .from("messages")
-        .select("id")
-        .eq("client_id", clientId);
+        .select("id");
       
       if (sellerId) {
-        messagesQuery = messagesQuery.eq("seller_id", sellerId);
+        // Get all messages where this seller has interacted, regardless of client
+        // But filter by client_id to keep it relevant to this client view
+        messagesQuery = messagesQuery.eq("seller_id", sellerId).eq("client_id", clientId);
+      } else {
+        messagesQuery = messagesQuery.eq("client_id", clientId);
       }
 
       const { data: messages } = await messagesQuery;
