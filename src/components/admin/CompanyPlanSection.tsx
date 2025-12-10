@@ -89,7 +89,7 @@ const CompanyPlanSection = ({
         .from("companies")
         .select("free_start_date, free_end_date")
         .eq("id", companyId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
       

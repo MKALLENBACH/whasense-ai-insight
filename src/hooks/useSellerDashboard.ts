@@ -44,7 +44,7 @@ export interface PersonalPerformance {
   messagesSent: number;
   avgResponseTime: number;
   bestDayOfWeek: string;
-  comparedToTeam: number; // percentage difference
+  comparedToTeam: number;
 }
 
 export interface RecentCycle {
@@ -100,47 +100,60 @@ export function useSellerDashboard() {
     try {
       const sellerId = user.id;
 
-      // Get seller's messages
-      const { data: messages } = await supabase
-        .from("messages")
-        .select("id, customer_id, direction, timestamp, cycle_id")
-        .eq("seller_id", sellerId);
+      // OTIMIZAÇÃO: Executar todas as queries em paralelo
+      const [messagesResult, cyclesResult, salesResult] = await Promise.all([
+        supabase
+          .from("messages")
+          .select("id, customer_id, direction, timestamp, cycle_id")
+          .eq("seller_id", sellerId)
+          .order("timestamp", { ascending: false })
+          .limit(1000),
+        supabase
+          .from("sale_cycles")
+          .select("*")
+          .eq("seller_id", sellerId)
+          .order("created_at", { ascending: false })
+          .limit(500),
+        supabase
+          .from("sales")
+          .select("*")
+          .eq("seller_id", sellerId)
+          .order("created_at", { ascending: false })
+          .limit(200),
+      ]);
 
-      const customerIds = [...new Set(messages?.map((m) => m.customer_id) || [])];
+      const messages = messagesResult.data || [];
+      const cycles = cyclesResult.data || [];
+      const sales = salesResult.data || [];
 
-      // Get customers
-      const { data: customers } = await supabase
-        .from("customers")
-        .select("id, name, lead_status")
-        .in("id", customerIds.length > 0 ? customerIds : [""]);
+      const customerIds = [...new Set(messages.map((m) => m.customer_id))];
 
-      // Get sale cycles
-      const { data: cycles } = await supabase
-        .from("sale_cycles")
-        .select("*")
-        .eq("seller_id", sellerId);
+      // Segunda rodada de queries paralelas
+      const [customersResult, insightsResult] = await Promise.all([
+        customerIds.length > 0
+          ? supabase
+              .from("customers")
+              .select("id, name, lead_status")
+              .in("id", customerIds)
+          : Promise.resolve({ data: [] }),
+        messages.length > 0
+          ? supabase
+              .from("insights")
+              .select("*")
+              .in("message_id", messages.map((m) => m.id))
+          : Promise.resolve({ data: [] }),
+      ]);
 
-      // Get sales
-      const { data: sales } = await supabase
-        .from("sales")
-        .select("*")
-        .eq("seller_id", sellerId)
-        .order("created_at", { ascending: false });
-
-      // Get insights
-      const messageIds = messages?.map((m) => m.id) || [];
-      const { data: insights } = await supabase
-        .from("insights")
-        .select("*")
-        .in("message_id", messageIds.length > 0 ? messageIds : [""]);
+      const customers = customersResult.data || [];
+      const insights = insightsResult.data || [];
 
       // Build temperature map
       const messageToCustomer = new Map<string, string>();
-      messages?.forEach((m) => messageToCustomer.set(m.id, m.customer_id));
+      messages.forEach((m) => messageToCustomer.set(m.id, m.customer_id));
 
       const customerTemperatures = new Map<string, string>();
       insights
-        ?.filter((i) => i.temperature)
+        .filter((i) => i.temperature)
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .forEach((i) => {
           const customerId = messageToCustomer.get(i.message_id);
@@ -150,14 +163,12 @@ export function useSellerDashboard() {
         });
 
       // Calculate KPIs
-      const activeCustomers =
-        customers?.filter(
-          (c) => c.lead_status === "pending" || c.lead_status === "in_progress"
-        ) || [];
-      const pendingLeads = customers?.filter((c) => c.lead_status === "pending").length || 0;
-      const inProgressLeads =
-        customers?.filter((c) => c.lead_status === "in_progress").length || 0;
-      const wonSales = sales?.filter((s) => s.status === "won").length || 0;
+      const activeCustomers = customers.filter(
+        (c) => c.lead_status === "pending" || c.lead_status === "in_progress"
+      );
+      const pendingLeads = customers.filter((c) => c.lead_status === "pending").length;
+      const inProgressLeads = customers.filter((c) => c.lead_status === "in_progress").length;
+      const wonSales = sales.filter((s) => s.status === "won").length;
       const hotLeads = activeCustomers.filter(
         (c) => customerTemperatures.get(c.id) === "hot"
       ).length;
@@ -165,7 +176,7 @@ export function useSellerDashboard() {
       // Calculate avg response time
       let totalResponseTime = 0;
       let responseCount = 0;
-      const sortedMessages = [...(messages || [])].sort(
+      const sortedMessages = [...messages].sort(
         (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
 
@@ -189,23 +200,19 @@ export function useSellerDashboard() {
 
       // Count risk cycles
       let riskCyclesCount = 0;
-      const activeCycles =
-        cycles?.filter((c) => c.status === "pending" || c.status === "in_progress") || [];
-
+      const activeCycles = cycles.filter((c) => c.status === "pending" || c.status === "in_progress");
       const priorityList: Priority[] = [];
 
       for (const cycle of activeCycles) {
-        const customer = customers?.find((c) => c.id === cycle.customer_id);
+        const customer = customers.find((c) => c.id === cycle.customer_id);
         if (!customer) continue;
 
-        const cycleMessages =
-          messages?.filter((m) => m.customer_id === cycle.customer_id) || [];
+        const cycleMessages = messages.filter((m) => m.customer_id === cycle.customer_id);
         const lastMessage = cycleMessages.sort(
           (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         )[0];
 
         let urgencyType = "";
-        let urgencyLevel = 0;
 
         // Check for unanswered messages
         if (lastMessage?.direction === "incoming") {
@@ -213,7 +220,6 @@ export function useSellerDashboard() {
             (Date.now() - new Date(lastMessage.timestamp).getTime()) / 60000;
           if (minutesSince > 5) {
             urgencyType = "Cliente aguardando";
-            urgencyLevel = 4;
             riskCyclesCount++;
           }
         }
@@ -222,18 +228,16 @@ export function useSellerDashboard() {
         const temp = customerTemperatures.get(cycle.customer_id) || "cold";
         if (!urgencyType && temp === "hot") {
           urgencyType = "Lead quente";
-          urgencyLevel = 3;
         }
 
         // Check for open objection
         if (!urgencyType) {
-          const cycleInsights = insights?.filter((i) =>
+          const cycleInsights = insights.filter((i) =>
             cycleMessages.some((m) => m.id === i.message_id)
           );
-          const hasOpenObjection = cycleInsights?.some((i) => i.objection);
+          const hasOpenObjection = cycleInsights.some((i) => i.objection);
           if (hasOpenObjection) {
             urgencyType = "Objeção aberta";
-            urgencyLevel = 2;
           }
         }
 
@@ -243,7 +247,6 @@ export function useSellerDashboard() {
             (Date.now() - new Date(lastMessage.timestamp).getTime()) / 60000;
           if (minutesSince > 120) {
             urgencyType = "Conversa parada";
-            urgencyLevel = 1;
           }
         }
 
@@ -288,19 +291,16 @@ export function useSellerDashboard() {
         leads: [],
       }));
 
-      // Assign cycles to stages based on insights or status
       for (const cycle of activeCycles) {
-        const customer = customers?.find((c) => c.id === cycle.customer_id);
+        const customer = customers.find((c) => c.id === cycle.customer_id);
         if (!customer) continue;
 
-        const cycleMessages =
-          messages?.filter((m) => m.customer_id === cycle.customer_id) || [];
+        const cycleMessages = messages.filter((m) => m.customer_id === cycle.customer_id);
         const lastMessage = cycleMessages.sort(
           (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         )[0];
         const temp = customerTemperatures.get(cycle.customer_id) || "cold";
 
-        // Determine stage based on message count and status
         let stageIndex = 0;
         const msgCount = cycleMessages.length;
         if (msgCount > 20) stageIndex = 5;
@@ -330,14 +330,12 @@ export function useSellerDashboard() {
         const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
         const monthLabel = date.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
 
-        const monthWon =
-          sales?.filter(
-            (s) => s.status === "won" && s.created_at.startsWith(monthStr)
-          ).length || 0;
-        const monthLost =
-          sales?.filter(
-            (s) => s.status === "lost" && s.created_at.startsWith(monthStr)
-          ).length || 0;
+        const monthWon = sales.filter(
+          (s) => s.status === "won" && s.created_at.startsWith(monthStr)
+        ).length;
+        const monthLost = sales.filter(
+          (s) => s.status === "lost" && s.created_at.startsWith(monthStr)
+        ).length;
         const total = monthWon + monthLost;
 
         monthlyData.push({
@@ -350,12 +348,12 @@ export function useSellerDashboard() {
       setMonthlyConversion(monthlyData);
 
       // Personal performance
-      const messagesSent = messages?.filter((m) => m.direction === "outgoing").length || 0;
+      const messagesSent = messages.filter((m) => m.direction === "outgoing").length;
 
       // Best day of week
       const dayCount = [0, 0, 0, 0, 0, 0, 0];
       messages
-        ?.filter((m) => m.direction === "outgoing")
+        .filter((m) => m.direction === "outgoing")
         .forEach((m) => {
           const day = new Date(m.timestamp).getDay();
           dayCount[day]++;
@@ -363,34 +361,23 @@ export function useSellerDashboard() {
       const bestDayIndex = dayCount.indexOf(Math.max(...dayCount));
       const bestDayOfWeek = dayCount[bestDayIndex] > 0 ? DAY_NAMES[bestDayIndex] : "N/A";
 
-      // Compare to team average (simplified)
-      const comparedToTeam = 0; // Would need team data
-
       setPersonalPerformance({
         messagesSent,
         avgResponseTime,
         bestDayOfWeek,
-        comparedToTeam,
+        comparedToTeam: 0,
       });
 
       // Recent cycles
       const recent: RecentCycle[] = [];
-      const allCycles =
-        cycles
-          ?.sort(
-            (a, b) =>
-              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          )
-          .slice(0, 20) || [];
+      const allCycles = cycles.slice(0, 20);
 
       for (const cycle of allCycles) {
-        const customer = customers?.find((c) => c.id === cycle.customer_id);
+        const customer = customers.find((c) => c.id === cycle.customer_id);
         if (!customer) continue;
 
         const temp = customerTemperatures.get(cycle.customer_id) || "cold";
-        const cycleMessages = messages?.filter(
-          (m) => m.customer_id === cycle.customer_id
-        ).length || 0;
+        const cycleMessages = messages.filter((m) => m.customer_id === cycle.customer_id).length;
 
         let phase = "Abertura";
         if (cycle.status === "won") phase = "Ganho";
