@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { SaleCycle } from "@/components/sale/SaleCycleHistory";
 
+export type CycleType = "pre_sale" | "post_sale";
+
 interface UseSaleCyclesOptions {
   customerId: string;
   sellerId?: string;
@@ -159,6 +161,59 @@ export const useSaleCycles = ({ customerId, sellerId }: UseSaleCyclesOptions) =>
     [customerId, fetchCycles]
   );
 
+  // Mark cycle as post-sale
+  const markAsPostSale = useCallback(
+    async (cycleId: string) => {
+      try {
+        const { error } = await supabase
+          .from("sale_cycles")
+          .update({ 
+            cycle_type: "post_sale",
+            status: "in_progress"
+          })
+          .eq("id", cycleId);
+
+        if (error) throw error;
+
+        // Delete any alerts for this cycle
+        await supabase
+          .from("alerts")
+          .delete()
+          .eq("cycle_id", cycleId);
+
+        await fetchCycles();
+        return true;
+      } catch (error) {
+        console.error("Error marking cycle as post-sale:", error);
+        return false;
+      }
+    },
+    [fetchCycles]
+  );
+
+  // Close post-sale cycle
+  const closePostSaleCycle = useCallback(
+    async (cycleId: string) => {
+      try {
+        const { error } = await supabase
+          .from("sale_cycles")
+          .update({
+            status: "closed",
+            closed_at: new Date().toISOString(),
+          })
+          .eq("id", cycleId);
+
+        if (error) throw error;
+        await fetchCycles();
+        return true;
+      } catch (error) {
+        console.error("Error closing post-sale cycle:", error);
+        return false;
+      }
+    },
+    [fetchCycles]
+  );
+
   const getCycleNumber = useCallback(
     (cycleId: string) => {
       const index = [...cycles].reverse().findIndex((c) => c.id === cycleId);
@@ -176,6 +231,8 @@ export const useSaleCycles = ({ customerId, sellerId }: UseSaleCyclesOptions) =>
     getOrCreateActiveCycle,
     closeCycle,
     updateCycleStatus,
+    markAsPostSale,
+    closePostSaleCycle,
     getCycleNumber,
   };
 };

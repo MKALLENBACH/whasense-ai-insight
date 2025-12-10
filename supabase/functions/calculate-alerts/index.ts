@@ -50,11 +50,12 @@ serve(async (req) => {
     console.log('Starting alert calculation...');
     const now = new Date();
 
-    // Fetch all active sale cycles (pending or in_progress only)
+    // Fetch all active PRE-SALE cycles only (pending or in_progress, NOT post_sale)
     const { data: activeCycles, error: cyclesError } = await supabase
       .from('sale_cycles')
-      .select('id, customer_id, seller_id, status, last_activity_at, created_at')
-      .in('status', ['pending', 'in_progress']);
+      .select('id, customer_id, seller_id, status, cycle_type, last_activity_at, created_at')
+      .in('status', ['pending', 'in_progress'])
+      .neq('cycle_type', 'post_sale'); // Exclude post-sale cycles from alerts
 
     if (cyclesError) {
       console.error('Error fetching active cycles:', cyclesError);
@@ -64,7 +65,7 @@ serve(async (req) => {
     const activeCustomerIds = [...new Set(activeCycles?.map(c => c.customer_id) || [])];
     
     if (activeCustomerIds.length === 0) {
-      console.log('No active cycles found, cleaning up all alerts');
+      console.log('No active pre-sale cycles found, cleaning up all alerts');
       // Delete all operational alerts since there are no active cycles
       await supabase
         .from('alerts')
@@ -88,13 +89,16 @@ serve(async (req) => {
       throw customersError;
     }
 
-    console.log(`Found ${customers?.length || 0} active customers`);
+    console.log(`Found ${customers?.length || 0} active pre-sale customers`);
 
     const alertsToCreate: AlertData[] = [];
 
     for (const cycle of activeCycles || []) {
       const customer = customers?.find(c => c.id === cycle.customer_id);
       if (!customer || !cycle.seller_id) continue;
+
+      // Skip post-sale cycles (double check)
+      if (cycle.cycle_type === 'post_sale') continue;
 
       const customerId = cycle.customer_id;
       const sellerId = cycle.seller_id;

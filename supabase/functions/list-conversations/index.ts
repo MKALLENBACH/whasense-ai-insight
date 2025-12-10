@@ -40,8 +40,6 @@ serve(async (req) => {
       );
     }
 
-    // supabase client already created above with service role
-
     console.log('Fetching conversations for seller:', user.id);
 
     // Get user role and company in parallel
@@ -99,11 +97,10 @@ serve(async (req) => {
     // Get all customer IDs from messages
     const customerIds = [...new Set((messages || []).map(m => m.customer_id).filter(Boolean))];
 
-    // Fetch all active sale_cycles for these customers (status pending or in_progress)
-    // AND all cycles to know the current cycle status
+    // Fetch all sale_cycles for these customers (including cycle_type)
     const { data: allCycles } = await supabase
       .from('sale_cycles')
-      .select('id, customer_id, seller_id, status, created_at, closed_at, lost_reason, won_summary')
+      .select('id, customer_id, seller_id, status, cycle_type, created_at, closed_at, lost_reason, won_summary')
       .in('customer_id', customerIds.length > 0 ? customerIds : [''])
       .order('created_at', { ascending: false });
 
@@ -111,6 +108,7 @@ serve(async (req) => {
     const customerCycleMap = new Map<string, {
       id: string;
       status: string;
+      cycle_type: string;
       created_at: string;
       closed_at: string | null;
       lost_reason: string | null;
@@ -123,6 +121,7 @@ serve(async (req) => {
         customerCycleMap.set(cycle.customer_id, {
           id: cycle.id,
           status: cycle.status,
+          cycle_type: cycle.cycle_type || 'pre_sale',
           created_at: cycle.created_at,
           closed_at: cycle.closed_at,
           lost_reason: cycle.lost_reason,
@@ -153,6 +152,7 @@ serve(async (req) => {
         const cycleInfo = customerCycleMap.get(customerId);
         // Use cycle status if available, otherwise fallback to customer lead_status
         const currentStatus = cycleInfo?.status || customer.lead_status || 'pending';
+        const cycleType = cycleInfo?.cycle_type || 'pre_sale';
         
         conversationsMap.set(customerId, {
           id: customerId,
@@ -171,6 +171,7 @@ serve(async (req) => {
           hasRisk: false,
           // Use cycle status for filtering tabs
           cycleStatus: currentStatus,
+          cycleType: cycleType,
           cycleId: cycleInfo?.id || null,
           cycleLostReason: cycleInfo?.lost_reason || null,
           cycleWonSummary: cycleInfo?.won_summary || null,
