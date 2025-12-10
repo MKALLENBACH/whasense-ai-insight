@@ -256,19 +256,19 @@ const ChatPage = () => {
       setMessages(typedMessages);
 
       // Get the latest insight if exists - always load to show analysis
-      if (typedMessages && typedMessages.length > 0) {
+      if (typedMessages && typedMessages.length > 0 && !isConversationCompleted) {
         const lastIncomingMessage = [...typedMessages].reverse().find(m => m.direction === "incoming");
         if (lastIncomingMessage) {
+          // Try to find existing insight (with or without insight_type)
           const { data: insightData } = await supabase
             .from("insights")
             .select("*")
             .eq("message_id", lastIncomingMessage.id)
-            .eq("insight_type", "message_analysis")
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
 
-          if (insightData) {
+          if (insightData && insightData.suggestion) {
             setAiAnalysis({
               sentiment: insightData.sentiment || "neutral",
               intention: parseInt(insightData.intention || "0"),
@@ -277,10 +277,16 @@ const ChatPage = () => {
               suggestion: insightData.suggestion || "",
               next_action: insightData.next_action || "",
             });
+          } else {
+            // No insight exists - trigger analysis automatically
+            console.log("No insight found, triggering analysis for message:", lastIncomingMessage.id);
+            analyzeMessage(lastIncomingMessage.content, lastIncomingMessage.id);
           }
         }
+      }
 
-        // Fetch image insights for messages with image attachments
+      // Fetch image insights for messages with image attachments
+      if (typedMessages && typedMessages.length > 0) {
         const imageMessages = typedMessages.filter(m => 
           m.attachment_type?.startsWith('image/') || 
           ['jpg', 'jpeg', 'png', 'webp', 'gif'].some(ext => m.attachment_name?.toLowerCase().endsWith(`.${ext}`))
