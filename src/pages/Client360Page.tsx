@@ -96,24 +96,53 @@ const Client360Page = () => {
   });
 
   useEffect(() => {
-    if (clientId) {
+    if (clientId && user?.id) {
       fetchClientData();
     }
-  }, [clientId]);
+  }, [clientId, user?.id, isSeller]);
 
   const fetchClientData = async () => {
-    if (!clientId) return;
+    if (!clientId || !user?.id) return;
     
     setIsLoading(true);
     try {
+      // For sellers, first verify they have access to this client
+      if (isSeller) {
+        // Check if seller has any messages with customers linked to this client
+        const { data: accessCheck, error: accessError } = await supabase
+          .from("messages")
+          .select(`
+            id,
+            customers!inner (
+              client_id
+            )
+          `)
+          .eq("seller_id", user.id)
+          .limit(1);
+        
+        // Filter by client_id in customers
+        const hasAccess = accessCheck?.some(m => (m.customers as any)?.client_id === clientId);
+        
+        if (!hasAccess) {
+          setClient(null);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       // Fetch client
       const { data: clientData, error: clientError } = await supabase
         .from("clients")
         .select("*")
         .eq("id", clientId)
-        .single();
+        .maybeSingle();
 
       if (clientError) throw clientError;
+      if (!clientData) {
+        setClient(null);
+        setIsLoading(false);
+        return;
+      }
       setClient(clientData);
 
       // Fetch buyers
@@ -126,17 +155,23 @@ const Client360Page = () => {
       if (buyersError) throw buyersError;
       setBuyers(buyersData || []);
 
-      // Fetch cycles for this client
-      const { data: cyclesData, error: cyclesError } = await supabase
+      // Fetch cycles for this client (filtered by seller if not manager)
+      let cyclesQuery = supabase
         .from("sale_cycles")
         .select("*")
         .eq("client_id", clientId)
         .order("created_at", { ascending: false });
+      
+      if (isSeller) {
+        cyclesQuery = cyclesQuery.eq("seller_id", user.id);
+      }
+
+      const { data: cyclesData, error: cyclesError } = await cyclesQuery;
 
       if (!cyclesError && cyclesData) {
         setCycles(cyclesData);
         
-        // Calculate stats
+        // Calculate stats (based on filtered cycles for sellers)
         const wonCycles = cyclesData.filter(c => c.status === "won");
         setStats({
           totalBuyers: buyersData?.length || 0,
@@ -171,7 +206,11 @@ const Client360Page = () => {
         <div className="p-6 flex flex-col items-center justify-center min-h-[50vh]">
           <Building2 className="h-16 w-16 text-muted-foreground mb-4" />
           <h2 className="text-xl font-semibold mb-2">Cliente não encontrado</h2>
-          <p className="text-muted-foreground mb-4">O cliente solicitado não existe ou foi removido.</p>
+          <p className="text-muted-foreground mb-4">
+            {isSeller 
+              ? "Você não tem acesso a este cliente ou ele não existe."
+              : "O cliente solicitado não existe ou foi removido."}
+          </p>
           <Button onClick={() => navigate("/clientes")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Voltar para Clientes
@@ -199,8 +238,8 @@ const Client360Page = () => {
         <Client360Header
           client={client}
           stats={stats}
-          onEdit={() => setShowEditModal(true)}
-          onNewBuyer={() => setShowNewBuyerModal(true)}
+          onEdit={isManager ? () => setShowEditModal(true) : undefined}
+          onNewBuyer={isManager ? () => setShowNewBuyerModal(true) : undefined}
         />
 
         {/* Tabs for different sections */}

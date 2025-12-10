@@ -4,7 +4,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,8 +23,6 @@ import {
   Search,
   Plus,
   ChevronRight,
-  Calendar,
-  Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -45,7 +43,7 @@ interface Client {
 
 const ClientsListPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isManager } = useAuth();
   
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,30 +52,86 @@ const ClientsListPage = () => {
 
   useEffect(() => {
     fetchClients();
-  }, []);
+  }, [user?.id, isManager]);
 
   const fetchClients = async () => {
+    if (!user?.id) return;
+    
     setIsLoading(true);
     try {
-      const { data: clientsData, error: clientsError } = await supabase
+      let clientIds: string[] = [];
+      
+      if (!isManager) {
+        // For sellers: get only clients they've had contact with
+        // First get customer IDs where seller has messages
+        const { data: messagesData, error: messagesError } = await supabase
+          .from("messages")
+          .select("customer_id")
+          .eq("seller_id", user.id);
+        
+        if (messagesError) throw messagesError;
+        
+        const customerIds = [...new Set(messagesData?.map(m => m.customer_id) || [])];
+        
+        if (customerIds.length === 0) {
+          setClients([]);
+          setIsLoading(false);
+          return;
+        }
+        
+        // Get client IDs from those customers
+        const { data: customersData, error: customersError } = await supabase
+          .from("customers")
+          .select("client_id")
+          .in("id", customerIds)
+          .not("client_id", "is", null);
+        
+        if (customersError) throw customersError;
+        
+        clientIds = [...new Set(customersData?.map(c => c.client_id).filter(Boolean) as string[])];
+        
+        if (clientIds.length === 0) {
+          setClients([]);
+          setIsLoading(false);
+          return;
+        }
+      }
+      
+      // Fetch clients (all for managers, filtered for sellers)
+      let query = supabase
         .from("clients")
         .select("*")
         .order("created_at", { ascending: false });
-
+      
+      if (!isManager && clientIds.length > 0) {
+        query = query.in("id", clientIds);
+      }
+      
+      const { data: clientsData, error: clientsError } = await query;
+      
       if (clientsError) throw clientsError;
 
-      // Enrich with counts
+      // Enrich with counts (filtered by seller for sellers)
       const enrichedClients = await Promise.all(
         (clientsData || []).map(async (client) => {
+          let buyersQuery = supabase
+            .from("buyers")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", client.id);
+          
+          let cyclesQuery = supabase
+            .from("sale_cycles")
+            .select("id, status", { count: "exact" })
+            .eq("client_id", client.id);
+          
+          // For sellers, filter cycles by their seller_id
+          if (!isManager) {
+            cyclesQuery = cyclesQuery.eq("seller_id", user.id);
+          }
+          
           const [buyersResult, cyclesResult] = await Promise.all([
-            supabase
-              .from("buyers")
-              .select("id", { count: "exact", head: true })
-              .eq("client_id", client.id),
-            supabase
-              .from("sale_cycles")
-              .select("id, status", { count: "exact" })
-              .eq("client_id", client.id),
+            buyersQuery,
+            cyclesQuery,
           ]);
 
           const wonCount = cyclesResult.data?.filter(c => c.status === "won").length || 0;
@@ -120,12 +174,18 @@ const ClientsListPage = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold">Clientes 360°</h1>
-            <p className="text-muted-foreground">Visão completa das empresas clientes</p>
+            <p className="text-muted-foreground">
+              {isManager 
+                ? "Visão completa das empresas clientes" 
+                : "Clientes que você já teve contato"}
+            </p>
           </div>
-          <Button onClick={() => setShowNewClientModal(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Cliente
-          </Button>
+          {isManager && (
+            <Button onClick={() => setShowNewClientModal(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Cliente
+            </Button>
+          )}
         </div>
 
         {/* Stats Cards */}
@@ -209,9 +269,13 @@ const ClientsListPage = () => {
                 <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <h3 className="font-semibold mb-2">Nenhum cliente encontrado</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {searchTerm ? "Tente ajustar sua busca" : "Comece criando seu primeiro cliente"}
+                  {searchTerm 
+                    ? "Tente ajustar sua busca" 
+                    : isManager 
+                      ? "Comece criando seu primeiro cliente"
+                      : "Você ainda não teve contato com nenhum cliente vinculado a uma empresa"}
                 </p>
-                {!searchTerm && (
+                {!searchTerm && isManager && (
                   <Button onClick={() => setShowNewClientModal(true)}>
                     <Plus className="h-4 w-4 mr-2" />
                     Criar Cliente
@@ -286,11 +350,13 @@ const ClientsListPage = () => {
         </Card>
       </div>
 
-      <NewClientModal
-        open={showNewClientModal}
-        onOpenChange={setShowNewClientModal}
-        onSuccess={fetchClients}
-      />
+      {isManager && (
+        <NewClientModal
+          open={showNewClientModal}
+          onOpenChange={setShowNewClientModal}
+          onSuccess={fetchClients}
+        />
+      )}
     </AppLayout>
   );
 };
