@@ -1065,6 +1065,7 @@ export type Database = {
           stripe_annual_price_id: string | null
           stripe_monthly_price_id: string | null
           updated_at: string
+          visible_to_managers: boolean
         }
         Insert: {
           annual_price?: number
@@ -1078,6 +1079,7 @@ export type Database = {
           stripe_annual_price_id?: string | null
           stripe_monthly_price_id?: string | null
           updated_at?: string
+          visible_to_managers?: boolean
         }
         Update: {
           annual_price?: number
@@ -1091,6 +1093,7 @@ export type Database = {
           stripe_annual_price_id?: string | null
           stripe_monthly_price_id?: string | null
           updated_at?: string
+          visible_to_managers?: boolean
         }
         Relationships: []
       }
