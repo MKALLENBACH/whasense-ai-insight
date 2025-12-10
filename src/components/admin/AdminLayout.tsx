@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Bot,
   CreditCard,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ const navItems = [
   { label: "Gestores", href: "/admin/gestores", icon: UserCog },
   { label: "Planos", href: "/admin/planos", icon: CreditCard },
   { label: "AI Scripts", href: "/admin/ai", icon: Bot },
+  { label: "Monitor", href: "/admin/monitor", icon: Activity },
 ];
 
 const AdminLayout = ({ children }: AdminLayoutProps) => {

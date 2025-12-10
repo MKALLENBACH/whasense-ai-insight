@@ -246,14 +246,16 @@ const ChatPage = () => {
         setShowLeadModal(true);
       }
 
-      // Fetch messages for this customer
+      // Fetch messages for this customer with pagination (last 100 messages for performance)
       const { data: messagesData, error: messagesError } = await supabase
         .from("messages")
         .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
         .eq("customer_id", id)
-        .order("timestamp", { ascending: true });
+        .order("timestamp", { ascending: false })
+        .limit(100);
       
-      const typedMessages = (messagesData as unknown as Message[]) || [];
+      // Reverse to show in chronological order
+      const typedMessages = ((messagesData as unknown as Message[]) || []).reverse();
       setMessages(typedMessages);
 
       // Get the latest insight if exists - always load to show analysis

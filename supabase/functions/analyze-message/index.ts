@@ -485,7 +485,7 @@ serve(async (req) => {
 
     // Parse request body
     const body = await req.json();
-    const { message, message_id, cycleMessages, companyId, cycleType } = body;
+    const { message, message_id, cycleMessages, companyId, cycleType, async: useAsync } = body;
 
     // Validate input
     if (!message || typeof message !== 'string') {
@@ -509,7 +509,46 @@ serve(async (req) => {
       );
     }
 
-    console.log('Analyzing message:', {
+    // ASYNC MODE: Queue for background processing (recommended for high-load)
+    if (useAsync && companyId && message_id) {
+      console.log('Enqueueing message for async analysis:', message_id);
+      
+      const { data: queueItem, error: queueError } = await supabase
+        .from('processing_queue')
+        .insert({
+          company_id: companyId,
+          type: 'text_analysis',
+          payload: {
+            company_id: companyId,
+            message_id,
+            message,
+            cycle_type: cycleType || 'pre_sale',
+            cycle_messages: cycleMessages?.slice(-15) || [], // Limit history to last 15 messages
+          },
+          priority: 5,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (queueError) {
+        console.error('Error enqueueing analysis:', queueError);
+        // Fall through to sync processing
+      } else {
+        // Return immediately with 202 Accepted
+        return new Response(
+          JSON.stringify({ 
+            queued: true, 
+            queue_id: queueItem.id,
+            message: 'Analysis queued for background processing'
+          }),
+          { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // SYNC MODE: Process immediately (legacy behavior)
+    console.log('Analyzing message synchronously:', {
       message: message.substring(0, 100) + '...',
       cycleMessagesCount: cycleMessages?.length || 0,
       companyId: companyId || 'not provided',

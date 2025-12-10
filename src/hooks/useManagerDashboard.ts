@@ -115,6 +115,16 @@ export function useManagerDashboard() {
 
     setIsLoading(true);
     try {
+      const todayStr = new Date().toISOString().split("T")[0];
+      
+      // TRY to use aggregated analytics first (faster for high-load)
+      const { data: dailyAnalytics } = await supabase
+        .from("analytics_daily_company")
+        .select("*")
+        .eq("company_id", user.companyId)
+        .eq("date", todayStr)
+        .maybeSingle();
+
       // Get all sellers in the company
       const { data: profiles } = await supabase
         .from("profiles")
@@ -132,19 +142,23 @@ export function useManagerDashboard() {
       const actualSellerIds = roles?.filter((r) => r.role === "seller").map((r) => r.user_id) || [];
       const sellerProfiles = profiles?.filter((p) => actualSellerIds.includes(p.user_id)) || [];
 
-      // Get all customers for the company
+      // Get all customers for the company (limit for performance)
       const { data: customers } = await supabase
         .from("customers")
         .select("id, name, lead_status, seller_id")
-        .eq("company_id", user.companyId);
+        .eq("company_id", user.companyId)
+        .limit(1000);
 
       const customerIds = customers?.map((c) => c.id) || [];
 
-      // Get all sale cycles
+      // Get active sale cycles only (limit for performance)
       const { data: cycles } = await supabase
         .from("sale_cycles")
         .select("*")
-        .in("customer_id", customerIds.length > 0 ? customerIds : [""]);
+        .in("customer_id", customerIds.length > 0 ? customerIds : [""])
+        .in("status", ["pending", "in_progress", "won", "lost"])
+        .order("created_at", { ascending: false })
+        .limit(500);
 
       // Separate cycles by type and status
       const preSaleCycles = cycles?.filter(c => (c as any).cycle_type !== 'post_sale') || [];
@@ -153,22 +167,33 @@ export function useManagerDashboard() {
       const activeCycles = preSaleCycles.filter(c => c.status === "pending" || c.status === "in_progress");
       const closedCycles = preSaleCycles.filter(c => c.status === "won" || c.status === "lost");
 
-      // Get all sales
+      // Get recent sales only (last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
       const { data: sales } = await supabase
         .from("sales")
         .select("*")
         .eq("company_id", user.companyId)
-        .order("created_at", { ascending: false });
+        .gte("created_at", thirtyDaysAgo.toISOString())
+        .order("created_at", { ascending: false })
+        .limit(200);
 
-      // Get all messages
+      // Get recent messages only (last 7 days for insights)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
       const { data: messages } = await supabase
         .from("messages")
         .select("id, customer_id, seller_id, direction, timestamp, cycle_id")
-        .in("customer_id", customerIds.length > 0 ? customerIds : [""]);
+        .in("customer_id", customerIds.length > 0 ? customerIds : [""])
+        .gte("timestamp", sevenDaysAgo.toISOString())
+        .order("timestamp", { ascending: false })
+        .limit(1000);
 
       const messageIds = messages?.map((m) => m.id) || [];
 
-      // Get all insights
+      // Get insights for recent messages only
       const { data: insights } = await supabase
         .from("insights")
         .select("*")
@@ -179,9 +204,7 @@ export function useManagerDashboard() {
       const pendingLeads = activeCycles.filter((c) => c.status === "pending").length;
       const inProgressLeads = activeCycles.filter((c) => c.status === "in_progress").length;
       
-      // Filter sales and messages for last 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Use data already filtered from queries
       const thirtyDaysAgoStr = thirtyDaysAgo.toISOString();
       
       // Last 30 days metrics from sales
@@ -436,10 +459,10 @@ export function useManagerDashboard() {
       setSellerPerformance(performance.filter((p) => p.totalLeads > 0));
 
       // Sales timeline (last 30 days)
-      const today = new Date();
+      const timelineBaseDate = new Date();
       const timeline: SalesTimelinePoint[] = [];
       for (let i = 29; i >= 0; i--) {
-        const date = new Date(today);
+        const date = new Date(timelineBaseDate);
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split("T")[0];
         const dayWon =
