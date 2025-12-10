@@ -19,6 +19,8 @@ const objectionLabels: Record<string, string> = {
   confianca: "Confiança",
   doubt: "Dúvidas",
   duvida: "Dúvidas",
+  reclamacao: "Reclamação",
+  complaint: "Reclamação",
   none: "Nenhuma",
   nenhuma: "Nenhuma",
 };
