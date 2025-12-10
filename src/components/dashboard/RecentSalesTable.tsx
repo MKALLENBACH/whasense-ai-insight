@@ -83,7 +83,7 @@ export function RecentSalesTable({ sales, showSeller = true }: RecentSalesTableP
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => navigate(`/chat/${sale.id}`)}
+                        onClick={() => navigate(`/gestor/ciclos/${sale.cycleId}`)}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
