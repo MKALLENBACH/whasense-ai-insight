@@ -26,11 +26,14 @@ interface AdminLayoutProps {
   children: ReactNode;
 }
 
+import { DollarSign } from "lucide-react";
+
 const navItems = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Empresas", href: "/admin/empresas", icon: Building2 },
   { label: "Gestores", href: "/admin/gestores", icon: UserCog },
   { label: "Planos", href: "/admin/planos", icon: CreditCard },
+  { label: "Pagamentos", href: "/admin/payments", icon: DollarSign },
   { label: "AI Scripts", href: "/admin/ai", icon: Bot },
   { label: "Monitor", href: "/admin/monitor", icon: Activity },
   { label: "Saúde do Sistema", href: "/admin/system-health", icon: HeartPulse },

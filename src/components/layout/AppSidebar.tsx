@@ -1,4 +1,4 @@
-import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone, Users, Bot, Target, Trophy, Building2 } from "lucide-react";
+import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone, Users, Bot, Target, Trophy, Building2, CreditCard } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -69,6 +69,7 @@ const AppSidebar = () => {
     { to: "/gestor/vendedores", icon: Users, label: "Vendedores" },
     { to: "/gestor/metas", icon: Target, label: "Metas" },
     { to: "/gestor/followups", icon: Bot, label: "Follow-ups" },
+    { to: "/financeiro", icon: CreditCard, label: "Financeiro" },
     { to: "/historico", icon: History, label: "Histórico" },
     { to: "/dashboard/whatsapp-status", icon: Smartphone, label: "Status WhatsApp" },
   ];

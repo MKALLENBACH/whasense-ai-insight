@@ -44,6 +44,8 @@ interface Plan {
   seller_limit: number | null;
   is_active: boolean;
   created_at: string;
+  stripe_monthly_price_id: string | null;
+  stripe_annual_price_id: string | null;
 }
 
 const AdminPlansPage = () => {
@@ -61,6 +63,8 @@ const AdminPlansPage = () => {
   const [sellerLimit, setSellerLimit] = useState("");
   const [isUnlimited, setIsUnlimited] = useState(false);
   const [isActive, setIsActive] = useState(true);
+  const [stripeMonthlyPriceId, setStripeMonthlyPriceId] = useState("");
+  const [stripeAnnualPriceId, setStripeAnnualPriceId] = useState("");
 
   useEffect(() => {
     fetchPlans();
@@ -91,6 +95,8 @@ const AdminPlansPage = () => {
     setSellerLimit("");
     setIsUnlimited(false);
     setIsActive(true);
+    setStripeMonthlyPriceId("");
+    setStripeAnnualPriceId("");
     setEditingPlan(null);
   };
 
@@ -108,6 +114,8 @@ const AdminPlansPage = () => {
     setIsUnlimited(plan.seller_limit === null);
     setSellerLimit(plan.seller_limit?.toString() || "");
     setIsActive(plan.is_active);
+    setStripeMonthlyPriceId(plan.stripe_monthly_price_id || "");
+    setStripeAnnualPriceId(plan.stripe_annual_price_id || "");
     setIsModalOpen(true);
   };
 
@@ -129,6 +137,8 @@ const AdminPlansPage = () => {
         annual_price: parseFloat(annualPrice) || 0,
         seller_limit: isUnlimited ? null : (parseInt(sellerLimit) || 1),
         is_active: isActive,
+        stripe_monthly_price_id: stripeMonthlyPriceId.trim() || null,
+        stripe_annual_price_id: stripeAnnualPriceId.trim() || null,
       };
 
       if (editingPlan) {
@@ -414,6 +424,34 @@ const AdminPlansPage = () => {
                     className="bg-slate-900/50 border-slate-700 text-white"
                   />
                 )}
+              </div>
+
+              {/* Stripe Price IDs */}
+              <div className="space-y-3 pt-2 border-t border-slate-700">
+                <Label className="text-slate-300 flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  Integração Stripe
+                </Label>
+                
+                <div className="space-y-2">
+                  <Label className="text-xs text-slate-400">Price ID Mensal</Label>
+                  <Input
+                    value={stripeMonthlyPriceId}
+                    onChange={(e) => setStripeMonthlyPriceId(e.target.value)}
+                    placeholder="price_xxxxx (do Stripe)"
+                    className="bg-slate-900/50 border-slate-700 text-white font-mono text-sm"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs text-slate-400">Price ID Anual</Label>
+                  <Input
+                    value={stripeAnnualPriceId}
+                    onChange={(e) => setStripeAnnualPriceId(e.target.value)}
+                    placeholder="price_xxxxx (do Stripe)"
+                    className="bg-slate-900/50 border-slate-700 text-white font-mono text-sm"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-between pt-2">
