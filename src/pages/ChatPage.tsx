@@ -3,52 +3,24 @@ import { useParams, useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { 
-  Send, 
-  ArrowLeft, 
-  Loader2, 
-  Smile, 
-  Frown, 
-  Meh, 
-  Angry, 
-  HelpCircle, 
-  Sparkles,
-  Target,
-  AlertTriangle,
-  Thermometer,
-  MessageSquare,
-  Lightbulb,
-  ArrowRight,
-  Copy,
-  RefreshCw,
-  Trophy,
-  XCircle,
-  CheckCircle2,
-  AlertCircle,
-} from "lucide-react";
+import { Loader2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import LeadTemperatureBadge from "@/components/LeadTemperatureBadge";
 import SaleRegistrationModal from "@/components/sale/SaleRegistrationModal";
 import { useCustomerSimulation } from "@/hooks/useCustomerSimulation";
 import ManagerInsightsPanel from "@/components/manager/ManagerInsightsPanel";
 import NewLeadModal from "@/components/lead/NewLeadModal";
 import SaleCycleHistory from "@/components/sale/SaleCycleHistory";
-import CurrentCycleBadge from "@/components/sale/CurrentCycleBadge";
 import { useSaleCycles } from "@/hooks/useSaleCycles";
 import { ChatAlertsBanner } from "@/components/conversation/ChatAlertsBanner";
 import ChatInput from "@/components/conversation/ChatInput";
 import MessageBubble from "@/components/conversation/MessageBubble";
-import ImageInsightsCard from "@/components/conversation/ImageInsightsCard";
 import { CycleDivider } from "@/components/conversation/CycleDivider";
+import ChatHeader from "@/components/chat/ChatHeader";
+import SellerAIInsightsPanel, { AIAnalysis } from "@/components/chat/SellerAIInsightsPanel";
+import CompletedCyclePanel from "@/components/chat/CompletedCyclePanel";
 
 interface Message {
   id: string;
@@ -61,17 +33,6 @@ interface Message {
   attachment_name?: string | null;
 }
 
-interface AIAnalysis {
-  sales_stage?: string;
-  sentiment: string;
-  intention: number;
-  objection: string;
-  temperature: string;
-  analysis?: string;
-  suggestion: string;
-  next_action: string;
-}
-
 interface Customer {
   id: string;
   name: string;
@@ -82,52 +43,6 @@ interface Customer {
   is_incomplete: boolean;
   company_id: string | null;
 }
-
-const sentimentConfig: Record<string, { icon: typeof Smile; label: string; color: string }> = {
-  positive: { icon: Smile, label: "Positivo", color: "text-success" },
-  excited: { icon: Sparkles, label: "Empolgado", color: "text-success" },
-  neutral: { icon: Meh, label: "Neutro", color: "text-muted-foreground" },
-  negative: { icon: Frown, label: "Negativo", color: "text-warning" },
-  angry: { icon: Angry, label: "Irritado", color: "text-destructive" },
-  insecure: { icon: HelpCircle, label: "Inseguro", color: "text-warning" },
-};
-
-const objectionLabels: Record<string, string> = {
-  price: "Preço alto",
-  delay: "Prazo de entrega",
-  trust: "Falta de confiança",
-  doubt: "Dúvidas sobre o produto",
-  complaint: "Reclamação",
-  competition: "Concorrência",
-  quality: "Qualidade",
-  support: "Suporte",
-  delivery: "Entrega",
-  defect: "Defeito",
-  refund: "Reembolso",
-  exchange: "Troca",
-  problem: "Problema",
-  question: "Dúvida",
-  none: "Nenhuma objeção",
-  // Portuguese values (new)
-  preco: "Preço alto",
-  prazo: "Prazo de entrega",
-  confianca: "Falta de confiança",
-  duvida: "Dúvidas sobre o produto",
-  reclamacao: "Reclamação",
-  concorrencia: "Concorrência",
-  problema: "Problema com produto",
-  nenhuma: "Nenhuma objeção",
-};
-
-const temperatureConfig: Record<string, { label: string; color: string }> = {
-  hot: { label: "Quente", color: "bg-destructive text-destructive-foreground" },
-  warm: { label: "Morno", color: "bg-warning text-warning-foreground" },
-  cold: { label: "Frio", color: "bg-muted text-muted-foreground" },
-  // Portuguese values (new)
-  quente: { label: "Quente", color: "bg-destructive text-destructive-foreground" },
-  morno: { label: "Morno", color: "bg-warning text-warning-foreground" },
-  frio: { label: "Frio", color: "bg-muted text-muted-foreground" },
-};
 
 const ChatPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -183,10 +98,7 @@ const ChatPage = () => {
 
   // AI Customer Simulation
   const {
-    isSimulating,
     triggerResponseAfterSellerMessage,
-    startContinuousSimulation,
-    stopContinuousSimulation,
     updateHistory,
   } = useCustomerSimulation({
     customerId: id || "",
@@ -210,7 +122,6 @@ const ChatPage = () => {
   // Scroll to selected cycle when it changes
   useEffect(() => {
     if (selectedCycleId) {
-      // Use requestAnimationFrame to ensure DOM is updated
       requestAnimationFrame(() => {
         const cycleElement = cycleRefs.current.get(selectedCycleId);
         if (cycleElement) {
@@ -258,11 +169,10 @@ const ChatPage = () => {
       const typedMessages = ((messagesData as unknown as Message[]) || []).reverse();
       setMessages(typedMessages);
 
-      // Get the latest insight if exists - always load to show analysis
+      // Get the latest insight if exists
       if (typedMessages && typedMessages.length > 0 && !isConversationCompleted) {
         const lastIncomingMessage = [...typedMessages].reverse().find(m => m.direction === "incoming");
         if (lastIncomingMessage) {
-          // Try to find existing insight (with or without insight_type)
           const { data: insightData } = await supabase
             .from("insights")
             .select("*")
@@ -281,8 +191,6 @@ const ChatPage = () => {
               next_action: insightData.next_action || "",
             });
           } else {
-            // No insight exists - trigger analysis automatically
-            console.log("No insight found, triggering analysis for message:", lastIncomingMessage.id);
             analyzeMessage(lastIncomingMessage.content, lastIncomingMessage.id);
           }
         }
@@ -339,7 +247,6 @@ const ChatPage = () => {
     
     setIsAnalyzing(true);
     try {
-      // Send full cycle history to AI
       const cycleMessages = buildCycleMessages();
       
       const { data, error } = await supabase.functions.invoke("analyze-message", {
@@ -347,8 +254,8 @@ const ChatPage = () => {
           message: messageContent, 
           message_id: messageId,
           cycleMessages,
-          companyId: user?.companyId, // Pass company ID for script lookup
-          cycleType: isPostSaleCycle ? "post_sale" : "pre_sale", // Pass cycle type for context
+          companyId: user?.companyId,
+          cycleType: isPostSaleCycle ? "post_sale" : "pre_sale",
         },
       });
 
@@ -364,72 +271,11 @@ const ChatPage = () => {
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !id || !user || isSending || isViewingHistory) return;
-
-    const messageContent = newMessage.trim();
-    setIsSending(true);
-    setNewMessage("");
-    
-    try {
-      // Get or create active cycle
-      const cycle = await getOrCreateActiveCycle();
-      if (!cycle) throw new Error("Failed to get or create cycle");
-
-      // Update cycle status to in_progress if it's pending
-      if (cycle.status === 'pending') {
-        await updateCycleStatus(cycle.id, 'in_progress');
-      }
-
-      const { data, error } = await supabase
-        .from("messages")
-        .insert({
-          seller_id: user.id,
-          customer_id: id,
-          content: messageContent,
-          direction: "outgoing",
-          cycle_id: cycle.id,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setMessages((prev) => [...prev, data as unknown as Message]);
-
-      // Trigger AI customer response after seller sends a message
-      if (simulationEnabled && !isConversationCompleted) {
-        setIsSimulatingResponse(true);
-        const response = await triggerResponseAfterSellerMessage(messageContent);
-        if (response) {
-          const { data: newMsg } = await supabase
-            .from("messages")
-            .select("id, content, direction, timestamp, cycle_id")
-            .eq("id", response.messageId)
-            .maybeSingle();
-          
-          if (newMsg) {
-            setMessages((prev) => [...prev, newMsg as unknown as Message]);
-            await analyzeMessage(response.message, response.messageId);
-          }
-        }
-        setIsSimulatingResponse(false);
-      }
-    } catch (error) {
-      console.error("Error sending message:", error);
-      toast.error("Erro ao enviar mensagem");
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  // Handler for ChatInput component (simplified - ignores attachments since columns don't exist yet)
+  // Handler for ChatInput component
   const handleSendMessageWithAttachments = async (
     content: string, 
     attachments?: { url: string; type: string; name: string }[]
   ) => {
-    // Allow sending if there's content OR attachments
     const hasContent = content.trim().length > 0;
     const hasAttachments = attachments && attachments.length > 0;
     if ((!hasContent && !hasAttachments) || !id || !user || isSending || isViewingHistory) return;
@@ -444,7 +290,6 @@ const ChatPage = () => {
         await updateCycleStatus(cycle.id, 'in_progress');
       }
 
-      // Get the first attachment if any
       const attachment = attachments?.[0];
       const isImageAttachment = attachment?.type?.startsWith('image/') || 
         ['jpg', 'jpeg', 'png', 'webp', 'gif'].some(ext => attachment?.name?.toLowerCase().endsWith(`.${ext}`));
@@ -484,11 +329,7 @@ const ChatPage = () => {
             }),
           }).then(async (response) => {
             if (response.ok) {
-              const result = await response.json();
-              console.log("Image analysis complete:", result);
               toast.success("Imagem analisada pela Vision AI");
-            } else {
-              console.error("Image analysis failed:", await response.text());
             }
           }).catch(err => {
             console.error("Error calling analyze-image:", err);
@@ -510,12 +351,10 @@ const ChatPage = () => {
           if (newMsg) {
             setMessages((prev) => [...prev, newMsg as unknown as Message]);
             
-            // Check if incoming message has image attachment
             const incomingIsImage = newMsg.attachment_type?.startsWith('image/') ||
               ['jpg', 'jpeg', 'png', 'webp', 'gif'].some(ext => newMsg.attachment_name?.toLowerCase().endsWith(`.${ext}`));
             
             if (incomingIsImage && newMsg.attachment_url) {
-              // Trigger Vision AI analysis for incoming image
               const { data: { session: currentSession } } = await supabase.auth.getSession();
               if (currentSession) {
                 fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-image`, {
@@ -548,37 +387,33 @@ const ChatPage = () => {
     }
   };
 
-  // Audio recording handler - uploads and analyzes seller audio
+  // Audio recording handler
   const handleSendAudio = async (audioBlob: Blob) => {
     if (!id || !user || !customer?.company_id || isSending) return;
     
     setIsSending(true);
     
     try {
-      // Ensure we have an active cycle
       const cycle = await getOrCreateActiveCycle();
       if (!cycle) {
         toast.error("Erro ao obter ciclo de venda");
         return;
       }
       
-      // If cycle was pending, update to in_progress
       if (cycle.status === 'pending') {
         await updateCycleStatus(cycle.id, 'in_progress');
       }
 
-      // Upload audio to storage
       const fileName = `audio-${Date.now()}.webm`;
       const filePath = `${customer.company_id}/${id}/${cycle.id}/${fileName}`;
       
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("message_attachments")
         .upload(filePath, audioBlob, {
           contentType: "audio/webm",
         });
 
       if (uploadError) {
-        console.error("Audio upload error:", uploadError);
         toast.error("Erro ao fazer upload do áudio");
         return;
       }
@@ -589,7 +424,6 @@ const ChatPage = () => {
 
       const audioUrl = urlData.publicUrl;
 
-      // Create message with audio attachment
       const { data: msgData, error: msgError } = await supabase
         .from("messages")
         .insert({
@@ -606,14 +440,12 @@ const ChatPage = () => {
         .single();
 
       if (msgError) {
-        console.error("Message creation error:", msgError);
         toast.error("Erro ao salvar mensagem de áudio");
         return;
       }
 
       setMessages(prev => [...prev, msgData]);
 
-      // Call analyze-audio edge function
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         toast.error("Sessão expirada");
@@ -635,15 +467,12 @@ const ChatPage = () => {
         if (response.ok) {
           const result = await response.json();
           if (result.transcription) {
-            // Update the message in state with transcription
             setMessages(prev => prev.map(m => 
               m.id === msgData.id 
                 ? { ...m, content: result.transcription }
                 : m
             ));
           }
-        } else {
-          console.error("Audio analysis failed:", await response.text());
         }
       }).catch(err => {
         console.error("Error calling analyze-audio:", err);
@@ -695,7 +524,6 @@ const ChatPage = () => {
           setMessages((prev) => [...prev, newMsg]);
           await analyzeMessage(data.message, data.messageId);
         }
-        // Refresh cycles to get the new one if created
         await fetchCycles();
       }
     } catch (error) {
@@ -715,15 +543,6 @@ const ChatPage = () => {
       setNewMessage(aiAnalysis.suggestion);
       toast.info("Sugestão aplicada");
     }
-  };
-
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
   };
 
   const handleSelectCycle = (cycleId: string) => {
@@ -751,9 +570,6 @@ const ChatPage = () => {
     );
   }
 
-  const sentimentInfo = sentimentConfig[aiAnalysis?.sentiment || "neutral"] || sentimentConfig.neutral;
-  const SentimentIcon = sentimentInfo.icon;
-  const tempInfo = temperatureConfig[aiAnalysis?.temperature || "cold"] || temperatureConfig.cold;
   const currentCycleNumber = displayedCycle ? getCycleNumber(displayedCycle.id) : 1;
 
   return (
@@ -762,164 +578,58 @@ const ChatPage = () => {
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col bg-card rounded-lg border border-border overflow-hidden">
           {/* Chat Header */}
-          <div className="p-4 border-b border-border flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/conversas")}
-              className="h-8 w-8"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+          <ChatHeader
+            customerName={customer?.name || "Cliente"}
+            customerPhone={customer?.phone}
+            customerEmail={customer?.email}
+            isIncomplete={customer?.is_incomplete}
+            onBack={() => navigate("/conversas")}
+            onShowLeadModal={() => setShowLeadModal(true)}
+            cycleNumber={currentCycleNumber}
+            cycleStatus={displayedCycle?.status as any}
+            cycleType={(displayedCycle as any)?.cycle_type}
+            isViewingHistory={isViewingHistory}
+            onBackToCurrentCycle={handleBackToCurrentCycle}
+            temperature={aiAnalysis?.temperature as any}
+            showTemperature={!isConversationCompleted && !isViewingHistory && !!aiAnalysis}
+            isSeller={isSeller}
+            isConversationCompleted={isConversationCompleted}
+            isPostSaleCycle={isPostSaleCycle}
+            isSimulatingResponse={isSimulatingResponse}
+            onSimulate={simulateIncomingMessage}
+            onRegisterWon={() => {
+              setSaleModalInitialTab("won");
+              setShowSaleModal(true);
+            }}
+            onRegisterLost={() => {
+              setSaleModalInitialTab("lost");
+              setShowSaleModal(true);
+            }}
+            onMarkPostSale={async () => {
+              if (activeCycle) {
+                try {
+                  await markAsPostSale(activeCycle.id);
+                  toast.success("Ciclo marcado como pós-venda");
+                  await fetchCycles();
+                } catch (error) {
+                  toast.error("Erro ao marcar como pós-venda");
+                }
+              }
+            }}
+            onClosePostSale={async () => {
+              if (activeCycle) {
+                try {
+                  await closePostSaleCycle(activeCycle.id);
+                  toast.success("Atendimento pós-venda concluído");
+                  await fetchCycles();
+                } catch (error) {
+                  toast.error("Erro ao concluir pós-venda");
+                }
+              }
+            }}
+          />
 
-            <div className={cn(
-              "h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold",
-              customer?.is_incomplete 
-                ? "bg-orange-500/10 text-orange-500" 
-                : "bg-primary/10 text-primary"
-            )}>
-              {customer ? getInitials(customer.name) : "?"}
-            </div>
-
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <h2 className="font-semibold">{customer?.name || "Cliente"}</h2>
-                {customer?.is_incomplete && (
-                  <Badge 
-                    variant="outline" 
-                    className="text-[10px] px-1.5 py-0 border-orange-500 bg-orange-500/10 text-orange-500 cursor-pointer"
-                    onClick={() => setShowLeadModal(true)}
-                  >
-                    <AlertCircle className="h-3 w-3 mr-1" />
-                    Completar dados
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {customer?.phone || customer?.email || "Sem contato"}
-              </p>
-            </div>
-
-            {/* Current Cycle Badge */}
-            {displayedCycle && (
-              <CurrentCycleBadge
-                cycleNumber={currentCycleNumber}
-                status={displayedCycle.status as "pending" | "in_progress" | "won" | "lost" | "closed"}
-                cycleType={(displayedCycle as any).cycle_type as "pre_sale" | "post_sale" | undefined}
-              />
-            )}
-
-            {/* Viewing history indicator */}
-            {isViewingHistory && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleBackToCurrentCycle}
-                className="gap-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Voltar ao atual
-              </Button>
-            )}
-
-            {/* Temperature badge - only for active conversations */}
-            {!isConversationCompleted && !isViewingHistory && aiAnalysis && (
-              <LeadTemperatureBadge 
-                temperature={aiAnalysis.temperature as "hot" | "warm" | "cold"} 
-                showLabel 
-              />
-            )}
-
-            {/* Demo button to simulate incoming messages - Only for sellers on active conversations */}
-            {isSeller && !isConversationCompleted && !isViewingHistory && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={simulateIncomingMessage}
-                className="gap-2"
-                disabled={isSimulatingResponse}
-              >
-                <RefreshCw className={cn("h-4 w-4", isSimulatingResponse && "animate-spin")} />
-                Simular
-              </Button>
-            )}
-
-            {/* Sale registration buttons - Only for sellers when cycle is active */}
-            {isSeller && activeCycle && !isConversationCompleted && !isViewingHistory && (
-              <>
-                {/* Pre-sale actions */}
-                {!isPostSaleCycle && (
-                  <>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={() => {
-                        setSaleModalInitialTab("won");
-                        setShowSaleModal(true);
-                      }}
-                      className="gap-2 bg-success hover:bg-success/90"
-                    >
-                      <Trophy className="h-4 w-4" />
-                      Venda
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSaleModalInitialTab("lost");
-                        setShowSaleModal(true);
-                      }}
-                      className="gap-2"
-                    >
-                      <XCircle className="h-4 w-4" />
-                      Perda
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        try {
-                          await markAsPostSale(activeCycle.id);
-                          toast.success("Ciclo marcado como pós-venda");
-                          await fetchCycles();
-                        } catch (error) {
-                          console.error("Error marking as post-sale:", error);
-                          toast.error("Erro ao marcar como pós-venda");
-                        }
-                      }}
-                      className="gap-2 border-blue-500 text-blue-500 hover:bg-blue-500/10"
-                    >
-                      <CheckCircle2 className="h-4 w-4" />
-                      Pós-venda
-                    </Button>
-                  </>
-                )}
-                {/* Post-sale actions */}
-                {isPostSaleCycle && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        await closePostSaleCycle(activeCycle.id);
-                        toast.success("Atendimento pós-venda concluído");
-                        await fetchCycles();
-                      } catch (error) {
-                        console.error("Error closing post-sale cycle:", error);
-                        toast.error("Erro ao concluir pós-venda");
-                      }
-                    }}
-                    className="gap-2 bg-blue-600 hover:bg-blue-700"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Concluir Pós-venda
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Alerts Banner - Only for active conversations */}
+          {/* Alerts Banner */}
           {isSeller && !isConversationCompleted && !isViewingHistory && (
             <ChatAlertsBanner 
               customerId={id || ""} 
@@ -927,7 +637,7 @@ const ChatPage = () => {
             />
           )}
 
-          {/* Messages Area - Grouped by Cycle */}
+          {/* Messages Area */}
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-2">
               {messages.length === 0 ? (
@@ -940,7 +650,6 @@ const ChatPage = () => {
                 </div>
               ) : (
                 (() => {
-                  // Group messages by cycle for visual separation (oldest first)
                   const cyclesWithMessages = cycles
                     .filter(c => messages.some(m => m.cycle_id === c.id))
                     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -958,10 +667,10 @@ const ChatPage = () => {
                       >
                         <CycleDivider
                           cycleNumber={cycleNum}
-                          status={cycle.status as "pending" | "in_progress" | "won" | "lost" | "closed"}
+                          status={cycle.status as any}
                           startDate={cycle.start_message_timestamp || cycle.created_at}
                           endDate={cycle.closed_at}
-                          cycleType={(cycle as any).cycle_type as "pre_sale" | "post_sale" | undefined}
+                          cycleType={(cycle as any).cycle_type}
                         />
                         <div className="space-y-4">
                           {cycleMessages.map((message) => (
@@ -985,7 +694,7 @@ const ChatPage = () => {
             </div>
           </ScrollArea>
 
-          {/* Message Input - Only for sellers on active conversations */}
+          {/* Message Input */}
           {isSeller && !isConversationCompleted && !isViewingHistory && activeCycle && (
             <ChatInput
               onSendMessage={handleSendMessageWithAttachments}
@@ -1022,200 +731,28 @@ const ChatPage = () => {
             />
           )}
 
-          {/* Insights Panel - Different for Manager vs Seller */}
+          {/* Insights Panel */}
           {isManager ? (
             <ManagerInsightsPanel customerId={id || ""} />
           ) : !isConversationCompleted && !isViewingHistory ? (
-            <div className="flex-1 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
-              <div className="p-4 border-b border-border">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  Insights da IA
-                </h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Análise automática em tempo real
-                </p>
-              </div>
-
-              <ScrollArea className="flex-1 p-4">
-                {isAnalyzing ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="text-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">Analisando mensagem...</p>
-                    </div>
-                  </div>
-                ) : aiAnalysis ? (
-                  <div className="space-y-4">
-                    {/* Sentiment */}
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <SentimentIcon className={cn("h-4 w-4", sentimentInfo.color)} />
-                          Emoção do Cliente
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <Badge variant="outline" className={sentimentInfo.color}>
-                          {sentimentInfo.label}
-                        </Badge>
-                      </CardContent>
-                    </Card>
-
-                    {/* Purchase Intent */}
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <Target className="h-4 w-4 text-primary" />
-                          Intenção de Compra
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-primary transition-all duration-500"
-                              style={{ width: `${aiAnalysis.intention}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-semibold">{aiAnalysis.intention}%</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Objection */}
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4 text-warning" />
-                          Objeção Detectada
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <Badge 
-                          variant={aiAnalysis.objection === "none" ? "secondary" : "destructive"}
-                        >
-                          {objectionLabels[aiAnalysis.objection] || aiAnalysis.objection}
-                        </Badge>
-                      </CardContent>
-                    </Card>
-
-                    {/* Temperature */}
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <Thermometer className="h-4 w-4 text-primary" />
-                          Temperatura do Lead
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <Badge className={tempInfo.color}>
-                          {tempInfo.label}
-                        </Badge>
-                      </CardContent>
-                    </Card>
-
-                    <Separator />
-
-                    {/* Suggestion */}
-                    <Card className="border-primary/30 bg-primary/5">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <Lightbulb className="h-4 w-4 text-primary" />
-                          Sugestão de Resposta
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <p className="text-sm">{aiAnalysis.suggestion}</p>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={useSuggestion}
-                          className="w-full gap-2"
-                        >
-                          <Copy className="h-4 w-4" />
-                          Usar sugestão da IA
-                        </Button>
-                      </CardContent>
-                    </Card>
-
-                    {/* Next Action */}
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <ArrowRight className="h-4 w-4 text-success" />
-                          Próxima Ação
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground">{aiAnalysis.next_action}</p>
-                      </CardContent>
-                    </Card>
-
-                    {/* Image Insights */}
-                    {imageInsights.length > 0 && (
-                      <div className="space-y-2">
-                        <Separator />
-                        <h4 className="text-sm font-semibold flex items-center gap-2">
-                          📷 Análises de Imagens
-                        </h4>
-                        {imageInsights.slice(-3).map((img, idx) => (
-                          <ImageInsightsCard
-                            key={idx}
-                            imageUrl={img.imageUrl}
-                            analysisData={img.data}
-                            isSeller={img.data?.detected_type === "seller"}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center py-8 text-muted-foreground">
-                    <div className="text-center">
-                      <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">Aguardando mensagem do cliente</p>
-                      <p className="text-xs mt-1">Os insights aparecerão automaticamente</p>
-                    </div>
-                  </div>
-                )}
-              </ScrollArea>
-            </div>
+            <SellerAIInsightsPanel
+              isAnalyzing={isAnalyzing}
+              aiAnalysis={aiAnalysis}
+              imageInsights={imageInsights}
+              onUseSuggestion={useSuggestion}
+            />
           ) : (
-            // Static panel for completed conversations (seller view)
-            <div className="flex-1 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
-              <div className="p-4 border-b border-border">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                  {isViewingHistory ? "Ciclo Anterior" : "Ciclo Encerrado"}
-                </h3>
-              </div>
-              <div className="flex-1 flex items-center justify-center p-4">
-                <div className="text-center">
-                  <Badge className={cn(
-                    "text-lg px-4 py-2",
-                    displayedCycle?.status === "won" ? "bg-success" : "bg-destructive"
-                  )}>
-                    {displayedCycle?.status === "won" ? "Venda Ganha" : "Venda Perdida"}
-                  </Badge>
-                  {displayedCycle?.lost_reason && (
-                    <p className="text-sm text-muted-foreground mt-4">
-                      Motivo: {displayedCycle.lost_reason}
-                    </p>
-                  )}
-                  {displayedCycle?.won_summary && (
-                    <p className="text-sm text-success mt-4">
-                      {displayedCycle.won_summary}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
+            <CompletedCyclePanel
+              isViewingHistory={isViewingHistory}
+              status={displayedCycle?.status as any}
+              lostReason={displayedCycle?.lost_reason}
+              wonSummary={displayedCycle?.won_summary}
+            />
           )}
         </div>
       </div>
 
-      {/* Sale Registration Modal - Now closes cycles */}
+      {/* Sale Registration Modal */}
       {customer && user && activeCycle && (
         <SaleRegistrationModal
           open={showSaleModal}
