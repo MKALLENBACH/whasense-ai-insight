@@ -41,17 +41,29 @@ const Client360Emotions = ({ clientId, sellerId }: Client360EmotionsProps) => {
   const fetchEmotions = async () => {
     setIsLoading(true);
     try {
-      // For sellers, get messages where they interacted with this client
-      // For managers, get all messages for this client
+      // First get all customers linked to this client
+      const { data: customers } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("client_id", clientId);
+
+      if (!customers || customers.length === 0) {
+        setData([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const customerIds = customers.map(c => c.id);
+
+      // Get all messages for these customers (filtered by seller if needed)
       let messagesQuery = supabase
         .from("messages")
         .select("id, timestamp")
+        .in("customer_id", customerIds)
         .order("timestamp", { ascending: true });
       
       if (sellerId) {
-        messagesQuery = messagesQuery.eq("seller_id", sellerId).eq("client_id", clientId);
-      } else {
-        messagesQuery = messagesQuery.eq("client_id", clientId);
+        messagesQuery = messagesQuery.eq("seller_id", sellerId);
       }
 
       const { data: messages } = await messagesQuery;

@@ -12,10 +12,15 @@ interface Client360ObjectionsProps {
 
 const objectionLabels: Record<string, string> = {
   price: "Preço",
+  preco: "Preço",
   delay: "Prazo",
+  prazo: "Prazo",
   trust: "Confiança",
+  confianca: "Confiança",
   doubt: "Dúvidas",
+  duvida: "Dúvidas",
   none: "Nenhuma",
+  nenhuma: "Nenhuma",
 };
 
 const Client360Objections = ({ clientId, sellerId }: Client360ObjectionsProps) => {
@@ -29,18 +34,28 @@ const Client360Objections = ({ clientId, sellerId }: Client360ObjectionsProps) =
   const fetchObjections = async () => {
     setIsLoading(true);
     try {
-      // For sellers, we need to get messages from ALL buyers they have contacted
-      // For managers, we get all messages for this client
+      // First get all customers linked to this client
+      const { data: customers } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("client_id", clientId);
+
+      if (!customers || customers.length === 0) {
+        setData([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const customerIds = customers.map(c => c.id);
+
+      // Get all messages for these customers (filtered by seller if needed)
       let messagesQuery = supabase
         .from("messages")
-        .select("id");
+        .select("id")
+        .in("customer_id", customerIds);
       
       if (sellerId) {
-        // Get all messages where this seller has interacted, regardless of client
-        // But filter by client_id to keep it relevant to this client view
-        messagesQuery = messagesQuery.eq("seller_id", sellerId).eq("client_id", clientId);
-      } else {
-        messagesQuery = messagesQuery.eq("client_id", clientId);
+        messagesQuery = messagesQuery.eq("seller_id", sellerId);
       }
 
       const { data: messages } = await messagesQuery;
@@ -59,7 +74,7 @@ const Client360Objections = ({ clientId, sellerId }: Client360ObjectionsProps) =
         .select("objection")
         .in("message_id", messageIds)
         .not("objection", "is", null)
-        .neq("objection", "none");
+        .not("objection", "in", '("none","nenhuma")');
 
       if (!insights) {
         setData([]);
@@ -67,12 +82,14 @@ const Client360Objections = ({ clientId, sellerId }: Client360ObjectionsProps) =
         return;
       }
 
-      // Count objections
+      // Count objections (excluding "none" and "nenhuma")
       const objectionCounts: Record<string, number> = {};
       insights.forEach((insight: any) => {
         const obj = insight.objection;
-        if (obj && obj !== "none") {
-          objectionCounts[obj] = (objectionCounts[obj] || 0) + 1;
+        if (obj && obj !== "none" && obj !== "nenhuma") {
+          // Normalize the key to group similar objections
+          const normalizedKey = obj.toLowerCase();
+          objectionCounts[normalizedKey] = (objectionCounts[normalizedKey] || 0) + 1;
         }
       });
 
