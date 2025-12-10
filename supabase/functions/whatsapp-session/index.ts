@@ -101,7 +101,7 @@ serve(async (req) => {
           .from('whatsapp_sessions')
           .select('*')
           .eq('seller_id', user.id)
-          .single();
+          .maybeSingle();
 
         if (existingSession?.status === 'connected' && existingSession?.is_active) {
           return new Response(JSON.stringify({
@@ -156,7 +156,7 @@ serve(async (req) => {
           .from('whatsapp_sessions')
           .select('*')
           .eq('seller_id', user.id)
-          .single();
+          .maybeSingle();
 
         if (!session) {
           return new Response(JSON.stringify({

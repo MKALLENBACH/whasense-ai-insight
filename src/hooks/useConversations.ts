@@ -62,18 +62,28 @@ export const useConversations = ({ accessToken }: UseConversationsProps) => {
     }
   }, [accessToken, fetchConversations]);
 
-  // Realtime subscriptions
+  // Realtime subscriptions with debounce
   useEffect(() => {
+    let debounceTimer: NodeJS.Timeout | null = null;
+    
+    const debouncedFetch = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchConversations();
+      }, 500); // 500ms debounce
+    };
+
     const channel = supabase
       .channel('conversations-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, fetchConversations)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, fetchConversations)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, fetchConversations)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, fetchConversations)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sale_cycles' }, fetchConversations)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, debouncedFetch)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'customers' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, debouncedFetch)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sale_cycles' }, debouncedFetch)
       .subscribe();
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, [fetchConversations]);

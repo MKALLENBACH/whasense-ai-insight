@@ -47,7 +47,7 @@ serve(async (req) => {
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (roleData?.role !== 'manager') {
       return new Response(JSON.stringify({ error: 'Unauthorized: Manager role required' }), {
@@ -61,7 +61,7 @@ serve(async (req) => {
       .from('profiles')
       .select('company_id')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (!managerProfile?.company_id) {
       return new Response(JSON.stringify({ error: 'Manager has no company' }), {
@@ -145,7 +145,7 @@ serve(async (req) => {
           .from('profiles')
           .select('company_id')
           .eq('user_id', sellerId)
-          .single();
+          .maybeSingle();
 
         if (sellerProfile?.company_id !== managerProfile.company_id) {
           return new Response(JSON.stringify({ error: 'Seller not in your company' }), {

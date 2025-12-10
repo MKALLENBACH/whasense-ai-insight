@@ -76,14 +76,14 @@ const SellersPage = () => {
         .from("companies")
         .select("plan_id")
         .eq("id", companyId)
-        .single();
+        .maybeSingle();
 
       if (companyData?.plan_id) {
         const { data: planData } = await supabase
           .from("plans")
           .select("name, seller_limit")
           .eq("id", companyData.plan_id)
-          .single();
+          .maybeSingle();
 
         if (planData) {
           setPlanInfo({
