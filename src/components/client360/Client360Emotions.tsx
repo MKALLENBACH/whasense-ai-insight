@@ -134,12 +134,17 @@ const Client360Emotions = ({ clientId, sellerId }: Client360EmotionsProps) => {
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
-              <YAxis domain={[0, 4]} ticks={[1, 2, 3]} tickFormatter={(v) => {
-                if (v === 1) return "Frio/Neg";
-                if (v === 2) return "Morno/Neu";
-                if (v === 3) return "Quente/Pos";
-                return "";
-              }} />
+              <YAxis 
+                domain={[0, 4]} 
+                ticks={[1, 2, 3]} 
+                width={80}
+                tickFormatter={(v) => {
+                  if (v === 1) return "Frio/Neg";
+                  if (v === 2) return "Morno/Neu";
+                  if (v === 3) return "Quente/Pos";
+                  return "";
+                }} 
+              />
               <Tooltip />
               <Legend />
               <Line 
