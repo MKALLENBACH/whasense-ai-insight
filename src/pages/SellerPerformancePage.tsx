@@ -70,8 +70,6 @@ interface AIInsights {
 
 const GOAL_TYPES = {
   vendas: "Vendas",
-  conversas_ativas: "Conversas Ativas",
-  taxa_resposta: "Taxa de Resposta (%)",
 };
 
 const BADGE_INFO: Record<string, { icon: React.ReactNode; label: string; description: string; color: string }> = {
