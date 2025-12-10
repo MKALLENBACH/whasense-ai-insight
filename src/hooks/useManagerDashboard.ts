@@ -19,6 +19,15 @@ export interface FollowupMetrics {
   last7days: number;
 }
 
+export interface PostSaleMetrics {
+  totalCycles: number;
+  activeCycles: number;
+  closedCycles: number;
+  avgResolutionTime: number;
+  topIssues: { issue: string; count: number }[];
+  satisfactionTrend: "positive" | "neutral" | "negative";
+}
+
 export interface LeadDistribution {
   bySeller: { name: string; pending: number; inProgress: number }[];
   byTemperature: { temperature: string; count: number }[];
@@ -92,6 +101,14 @@ export function useManagerDashboard() {
     last24h: 0,
     last7days: 0,
   });
+  const [postSaleMetrics, setPostSaleMetrics] = useState<PostSaleMetrics>({
+    totalCycles: 0,
+    activeCycles: 0,
+    closedCycles: 0,
+    avgResolutionTime: 0,
+    topIssues: [],
+    satisfactionTrend: "neutral",
+  });
 
   const fetchData = useCallback(async () => {
     if (!user?.companyId) return;
@@ -129,9 +146,12 @@ export function useManagerDashboard() {
         .select("*")
         .in("customer_id", customerIds.length > 0 ? customerIds : [""]);
 
-      // Separate active and closed cycles
-      const activeCycles = cycles?.filter(c => c.status === "pending" || c.status === "in_progress") || [];
-      const closedCycles = cycles?.filter(c => c.status === "won" || c.status === "lost") || [];
+      // Separate cycles by type and status
+      const preSaleCycles = cycles?.filter(c => (c as any).cycle_type !== 'post_sale') || [];
+      const postSaleCycles = cycles?.filter(c => (c as any).cycle_type === 'post_sale') || [];
+      
+      const activeCycles = preSaleCycles.filter(c => c.status === "pending" || c.status === "in_progress");
+      const closedCycles = preSaleCycles.filter(c => c.status === "won" || c.status === "lost");
 
       // Get all sales
       const { data: sales } = await supabase
@@ -511,6 +531,69 @@ export function useManagerDashboard() {
           last7days: 0,
         });
       }
+
+      // Calculate post-sale metrics
+      const activePostSale = postSaleCycles.filter(c => c.status === "in_progress" || c.status === "pending");
+      const closedPostSale = postSaleCycles.filter(c => (c as any).status === "closed");
+      
+      // Calculate average resolution time for closed post-sale cycles
+      let totalResolutionTime = 0;
+      let resolutionCount = 0;
+      closedPostSale.forEach(cycle => {
+        if (cycle.closed_at && cycle.created_at) {
+          const hours = (new Date(cycle.closed_at).getTime() - new Date(cycle.created_at).getTime()) / (1000 * 60 * 60);
+          totalResolutionTime += hours;
+          resolutionCount++;
+        }
+      });
+      const avgResolutionTime = resolutionCount > 0 ? Math.round(totalResolutionTime / resolutionCount) : 0;
+
+      // Analyze sentiment from post-sale insights to determine satisfaction trend
+      const postSaleMessageIds = messages
+        ?.filter(m => postSaleCycles.some(c => c.id === m.cycle_id))
+        .map(m => m.id) || [];
+      
+      const postSaleInsights = insights?.filter(i => postSaleMessageIds.includes(i.message_id)) || [];
+      
+      let positiveCount = 0;
+      let negativeCount = 0;
+      postSaleInsights.forEach(insight => {
+        const sentiment = insight.sentiment?.toLowerCase();
+        if (sentiment === "positive" || sentiment === "excited") positiveCount++;
+        if (sentiment === "negative" || sentiment === "angry") negativeCount++;
+      });
+      
+      let satisfactionTrend: "positive" | "neutral" | "negative" = "neutral";
+      if (positiveCount > negativeCount * 2) satisfactionTrend = "positive";
+      else if (negativeCount > positiveCount) satisfactionTrend = "negative";
+
+      // Analyze top issues from post-sale cycles (from objections/problems)
+      const issuesCounts: Record<string, number> = {};
+      postSaleInsights.forEach(insight => {
+        const objection = insight.objection;
+        if (objection && objection !== "none") {
+          const issue = objection === "problem" ? "Problema com produto" 
+            : objection === "question" ? "Dúvida de uso" 
+            : objection === "complaint" ? "Reclamação"
+            : objection;
+          issuesCounts[issue] = (issuesCounts[issue] || 0) + 1;
+        }
+      });
+      
+      const topIssues = Object.entries(issuesCounts)
+        .map(([issue, count]) => ({ issue, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      setPostSaleMetrics({
+        totalCycles: postSaleCycles.length,
+        activeCycles: activePostSale.length,
+        closedCycles: closedPostSale.length,
+        avgResolutionTime,
+        topIssues,
+        satisfactionTrend,
+      });
+
     } catch (error) {
       console.error("Error fetching manager dashboard:", error);
     } finally {
@@ -548,6 +631,7 @@ export function useManagerDashboard() {
     salesTimeline,
     recentSales,
     followupMetrics,
+    postSaleMetrics,
     refresh: fetchData,
   };
 }
