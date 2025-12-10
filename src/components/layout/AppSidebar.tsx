@@ -5,9 +5,11 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { usePlanPermissions } from "@/hooks/usePlanPermissions";
 
 const AppSidebar = () => {
   const { user, logout, hasRestrictedAccess, hasSellerLimitExceeded, sellerLimitInfo } = useAuth();
+  const permissions = usePlanPermissions();
   const [alertCount, setAlertCount] = useState(0);
 
   useEffect(() => {
@@ -51,23 +53,26 @@ const AppSidebar = () => {
     icon: typeof MessageSquare;
     label: string;
     badge?: number;
+    featureKey?: 'canAccess360' | 'canUseGamification' | 'canUseFollowups';
   }
 
-  const vendedorLinks: NavLinkItem[] = [
+  // Links para vendedor - filtrados por features
+  const getAllVendedorLinks = (): NavLinkItem[] => [
     { to: "/dashboard-vendedor", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/conversas", icon: MessageSquare, label: "Conversas" },
-    { to: "/clientes", icon: Building2, label: "Clientes 360°" },
-    { to: "/vendedor/performance", icon: Trophy, label: "Performance" },
+    { to: "/clientes", icon: Building2, label: "Clientes 360°", featureKey: 'canAccess360' },
+    { to: "/vendedor/performance", icon: Trophy, label: "Performance", featureKey: 'canUseGamification' },
     { to: "/alertas", icon: Bell, label: "Alertas", badge: alertCount },
     { to: "/whatsapp-connect", icon: Smartphone, label: "WhatsApp" },
   ];
 
-  const gestorLinks: NavLinkItem[] = [
+  // Links para gestor - filtrados por features
+  const getAllGestorLinks = (): NavLinkItem[] => [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/clientes", icon: Building2, label: "Clientes 360°" },
+    { to: "/clientes", icon: Building2, label: "Clientes 360°", featureKey: 'canAccess360' },
     { to: "/gestor/vendedores", icon: Users, label: "Vendedores" },
-    { to: "/gestor/metas", icon: Target, label: "Metas" },
-    { to: "/gestor/followups", icon: Bot, label: "Follow-ups" },
+    { to: "/gestor/metas", icon: Target, label: "Metas", featureKey: 'canUseGamification' },
+    { to: "/gestor/followups", icon: Bot, label: "Follow-ups", featureKey: 'canUseFollowups' },
     { to: "/financeiro", icon: CreditCard, label: "Financeiro" },
     { to: "/historico", icon: History, label: "Histórico" },
     { to: "/dashboard/whatsapp-status", icon: Smartphone, label: "Status WhatsApp" },
@@ -85,6 +90,15 @@ const AppSidebar = () => {
     { to: "/financeiro", icon: CreditCard, label: "Financeiro" },
   ];
 
+  // Filtra links baseado nas permissões do plano
+  const filterByFeatures = (links: NavLinkItem[]): NavLinkItem[] => {
+    return links.filter(link => {
+      if (!link.featureKey) return true;
+      if (permissions.hasFullAccess) return true;
+      return permissions[link.featureKey];
+    });
+  };
+
   // Determina quais links mostrar
   const getLinks = () => {
     if (user?.role === "gestor") {
@@ -94,9 +108,9 @@ const AppSidebar = () => {
       if (hasSellerLimitExceeded) {
         return gestorSellerLimitLinks;
       }
-      return gestorLinks;
+      return filterByFeatures(getAllGestorLinks());
     }
-    return vendedorLinks;
+    return filterByFeatures(getAllVendedorLinks());
   };
 
   const links = getLinks();
