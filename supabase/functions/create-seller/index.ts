@@ -57,7 +57,7 @@ serve(async (req) => {
       );
     }
 
-    // Get manager's company with plan info
+    // Get manager's company
     const { data: managerProfile, error: profileError } = await supabase
       .from('profiles')
       .select('company_id')
@@ -69,71 +69,6 @@ serve(async (req) => {
         JSON.stringify({ error: 'Manager must belong to a company' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    }
-
-    const companyId = managerProfile.company_id;
-
-    // Get company's plan
-    const { data: company, error: companyError } = await supabase
-      .from('companies')
-      .select('plan_id')
-      .eq('id', companyId)
-      .single();
-
-    if (companyError) {
-      console.error('Error fetching company:', companyError);
-    }
-
-    // Check seller limit if company has a plan
-    if (company?.plan_id) {
-      const { data: plan, error: planError } = await supabase
-        .from('plans')
-        .select('seller_limit, name')
-        .eq('id', company.plan_id)
-        .single();
-
-      if (planError) {
-        console.error('Error fetching plan:', planError);
-      }
-
-      // If plan has a seller limit (not unlimited)
-      if (plan && plan.seller_limit !== null) {
-        // Count current active sellers
-        const { data: companyProfiles } = await supabase
-          .from('profiles')
-          .select('user_id')
-          .eq('company_id', companyId);
-
-        if (companyProfiles && companyProfiles.length > 0) {
-          const userIds = companyProfiles.map(p => p.user_id);
-          
-          const { data: sellerRoles, error: rolesError } = await supabase
-            .from('user_roles')
-            .select('user_id')
-            .in('user_id', userIds)
-            .eq('role', 'seller');
-
-          if (rolesError) {
-            console.error('Error counting sellers:', rolesError);
-          }
-
-          const currentSellerCount = sellerRoles?.length || 0;
-
-          console.log(`Plan: ${plan.name}, Limit: ${plan.seller_limit}, Current: ${currentSellerCount}`);
-
-          if (currentSellerCount >= plan.seller_limit) {
-            return new Response(
-              JSON.stringify({ 
-                error: `Seu plano "${plan.name}" permite somente ${plan.seller_limit} vendedores. Contate Whasense para fazer upgrade.`,
-                code: 'SELLER_LIMIT_REACHED',
-                limit: plan.seller_limit,
-                current: currentSellerCount
-              }),
-              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-        }
-      }
     }
 
     const body = await req.json();
@@ -154,7 +89,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Creating seller:', { name, email, companyId });
+    console.log('Creating seller:', { name, email, companyId: managerProfile.company_id });
 
     // Create the seller user
     const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
@@ -178,7 +113,7 @@ serve(async (req) => {
     // Update the profile with company_id
     const { error: updateProfileError } = await supabase
       .from('profiles')
-      .update({ company_id: companyId })
+      .update({ company_id: managerProfile.company_id })
       .eq('user_id', newUser.user.id);
 
     if (updateProfileError) {

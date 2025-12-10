@@ -9,13 +9,15 @@ const corsHeaders = {
 // Alert type definitions
 const ALERT_TYPES = {
   WAITING_RESPONSE: 'waiting_response',
+  LONG_WAIT: 'long_wait',
   HOT_LEAD: 'hot_lead',
   OPEN_OBJECTION: 'open_objection',
   STALE_LEAD: 'stale_lead',
   INCOMPLETE_LEAD: 'incomplete_lead',
-  CLIENT_ANGRY_AUDIO: 'client_angry_audio',
-  AUDIO_OBJECTION: 'audio_objection',
-  HIGH_INTENT_AUDIO: 'high_intent_audio',
+  // Manager-only alerts
+  MANAGER_STALE_LEAD: 'manager_stale_lead',
+  MANAGER_AT_RISK: 'manager_at_risk',
+  MANAGER_SLOW_RESPONSE: 'manager_slow_response',
 };
 
 // Thresholds in milliseconds
@@ -30,7 +32,6 @@ const THRESHOLDS = {
 interface AlertData {
   customer_id: string;
   seller_id: string;
-  cycle_id: string | null;
   alert_type: string;
   severity: string;
   message: string;
@@ -50,10 +51,11 @@ serve(async (req) => {
     console.log('Starting alert calculation...');
     const now = new Date();
 
-    // Fetch all active sale cycles (pending or in_progress only)
+    // Fetch all customers with active sale cycles (pending or in_progress only)
+    // First get customers with active cycles
     const { data: activeCycles, error: cyclesError } = await supabase
       .from('sale_cycles')
-      .select('id, customer_id, seller_id, status, last_activity_at, created_at')
+      .select('customer_id, seller_id')
       .in('status', ['pending', 'in_progress']);
 
     if (cyclesError) {
@@ -69,7 +71,13 @@ serve(async (req) => {
       await supabase
         .from('alerts')
         .delete()
-        .in('alert_type', Object.values(ALERT_TYPES));
+        .in('alert_type', [
+          ALERT_TYPES.WAITING_RESPONSE,
+          ALERT_TYPES.HOT_LEAD,
+          ALERT_TYPES.OPEN_OBJECTION,
+          ALERT_TYPES.STALE_LEAD,
+          ALERT_TYPES.INCOMPLETE_LEAD,
+        ]);
       
       return new Response(
         JSON.stringify({ success: true, alertsCreated: 0, customersProcessed: 0 }),
@@ -91,55 +99,55 @@ serve(async (req) => {
     console.log(`Found ${customers?.length || 0} active customers`);
 
     const alertsToCreate: AlertData[] = [];
+    const customerIdsToKeep = new Set<string>();
 
-    for (const cycle of activeCycles || []) {
-      const customer = customers?.find(c => c.id === cycle.customer_id);
-      if (!customer || !cycle.seller_id) continue;
+    for (const customer of customers || []) {
+      if (!customer.seller_id) continue;
 
-      const customerId = cycle.customer_id;
-      const sellerId = cycle.seller_id;
-      const cycleId = cycle.id;
+      const customerId = customer.id;
+      const sellerId = customer.seller_id;
 
-      // Fetch latest message for this cycle
+      // Fetch latest message for this customer
       const { data: lastMessage } = await supabase
         .from('messages')
         .select('id, direction, timestamp, content')
         .eq('customer_id', customerId)
-        .eq('cycle_id', cycleId)
+        .eq('seller_id', sellerId)
         .order('timestamp', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      // Fetch latest incoming message for insights
-      const { data: lastIncomingMessage } = await supabase
+      // Fetch latest insight
+      const { data: messagesForInsight } = await supabase
         .from('messages')
-        .select('id, timestamp')
+        .select('id')
         .eq('customer_id', customerId)
-        .eq('cycle_id', cycleId)
         .eq('direction', 'incoming')
         .order('timestamp', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
 
       let latestInsight = null;
-      if (lastIncomingMessage) {
+      if (messagesForInsight && messagesForInsight.length > 0) {
         const { data: insight } = await supabase
           .from('insights')
           .select('temperature, objection, created_at')
-          .eq('message_id', lastIncomingMessage.id)
+          .eq('message_id', messagesForInsight[0].id)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
         latestInsight = insight;
       }
 
+      // Calculate alerts based on conditions
+
       // ALERT 1 & 2: Waiting response / Long wait
-      // Condition: Last message is from customer and seller hasn't responded
       if (lastMessage && lastMessage.direction === 'incoming') {
         const timeSinceMessage = now.getTime() - new Date(lastMessage.timestamp).getTime();
         const minutesWaiting = Math.floor(timeSinceMessage / 60000);
 
         if (timeSinceMessage >= THRESHOLDS.WAITING_RESPONSE) {
+          customerIdsToKeep.add(`${customerId}-${ALERT_TYPES.WAITING_RESPONSE}`);
+          
           let severity = 'warning';
           let message = 'Cliente aguardando resposta';
 
@@ -157,7 +165,6 @@ serve(async (req) => {
           alertsToCreate.push({
             customer_id: customerId,
             seller_id: sellerId,
-            cycle_id: cycleId,
             alert_type: ALERT_TYPES.WAITING_RESPONSE,
             severity,
             message,
@@ -167,12 +174,11 @@ serve(async (req) => {
       }
 
       // ALERT 3: Hot lead
-      // Condition: Temperature is hot and cycle is active
       if (latestInsight?.temperature === 'hot') {
+        customerIdsToKeep.add(`${customerId}-${ALERT_TYPES.HOT_LEAD}`);
         alertsToCreate.push({
           customer_id: customerId,
           seller_id: sellerId,
-          cycle_id: cycleId,
           alert_type: ALERT_TYPES.HOT_LEAD,
           severity: 'info',
           message: 'Lead quente — oportunidade!',
@@ -181,19 +187,21 @@ serve(async (req) => {
       }
 
       // ALERT 4: Open objection
-      // Condition: Objection detected and seller hasn't responded since
       if (latestInsight?.objection && latestInsight.objection !== 'none') {
+        // Check if seller responded after the objection
         const insightTime = new Date(latestInsight.created_at);
         const { data: responseAfterObjection } = await supabase
           .from('messages')
           .select('id')
           .eq('customer_id', customerId)
-          .eq('cycle_id', cycleId)
+          .eq('seller_id', sellerId)
           .eq('direction', 'outgoing')
           .gt('timestamp', insightTime.toISOString())
           .limit(1);
 
         if (!responseAfterObjection || responseAfterObjection.length === 0) {
+          customerIdsToKeep.add(`${customerId}-${ALERT_TYPES.OPEN_OBJECTION}`);
+          
           const objectionLabels: Record<string, string> = {
             price: 'Preço alto',
             delay: 'Prazo de entrega',
@@ -204,7 +212,6 @@ serve(async (req) => {
           alertsToCreate.push({
             customer_id: customerId,
             seller_id: sellerId,
-            cycle_id: cycleId,
             alert_type: ALERT_TYPES.OPEN_OBJECTION,
             severity: 'warning',
             message: `Objeção aberta: ${objectionLabels[latestInsight.objection] || latestInsight.objection}`,
@@ -213,16 +220,15 @@ serve(async (req) => {
         }
       }
 
-      // ALERT 5: Stale lead (24h without activity)
-      // Condition: Last activity > 24h and status is in_progress
-      if (cycle.status === 'in_progress' && cycle.last_activity_at) {
-        const timeSinceLastActivity = now.getTime() - new Date(cycle.last_activity_at).getTime();
-        if (timeSinceLastActivity >= THRESHOLDS.STALE_LEAD) {
-          const hoursStale = Math.floor(timeSinceLastActivity / (60 * 60 * 1000));
+      // ALERT 5: Stale lead (24h without messages)
+      if (lastMessage && customer.lead_status === 'in_progress') {
+        const timeSinceLastMessage = now.getTime() - new Date(lastMessage.timestamp).getTime();
+        if (timeSinceLastMessage >= THRESHOLDS.STALE_LEAD) {
+          customerIdsToKeep.add(`${customerId}-${ALERT_TYPES.STALE_LEAD}`);
+          const hoursStale = Math.floor(timeSinceLastMessage / (60 * 60 * 1000));
           alertsToCreate.push({
             customer_id: customerId,
             seller_id: sellerId,
-            cycle_id: cycleId,
             alert_type: ALERT_TYPES.STALE_LEAD,
             severity: 'warning',
             message: `Lead parado há ${hoursStale} horas`,
@@ -232,12 +238,11 @@ serve(async (req) => {
       }
 
       // ALERT 6: Incomplete lead
-      // Condition: Customer is marked as incomplete
       if (customer.is_incomplete) {
+        customerIdsToKeep.add(`${customerId}-${ALERT_TYPES.INCOMPLETE_LEAD}`);
         alertsToCreate.push({
           customer_id: customerId,
           seller_id: sellerId,
-          cycle_id: cycleId,
           alert_type: ALERT_TYPES.INCOMPLETE_LEAD,
           severity: 'info',
           message: 'Lead incompleto — completar cadastro',
@@ -246,21 +251,47 @@ serve(async (req) => {
       }
     }
 
-    // Delete ALL operational alerts first (atomic replacement)
-    const { error: deleteError } = await supabase
-      .from('alerts')
-      .delete()
-      .in('alert_type', Object.values(ALERT_TYPES));
+    // Delete all existing alerts and insert new ones (atomic update)
+    if (activeCustomerIds.length > 0) {
+      // Delete alerts for active customers (will be recreated if conditions still apply)
+      const { error: deleteError } = await supabase
+        .from('alerts')
+        .delete()
+        .in('customer_id', activeCustomerIds)
+        .in('alert_type', [
+          ALERT_TYPES.WAITING_RESPONSE,
+          ALERT_TYPES.HOT_LEAD,
+          ALERT_TYPES.OPEN_OBJECTION,
+          ALERT_TYPES.STALE_LEAD,
+          ALERT_TYPES.INCOMPLETE_LEAD,
+        ]);
 
-    if (deleteError) {
-      console.error('Error deleting old alerts:', deleteError);
+      if (deleteError) {
+        console.error('Error deleting old alerts:', deleteError);
+      }
     }
 
-    // Insert new alerts
+    // Also delete alerts for completed leads
+    const { error: deleteCompletedError } = await supabase
+      .from('alerts')
+      .delete()
+      .not('customer_id', 'in', `(${activeCustomerIds.length > 0 ? activeCustomerIds.map(id => `'${id}'`).join(',') : "'00000000-0000-0000-0000-000000000000'"})`)
+      .in('alert_type', [
+        ALERT_TYPES.WAITING_RESPONSE,
+        ALERT_TYPES.HOT_LEAD,
+        ALERT_TYPES.OPEN_OBJECTION,
+        ALERT_TYPES.STALE_LEAD,
+        ALERT_TYPES.INCOMPLETE_LEAD,
+      ]);
+
+    // Insert new alerts using upsert
     if (alertsToCreate.length > 0) {
       const { error: insertError } = await supabase
         .from('alerts')
-        .insert(alertsToCreate);
+        .upsert(alertsToCreate, {
+          onConflict: 'customer_id,seller_id,alert_type',
+          ignoreDuplicates: false,
+        });
 
       if (insertError) {
         console.error('Error inserting alerts:', insertError);

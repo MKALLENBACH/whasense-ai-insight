@@ -72,15 +72,7 @@ const LoginPage = () => {
     try {
       const { role } = await login(email, password);
       toast.success("Login realizado com sucesso!");
-      
-      // Redirect based on role
-      let redirectPath = "/conversas";
-      if (role === "admin") {
-        redirectPath = "/admin/dashboard";
-      } else if (role === "gestor") {
-        redirectPath = "/dashboard";
-      }
-      navigate(redirectPath, { replace: true });
+      navigate(role === "gestor" ? "/dashboard" : "/conversas", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao fazer login");
     } finally {

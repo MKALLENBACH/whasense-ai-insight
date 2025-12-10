@@ -106,7 +106,7 @@ const ManagerInsightsPanel = ({ customerId }: ManagerInsightsPanelProps) => {
 
   if (isLoading) {
     return (
-      <div className="w-80 lg:w-96 flex-shrink-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col h-full">
+      <div className="w-80 flex-shrink-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
         <div className="p-4 border-b border-border">
           <h3 className="font-semibold flex items-center gap-2">
             <BarChart3 className="h-4 w-4 text-primary" />
@@ -125,7 +125,7 @@ const ManagerInsightsPanel = ({ customerId }: ManagerInsightsPanelProps) => {
 
   if (error || !insights) {
     return (
-      <div className="w-80 lg:w-96 flex-shrink-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col h-full">
+      <div className="w-80 flex-shrink-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
         <div className="p-4 border-b border-border">
           <h3 className="font-semibold flex items-center gap-2">
             <BarChart3 className="h-4 w-4 text-primary" />
@@ -145,7 +145,7 @@ const ManagerInsightsPanel = ({ customerId }: ManagerInsightsPanelProps) => {
   const StatusIcon = statusConfig[insights.leadStatus].icon;
 
   return (
-    <div className="w-80 lg:w-96 flex-shrink-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col h-full">
+    <div className="w-96 flex-shrink-0 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
       <div className="p-4 border-b border-border">
         <h3 className="font-semibold flex items-center gap-2">
           <BarChart3 className="h-4 w-4 text-primary" />

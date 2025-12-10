@@ -17,7 +17,6 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import CreateSellerModal from "@/components/seller/CreateSellerModal";
 import EditSellerModal from "@/components/seller/EditSellerModal";
-import PlanLimitBanner from "@/components/seller/PlanLimitBanner";
 import AppLayout from "@/components/layout/AppLayout";
 
 interface Seller {
@@ -29,11 +28,6 @@ interface Seller {
   is_active: boolean;
 }
 
-interface PlanInfo {
-  name: string | null;
-  sellerLimit: number | null;
-}
-
 const SellersPage = () => {
   const { user } = useAuth();
   const [sellers, setSellers] = useState<Seller[]>([]);
@@ -42,82 +36,48 @@ const SellersPage = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
   const [togglingStatus, setTogglingStatus] = useState<string | null>(null);
-  const [planInfo, setPlanInfo] = useState<PlanInfo>({ name: null, sellerLimit: null });
 
   const fetchSellers = async () => {
     if (!user?.id) return;
 
     try {
-      // Get all sellers from company - using the manager RLS policy
-      // which allows managers to view all profiles in their company
-      const { data: profiles, error: profilesError } = await supabase
+      // Get manager's company
+      const { data: managerProfile } = await supabase
         .from("profiles")
-        .select("id, user_id, name, email, created_at, company_id");
+        .select("company_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-      if (profilesError) {
-        console.error("Error fetching profiles:", profilesError);
-        throw profilesError;
-      }
-
-      console.log("Profiles fetched:", profiles);
-
-      if (!profiles || profiles.length === 0) {
-        setSellers([]);
-        return;
-      }
-
-      // Get manager's company from the profiles we can see
-      const managerProfile = profiles.find(p => p.user_id === user.id);
-      
       if (!managerProfile?.company_id) {
-        console.error("Manager profile not found or has no company");
+        console.error("Manager has no company");
         return;
       }
 
-      const companyId = managerProfile.company_id;
+      // Get all profiles from the same company that are sellers
+      const { data: profiles, error } = await supabase
+        .from("profiles")
+        .select(`
+          id,
+          user_id,
+          name,
+          email,
+          created_at
+        `)
+        .eq("company_id", managerProfile.company_id);
 
-      // Fetch company's plan info
-      const { data: companyData } = await supabase
-        .from("companies")
-        .select("plan_id")
-        .eq("id", companyId)
-        .single();
-
-      if (companyData?.plan_id) {
-        const { data: planData } = await supabase
-          .from("plans")
-          .select("name, seller_limit")
-          .eq("id", companyData.plan_id)
-          .single();
-
-        if (planData) {
-          setPlanInfo({
-            name: planData.name,
-            sellerLimit: planData.seller_limit,
-          });
-        }
-      }
-
-      // Filter profiles from the same company
-      const companyProfiles = profiles.filter(p => p.company_id === companyId);
-      const userIds = companyProfiles.map((p) => p.user_id);
+      if (error) throw error;
 
       // Get roles for these users
-      const { data: roles, error: rolesError } = await supabase
+      const userIds = profiles?.map((p) => p.user_id) || [];
+      const { data: roles } = await supabase
         .from("user_roles")
         .select("user_id, role")
         .in("user_id", userIds);
 
-      if (rolesError) {
-        console.error("Error fetching roles:", rolesError);
-      }
-
-      console.log("Roles fetched:", roles);
-
-      // Filter only sellers
+      // Filter only sellers and add is_active (we'll need to track this - for now assume all are active)
       const sellerUserIds = roles?.filter((r) => r.role === "seller").map((r) => r.user_id) || [];
       
-      const sellersData: Seller[] = companyProfiles
+      const sellersData: Seller[] = (profiles || [])
         .filter((p) => sellerUserIds.includes(p.user_id))
         .map((p) => ({
           id: p.id,
@@ -125,10 +85,9 @@ const SellersPage = () => {
           name: p.name,
           email: p.email,
           created_at: p.created_at,
-          is_active: true,
+          is_active: true, // Default to active - we'll add a column later if needed
         }));
 
-      console.log("Sellers data:", sellersData);
       setSellers(sellersData);
     } catch (error) {
       console.error("Error fetching sellers:", error);
@@ -170,19 +129,9 @@ const SellersPage = () => {
     }
   };
 
-  const activeSellerCount = sellers.filter(s => s.is_active).length;
-  const isAtLimit = planInfo.sellerLimit !== null && activeSellerCount >= planInfo.sellerLimit;
-
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Plan Banner */}
-        <PlanLimitBanner
-          planName={planInfo.name}
-          sellerLimit={planInfo.sellerLimit}
-          currentSellerCount={activeSellerCount}
-        />
-
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -191,12 +140,7 @@ const SellersPage = () => {
               Gerencie os vendedores da sua equipe
             </p>
           </div>
-          <Button 
-            onClick={() => setIsCreateModalOpen(true)} 
-            className="gap-2"
-            disabled={isAtLimit}
-            title={isAtLimit ? "Limite de vendedores atingido" : undefined}
-          >
+          <Button onClick={() => setIsCreateModalOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" />
             Cadastrar Vendedor
           </Button>

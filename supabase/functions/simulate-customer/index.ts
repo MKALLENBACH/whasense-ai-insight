@@ -110,7 +110,7 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { customerId, sellerId, sellerMessage, conversationHistory, sendAudio } = await req.json();
+    const { customerId, sellerId, sellerMessage, conversationHistory } = await req.json();
 
     if (!customerId || !sellerId) {
       return new Response(JSON.stringify({ error: 'Missing customerId or sellerId' }), {
@@ -152,15 +152,6 @@ serve(async (req) => {
       console.log('Created new cycle for simulation:', cycleId);
     }
 
-    // Get company_id from seller profile
-    const { data: sellerProfile } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('user_id', sellerId)
-      .single();
-
-    const companyId = sellerProfile?.company_id || 'default';
-
     // Build conversation context with full cycle history
     let conversationContext = "";
     const cycleMessages: Array<{ from: string; text: string; timestamp?: string }> = [];
@@ -182,10 +173,6 @@ serve(async (req) => {
     const userPrompt = sellerMessage 
       ? `O vendedor acabou de responder:\n"""\n${sellerMessage}\n"""\n\nResponda como cliente, mantendo seu perfil e avançando a conversa naturalmente.`
       : `O vendedor ainda não respondeu. Envie uma mensagem inicial como cliente interessado em produtos fitness, ou faça um follow-up natural.`;
-
-    // Determine if this should be an audio message (simulated)
-    // About 15% chance of being an "audio" message when sendAudio flag is passed
-    const isAudioMessage = sendAudio || (Math.random() < 0.15);
 
     // Call Lovable AI Gateway
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -214,25 +201,7 @@ serve(async (req) => {
     const aiData = await aiResponse.json();
     const customerMessage = aiData.choices?.[0]?.message?.content?.trim() || "Hmm, pode me explicar melhor?";
 
-    console.log('Simulated customer message:', customerMessage, 'isAudio:', isAudioMessage);
-
-    // For audio messages, we create a simulated audio file
-    let audioUrl: string | null = null;
-    let messageContent = customerMessage;
-
-    if (isAudioMessage) {
-      // Create a simulated audio placeholder - in real implementation this would be real audio from WhatsApp
-      // For now we store the transcription directly but mark it as audio type
-      messageContent = customerMessage; // The "transcription" of the audio
-      
-      // Create a mock audio file path (in production, this would come from WhatsApp)
-      const audioFileName = `client_audio_${Date.now()}.ogg`;
-      const audioPath = `${companyId}/${customerId}/${cycleId}/audio/${audioFileName}`;
-      
-      // Note: In a real implementation, this would be the actual audio URL from WhatsApp
-      // For simulation, we'll store a placeholder URL that indicates it's a simulated audio
-      audioUrl = `simulated://audio/${audioPath}`;
-    }
+    console.log('Simulated customer message:', customerMessage);
 
     // Save the customer message with cycle_id
     const { data: savedMessage, error: messageError } = await supabase
@@ -240,14 +209,10 @@ serve(async (req) => {
       .insert({
         customer_id: customerId,
         seller_id: sellerId,
-        content: isAudioMessage ? "[Transcrevendo áudio...]" : customerMessage,
+        content: customerMessage,
         direction: 'incoming',
         timestamp: new Date().toISOString(),
         cycle_id: cycleId,
-        ...(isAudioMessage && {
-          attachment_type: 'audio',
-          attachment_name: `audio_cliente_${Date.now()}.ogg`,
-        }),
       })
       .select('id')
       .single();
@@ -255,15 +220,6 @@ serve(async (req) => {
     if (messageError) {
       console.error('Error saving message:', messageError);
       throw messageError;
-    }
-
-    // For audio messages, update with transcription after a brief delay (simulating transcription)
-    if (isAudioMessage) {
-      // Update message with the "transcription"
-      await supabase
-        .from('messages')
-        .update({ content: customerMessage })
-        .eq('id', savedMessage.id);
     }
 
     // Add the new message to cycle context for analysis
@@ -274,36 +230,18 @@ serve(async (req) => {
 
     // Trigger AI analysis for insights with full cycle context
     try {
-      if (isAudioMessage) {
-        // For audio messages, use analyze-audio endpoint
-        await fetch(`${supabaseUrl}/functions/v1/analyze-audio`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            audio_url: audioUrl || '',
-            message_id: savedMessage.id,
-            sender: 'client',
-            // Pass the transcription directly for simulated audios
-            simulated_transcription: customerMessage,
-          }),
-        });
-      } else {
-        await fetch(`${supabaseUrl}/functions/v1/analyze-message`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            message: customerMessage,
-            message_id: savedMessage.id,
-            cycleMessages: cycleMessages,
-          }),
-        });
-      }
+      await fetch(`${supabaseUrl}/functions/v1/analyze-message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({
+          message: customerMessage,
+          message_id: savedMessage.id,
+          cycleMessages: cycleMessages,
+        }),
+      });
     } catch (analyzeError) {
       console.error('Failed to analyze message:', analyzeError);
     }
@@ -313,7 +251,6 @@ serve(async (req) => {
       message: customerMessage,
       messageId: savedMessage.id,
       cycleId,
-      isAudio: isAudioMessage,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

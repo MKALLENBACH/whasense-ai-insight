@@ -41,24 +41,3 @@ verify_jwt = false
 
 [functions.auto-simulate]
 verify_jwt = false
-
-[functions.admin-operations]
-verify_jwt = false
-
-[functions.ai-scripts]
-verify_jwt = false
-
-[functions.generate-followups]
-verify_jwt = false
-
-[functions.calculate-gamification]
-verify_jwt = false
-
-[functions.award-points]
-verify_jwt = false
-
-[functions.seller-performance-insights]
-verify_jwt = false
-
-[functions.analyze-audio]
-verify_jwt = false
