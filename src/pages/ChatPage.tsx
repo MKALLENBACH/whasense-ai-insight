@@ -48,6 +48,7 @@ import { ChatAlertsBanner } from "@/components/conversation/ChatAlertsBanner";
 import ChatInput from "@/components/conversation/ChatInput";
 import MessageBubble from "@/components/conversation/MessageBubble";
 import ImageInsightsCard from "@/components/conversation/ImageInsightsCard";
+import { CycleDivider } from "@/components/conversation/CycleDivider";
 
 interface Message {
   id: string;
@@ -820,9 +821,9 @@ const ChatPage = () => {
             />
           )}
 
-          {/* Messages Area */}
+          {/* Messages Area - Grouped by Cycle */}
           <ScrollArea className="flex-1 p-4">
-            <div className="space-y-4">
+            <div className="space-y-2">
               {messages.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <div className="text-center">
@@ -832,17 +833,41 @@ const ChatPage = () => {
                   </div>
                 </div>
               ) : (
-                messages.map((message) => (
-                  <MessageBubble
-                    key={message.id}
-                    content={message.content}
-                    direction={message.direction}
-                    timestamp={message.timestamp}
-                    attachmentUrl={message.attachment_url}
-                    attachmentType={message.attachment_type}
-                    attachmentName={message.attachment_name}
-                  />
-                ))
+                (() => {
+                  // Group messages by cycle for visual separation
+                  const cyclesWithMessages = cycles
+                    .filter(c => messages.some(m => m.cycle_id === c.id))
+                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                  
+                  return cyclesWithMessages.map((cycle) => {
+                    const cycleMessages = messages.filter(m => m.cycle_id === cycle.id);
+                    const cycleNum = getCycleNumber(cycle.id);
+                    
+                    return (
+                      <div key={cycle.id}>
+                        <CycleDivider
+                          cycleNumber={cycleNum}
+                          status={cycle.status as "pending" | "in_progress" | "won" | "lost"}
+                          startDate={cycle.start_message_timestamp || cycle.created_at}
+                          endDate={cycle.closed_at}
+                        />
+                        <div className="space-y-4">
+                          {cycleMessages.map((message) => (
+                            <MessageBubble
+                              key={message.id}
+                              content={message.content}
+                              direction={message.direction}
+                              timestamp={message.timestamp}
+                              attachmentUrl={message.attachment_url}
+                              attachmentType={message.attachment_type}
+                              attachmentName={message.attachment_name}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()
               )}
               <div ref={messagesEndRef} />
             </div>

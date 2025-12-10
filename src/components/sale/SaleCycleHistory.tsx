@@ -28,6 +28,8 @@ export interface SaleCycle {
   lost_reason: string | null;
   won_summary: string | null;
   last_activity_at?: string | null;
+  start_message_id?: string | null;
+  start_message_timestamp?: string | null;
   messageCount?: number;
 }
 
