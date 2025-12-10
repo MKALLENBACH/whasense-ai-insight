@@ -158,6 +158,13 @@ const SaleRegistrationModal = ({
         });
 
         if (error) throw error;
+        
+        // Check for duplicate error from edge function
+        if (data?.error) {
+          toast.error(data.error);
+          setIsSubmitting(false);
+          return;
+        }
 
         toast.success(
           activeTab === "won" 

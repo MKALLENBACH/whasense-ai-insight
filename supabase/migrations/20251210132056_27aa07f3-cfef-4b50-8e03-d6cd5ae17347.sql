@@ -1,0 +1,2 @@
+-- Create unique constraint on customer + status to prevent duplicate won sales per customer
+CREATE UNIQUE INDEX IF NOT EXISTS sales_customer_status_unique ON public.sales(customer_id, status) WHERE status = 'won';
