@@ -16,10 +16,19 @@ import {
   ExternalLink,
   RefreshCw,
   Crown,
-  ArrowUpRight
+  ArrowUpRight,
+  XCircle,
+  MessageCircle
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Plan {
   id: string;
@@ -69,6 +78,7 @@ export default function FinanceiroPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [checkingStatus, setCheckingStatus] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   useEffect(() => {
     if (searchParams.get("success") === "true") {
@@ -272,11 +282,19 @@ export default function FinanceiroPage() {
                     )}
                   </div>
 
-                  <div className="pt-4 flex gap-2">
-                    <Button onClick={openCustomerPortal} className="flex-1">
+                  <div className="pt-4 flex flex-col gap-2">
+                    <Button onClick={openCustomerPortal} className="w-full">
                       <CreditCard className="h-4 w-4 mr-2" />
                       Gerenciar assinatura
                       <ExternalLink className="h-3 w-3 ml-2" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="w-full text-destructive hover:text-destructive"
+                      onClick={() => setShowCancelModal(true)}
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Cancelar assinatura
                     </Button>
                   </div>
                 </>
@@ -401,6 +419,40 @@ export default function FinanceiroPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Cancel Subscription Modal */}
+        <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-primary" />
+                Cancelar Assinatura
+              </DialogTitle>
+              <DialogDescription>
+                Para cancelar sua assinatura, entre em contato com nosso suporte.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <p className="text-sm text-muted-foreground">
+                Nossa equipe está pronta para ajudá-lo com o processo de cancelamento e esclarecer qualquer dúvida.
+              </p>
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <p className="text-sm font-medium">Entre em contato:</p>
+                <p className="text-sm text-muted-foreground">
+                  📧 Email: suporte@whasense.com.br
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  💬 WhatsApp: (11) 99999-9999
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={() => setShowCancelModal(false)}>
+                Fechar
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );
