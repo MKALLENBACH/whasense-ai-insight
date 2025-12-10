@@ -82,7 +82,7 @@ export function RiskCyclesList({ cycles }: RiskCyclesListProps) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => navigate(`/chat/${cycle.customerId}`)}
+                      onClick={() => navigate(`/gestor/ciclos/${cycle.id}`)}
                     >
                       <MessageCircle className="h-4 w-4" />
                     </Button>
