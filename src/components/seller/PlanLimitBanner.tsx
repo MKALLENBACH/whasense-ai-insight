@@ -1,4 +1,4 @@
-import { Users, Infinity, AlertTriangle } from "lucide-react";
+import { Users, Infinity, AlertTriangle, Crown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface PlanLimitBannerProps {
@@ -18,68 +18,74 @@ const PlanLimitBanner = ({
 
   return (
     <div
-      className={`rounded-lg p-4 flex items-center justify-between ${
+      className={`rounded-xl p-5 border transition-all ${
         isAtLimit
-          ? "bg-red-500/10 border border-red-500/30"
+          ? "bg-destructive/10 border-destructive/30"
           : isNearLimit
-          ? "bg-amber-500/10 border border-amber-500/30"
-          : "bg-slate-800 border border-slate-700"
+          ? "bg-amber-500/10 border-amber-500/30"
+          : "bg-card border-border"
       }`}
     >
-      <div className="flex items-center gap-3">
-        <div
-          className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-            isAtLimit
-              ? "bg-red-500/20"
-              : isNearLimit
-              ? "bg-amber-500/20"
-              : "bg-orange-500/10"
-          }`}
-        >
-          {isAtLimit ? (
-            <AlertTriangle className="h-5 w-5 text-red-400" />
-          ) : (
-            <Users className="h-5 w-5 text-orange-500" />
-          )}
-        </div>
-        <div>
-          <p className="text-sm text-slate-400">
-            Plano: <span className="text-white font-medium">{planName || "Sem plano"}</span>
-          </p>
-          <p className="text-sm">
-            <span className="text-slate-400">Vendedores: </span>
-            <span
-              className={`font-medium ${
-                isAtLimit
-                  ? "text-red-400"
-                  : isNearLimit
-                  ? "text-amber-400"
-                  : "text-white"
-              }`}
-            >
-              {currentSellerCount}
-            </span>
-            <span className="text-slate-400"> / </span>
-            {isUnlimited ? (
-              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
-                <Infinity className="h-3 w-3 mr-1" />
-                Ilimitado
-              </Badge>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div
+            className={`h-12 w-12 rounded-xl flex items-center justify-center ${
+              isAtLimit
+                ? "bg-destructive/20"
+                : isNearLimit
+                ? "bg-amber-500/20"
+                : "bg-primary/10"
+            }`}
+          >
+            {isAtLimit ? (
+              <AlertTriangle className="h-6 w-6 text-destructive" />
             ) : (
-              <span className="text-white">{sellerLimit}</span>
+              <Crown className="h-6 w-6 text-primary" />
             )}
-          </p>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Plano:</span>
+              <Badge variant="secondary" className="font-semibold">
+                {planName || "Sem plano"}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Vendedores:</span>
+              <span
+                className={`font-bold text-lg ${
+                  isAtLimit
+                    ? "text-destructive"
+                    : isNearLimit
+                    ? "text-amber-500"
+                    : "text-foreground"
+                }`}
+              >
+                {currentSellerCount}
+              </span>
+              <span className="text-muted-foreground">/</span>
+              {isUnlimited ? (
+                <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+                  <Infinity className="h-3 w-3 mr-1" />
+                  Ilimitado
+                </Badge>
+              ) : (
+                <span className="font-bold text-lg text-foreground">{sellerLimit}</span>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
 
-      {isAtLimit && (
-        <div className="text-right">
-          <p className="text-sm text-red-400 font-medium">Limite atingido</p>
-          <p className="text-xs text-slate-400">
-            Contate Whasense para upgrade
-          </p>
-        </div>
-      )}
+        {isAtLimit && (
+          <div className="text-right px-4 py-2 rounded-lg bg-destructive/10">
+            <p className="text-sm font-semibold text-destructive">Limite atingido</p>
+            <p className="text-xs text-muted-foreground">
+              Contate Whasense para upgrade
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
