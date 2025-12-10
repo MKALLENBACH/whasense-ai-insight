@@ -111,6 +111,7 @@ const ChatPage = () => {
   const navigate = useNavigate();
   const { session, user, isManager, isSeller } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const cycleRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -675,9 +676,18 @@ const ChatPage = () => {
     if (cycleId === activeCycle?.id) {
       setSelectedCycleId(null);
       setIsViewingHistory(false);
+      // Scroll to bottom (current messages)
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     } else {
       setSelectedCycleId(cycleId);
       setIsViewingHistory(true);
+      // Scroll to the selected cycle divider
+      setTimeout(() => {
+        const cycleElement = cycleRefs.current.get(cycleId);
+        if (cycleElement) {
+          cycleElement.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
     }
   };
 
@@ -844,7 +854,12 @@ const ChatPage = () => {
                     const cycleNum = getCycleNumber(cycle.id);
                     
                     return (
-                      <div key={cycle.id}>
+                      <div 
+                        key={cycle.id} 
+                        ref={(el) => {
+                          if (el) cycleRefs.current.set(cycle.id, el);
+                        }}
+                      >
                         <CycleDivider
                           cycleNumber={cycleNum}
                           status={cycle.status as "pending" | "in_progress" | "won" | "lost"}
