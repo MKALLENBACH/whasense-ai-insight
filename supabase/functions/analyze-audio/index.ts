@@ -91,7 +91,8 @@ Deno.serve(async (req) => {
       const audioBuffer = await audioResponse.arrayBuffer();
       const audioBlob = new Blob([audioBuffer], { type: "audio/webm" });
 
-      // Transcribe using OpenAI Whisper if available
+      // Try OpenAI Whisper first
+      let whisperSuccess = false;
       if (openaiApiKey) {
         console.log("Transcribing with OpenAI Whisper...");
         const formData = new FormData();
@@ -99,20 +100,83 @@ Deno.serve(async (req) => {
         formData.append("model", "whisper-1");
         formData.append("language", "pt");
 
-        const whisperResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${openaiApiKey}`,
-          },
-          body: formData,
-        });
+        try {
+          const whisperResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${openaiApiKey}`,
+            },
+            body: formData,
+          });
 
-        if (whisperResponse.ok) {
-          const whisperData = await whisperResponse.json();
-          transcription = whisperData.text || "";
-          console.log("Transcription:", transcription);
-        } else {
-          console.error("Whisper error:", await whisperResponse.text());
+          if (whisperResponse.ok) {
+            const whisperData = await whisperResponse.json();
+            transcription = whisperData.text || "";
+            whisperSuccess = true;
+            console.log("Whisper transcription:", transcription);
+          } else {
+            const errorText = await whisperResponse.text();
+            console.error("Whisper error:", errorText);
+            // Check for quota errors
+            if (errorText.includes("insufficient_quota") || errorText.includes("rate_limit")) {
+              console.log("OpenAI quota exceeded, falling back to Gemini...");
+            }
+          }
+        } catch (whisperErr) {
+          console.error("Whisper request failed:", whisperErr);
+        }
+      }
+
+      // Fallback to Gemini for transcription if Whisper failed
+      if (!whisperSuccess && lovableApiKey) {
+        console.log("Transcribing with Gemini (fallback)...");
+        
+        // Convert audio to base64 for Gemini
+        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+        
+        try {
+          const geminiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${lovableApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: [
+                { 
+                  role: "user", 
+                  content: [
+                    {
+                      type: "text",
+                      text: "Transcreva este áudio em português brasileiro. Retorne APENAS a transcrição, sem nenhum texto adicional, explicações ou formatação. Se não conseguir transcrever, retorne apenas: [Áudio não transcrito]"
+                    },
+                    {
+                      type: "input_audio",
+                      input_audio: {
+                        data: base64Audio,
+                        format: "webm"
+                      }
+                    }
+                  ]
+                }
+              ],
+              temperature: 0.1,
+            }),
+          });
+
+          if (geminiResponse.ok) {
+            const geminiData = await geminiResponse.json();
+            const geminiText = geminiData.choices?.[0]?.message?.content?.trim() || "";
+            if (geminiText && !geminiText.includes("[Áudio não transcrito]")) {
+              transcription = geminiText;
+              console.log("Gemini transcription:", transcription);
+            }
+          } else {
+            console.error("Gemini transcription error:", await geminiResponse.text());
+          }
+        } catch (geminiErr) {
+          console.error("Gemini transcription failed:", geminiErr);
         }
       }
     }
@@ -120,6 +184,7 @@ Deno.serve(async (req) => {
     // If no transcription yet, use placeholder
     if (!transcription) {
       transcription = "[Áudio - transcrição não disponível]";
+      console.log("No transcription available, using placeholder");
     }
 
     // Update message content with transcription
