@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@14.21.0";
+import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
@@ -78,7 +78,7 @@ serve(async (req) => {
     logStep("Local subscription found", { status: localSub.status });
 
     // Verify with Stripe for the latest status
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
     const subscriptions = await stripe.subscriptions.list({
       customer: localSub.stripe_customer_id,
@@ -100,15 +100,43 @@ serve(async (req) => {
       if (stripeStatus !== localSub.status || cancelAtPeriodEnd !== localSub.cancel_at_period_end) {
         logStep("Syncing subscription status", { stripeStatus, localStatus: localSub.status });
         
+        let mappedStatus = stripeStatus;
+        if (stripeStatus === "incomplete" || stripeStatus === "incomplete_expired") {
+          mappedStatus = "inactive";
+        }
+
         await supabaseClient
           .from("company_subscriptions")
           .update({
-            status: stripeStatus === "active" ? "active" : stripeStatus === "past_due" ? "past_due" : stripeStatus,
+            status: mappedStatus,
             next_billing_date: subscriptionEnd,
+            current_period_end: subscriptionEnd,
             cancel_at_period_end: cancelAtPeriodEnd,
             updated_at: new Date().toISOString(),
           })
           .eq("id", localSub.id);
+      }
+
+      // Check for 7-day past_due inactivation
+      if (stripeStatus === "past_due") {
+        const periodEnd = new Date(stripeSub.current_period_end * 1000);
+        const daysPastDue = Math.floor((Date.now() - periodEnd.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysPastDue >= 7 && localSub.status !== "inactive_due_payment") {
+          logStep("Company past due for 7+ days, marking as inactive_due_payment");
+          
+          await supabaseClient
+            .from("company_subscriptions")
+            .update({ status: "inactive_due_payment" })
+            .eq("id", localSub.id);
+
+          await supabaseClient
+            .from("companies")
+            .update({ is_active: false })
+            .eq("id", profile.company_id);
+
+          stripeStatus = "inactive_due_payment";
+        }
       }
     }
 
@@ -123,6 +151,7 @@ serve(async (req) => {
       cancel_at_period_end: cancelAtPeriodEnd,
       plan: localSub.plans,
       company_id: profile.company_id,
+      next_billing_date: localSub.next_billing_date,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,

@@ -35,6 +35,10 @@ import AdminAIScriptsPage from "./pages/admin/AdminAIScriptsPage";
 import AdminPlansPage from "./pages/admin/AdminPlansPage";
 import AdminMonitorPage from "./pages/admin/AdminMonitorPage";
 import AdminSystemHealthPage from "./pages/admin/AdminSystemHealthPage";
+import AdminPaymentsPage from "./pages/admin/AdminPaymentsPage";
+
+// Manager pages
+import FinanceiroPage from "./pages/FinanceiroPage";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +65,7 @@ const App = () => (
             <Route path="/admin/planos" element={<AdminPlansPage />} />
             <Route path="/admin/monitor" element={<AdminMonitorPage />} />
             <Route path="/admin/system-health" element={<AdminSystemHealthPage />} />
+            <Route path="/admin/payments" element={<AdminPaymentsPage />} />
             
             {/* Seller routes */}
             <Route 
@@ -167,6 +172,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="gestor">
                   <ManagerCycleViewPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/financeiro" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <FinanceiroPage />
                 </ProtectedRoute>
               } 
             />
