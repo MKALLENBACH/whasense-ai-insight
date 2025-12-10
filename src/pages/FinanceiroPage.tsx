@@ -18,10 +18,13 @@ import {
   Crown,
   ArrowUpRight,
   XCircle,
-  MessageCircle
+  MessageCircle,
+  Clock
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+const FREE_PLAN_ID = "8af5c9e1-02a3-4705-b312-6f33bcc0d965";
 import {
   Dialog,
   DialogContent,
@@ -70,7 +73,7 @@ const statusMap: Record<string, { label: string; variant: "default" | "secondary
 };
 
 export default function FinanceiroPage() {
-  const { user } = useAuth();
+  const { user, companyPlan } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -221,6 +224,13 @@ export default function FinanceiroPage() {
   const currentPlan = isSubscriptionActive ? subscription?.plans : null;
   const status = statusMap[subscription?.status || "inactive"] || statusMap.inactive;
 
+  // Calculate FREE plan info
+  const isFreePlan = companyPlan?.planId === FREE_PLAN_ID;
+  const freeEndDate = companyPlan?.freeEndDate ? new Date(companyPlan.freeEndDate) : null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysRemaining = freeEndDate ? Math.max(0, differenceInDays(freeEndDate, today)) : null;
+
   return (
     <AppLayout>
       <div className="p-6 space-y-6">
@@ -250,7 +260,58 @@ export default function FinanceiroPage() {
               <CardDescription>Detalhes da sua assinatura</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {currentPlan ? (
+              {isFreePlan && freeEndDate ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl font-bold">Free (Avaliação)</span>
+                    <Badge variant="secondary">
+                      <Clock className="h-3 w-3 mr-1" />
+                      Trial
+                    </Badge>
+                  </div>
+                  
+                  <div className={`p-4 rounded-lg border ${
+                    daysRemaining !== null && daysRemaining <= 1 
+                      ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800" 
+                      : "bg-primary/5 border-primary/20"
+                  }`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      {daysRemaining !== null && daysRemaining <= 1 ? (
+                        <AlertTriangle className="h-5 w-5 text-amber-600" />
+                      ) : (
+                        <Clock className="h-5 w-5 text-primary" />
+                      )}
+                      <span className="font-semibold">
+                        {daysRemaining === 0 
+                          ? "Expira hoje!" 
+                          : daysRemaining === 1 
+                            ? "Expira amanhã!" 
+                            : `${daysRemaining} dias restantes`}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Válido até: <strong>{format(freeEndDate, "dd/MM/yyyy", { locale: ptBR })}</strong>
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Limite de vendedores:</span>
+                      <span>Ilimitado</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Funcionalidades:</span>
+                      <span>Acesso completo</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Assine agora para continuar usando após o período de avaliação.
+                    </p>
+                  </div>
+                </>
+              ) : currentPlan ? (
                 <>
                   <div className="flex items-center justify-between">
                     <span className="text-2xl font-bold">{currentPlan.name}</span>

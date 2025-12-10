@@ -29,6 +29,8 @@ export interface CompanyPlanInfo {
   hasValidPlan: boolean;
   sellerLimit: number | null;
   features: PlanFeatures | null;
+  freeStartDate: string | null;
+  freeEndDate: string | null;
 }
 
 interface SellerLimitInfo {
@@ -141,6 +143,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           hasValidPlan: false,
           sellerLimit: null,
           features: null,
+          freeStartDate: company.free_start_date,
+          freeEndDate: company.free_end_date,
         };
       }
     }
@@ -157,6 +161,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       hasValidPlan,
       sellerLimit: planData?.seller_limit ?? null,
       features: planData?.features || null,
+      freeStartDate: company.free_start_date,
+      freeEndDate: company.free_end_date,
     };
   };
 
