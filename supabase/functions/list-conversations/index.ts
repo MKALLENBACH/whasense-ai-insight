@@ -78,7 +78,8 @@ serve(async (req) => {
           lead_status,
           seller_id,
           is_incomplete,
-          company_id
+          company_id,
+          client_id
         )
       `)
       .order('timestamp', { ascending: false });
@@ -130,12 +131,21 @@ serve(async (req) => {
       }
     }
 
-    // Get company names
-    const { data: companiesData } = await supabase
-      .from('companies')
-      .select('id, name');
-    
-    const companiesMap = new Map(companiesData?.map(c => [c.id, c.name]) || []);
+    // Get client company names (these are the customer's companies, not Whasense companies)
+    const clientIds = [...new Set((messages || [])
+      .map(m => (m.customers as any)?.client_id)
+      .filter(Boolean)
+    )];
+
+    let clientsMap = new Map<string, string>();
+    if (clientIds.length > 0) {
+      const { data: clientsData } = await supabase
+        .from('clients')
+        .select('id, name')
+        .in('id', clientIds);
+      
+      clientsMap = new Map(clientsData?.map(c => [c.id, c.name]) || []);
+    }
 
     // Group messages by customer
     const conversationsMap = new Map();
@@ -160,7 +170,7 @@ serve(async (req) => {
             ...customer,
             lead_status: customer.lead_status || 'pending',
             is_incomplete: customer.is_incomplete || false,
-            companyName: customer.company_id ? companiesMap.get(customer.company_id) : null,
+            companyName: customer.client_id ? clientsMap.get(customer.client_id) : null,
           },
           lastMessage: message.content,
           lastMessageTime: message.timestamp,
