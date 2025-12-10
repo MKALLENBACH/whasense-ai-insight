@@ -179,16 +179,23 @@ export function useManagerDashboard() {
       const pendingLeads = activeCycles.filter((c) => c.status === "pending").length;
       const inProgressLeads = activeCycles.filter((c) => c.status === "in_progress").length;
       
-      // Historical metrics from all sales
-      const wonSales = sales?.filter((s) => s.status === "won").length || 0;
-      const lostSales = sales?.filter((s) => s.status === "lost").length || 0;
+      // Filter sales and messages for last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyDaysAgoStr = thirtyDaysAgo.toISOString();
+      
+      // Last 30 days metrics from sales
+      const last30DaysSales = sales?.filter(s => s.created_at >= thirtyDaysAgoStr) || [];
+      const wonSales = last30DaysSales.filter((s) => s.status === "won").length;
+      const lostSales = last30DaysSales.filter((s) => s.status === "lost").length;
       const totalSales = wonSales + lostSales;
       const conversionRate = totalSales > 0 ? Math.round((wonSales / totalSales) * 100) : 0;
 
-      // Calculate avg response time (simplified: count messages with quick responses)
+      // Calculate avg response time for last 30 days
+      const last30DaysMessages = messages?.filter(m => m.timestamp >= thirtyDaysAgoStr) || [];
       let totalResponseTime = 0;
       let responseCount = 0;
-      const sortedMessages = [...(messages || [])].sort(
+      const sortedMessages = [...last30DaysMessages].sort(
         (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
 
