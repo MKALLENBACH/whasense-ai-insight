@@ -78,6 +78,7 @@ interface Customer {
   seller_id: string | null;
   lead_status: string;
   is_incomplete: boolean;
+  company_id: string | null;
 }
 
 const sentimentConfig: Record<string, { icon: typeof Smile; label: string; color: string }> = {
@@ -403,9 +404,114 @@ const ChatPage = () => {
     }
   };
 
-  // Simplified audio handler - audio attachments not supported yet
+  // Audio recording handler - uploads and analyzes seller audio
   const handleSendAudio = async (audioBlob: Blob) => {
-    toast.info("Envio de áudio será suportado em breve!");
+    if (!id || !user || !customer?.company_id || isSending) return;
+    
+    setIsSending(true);
+    
+    try {
+      // Ensure we have an active cycle
+      const cycle = await getOrCreateActiveCycle();
+      if (!cycle) {
+        toast.error("Erro ao obter ciclo de venda");
+        return;
+      }
+      
+      // If cycle was pending, update to in_progress
+      if (cycle.status === 'pending') {
+        await updateCycleStatus(cycle.id, 'in_progress');
+      }
+
+      // Upload audio to storage
+      const fileName = `audio-${Date.now()}.webm`;
+      const filePath = `${customer.company_id}/${id}/${cycle.id}/${fileName}`;
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("message_attachments")
+        .upload(filePath, audioBlob, {
+          contentType: "audio/webm",
+        });
+
+      if (uploadError) {
+        console.error("Audio upload error:", uploadError);
+        toast.error("Erro ao fazer upload do áudio");
+        return;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("message_attachments")
+        .getPublicUrl(filePath);
+
+      const audioUrl = urlData.publicUrl;
+
+      // Create message with audio attachment
+      const { data: msgData, error: msgError } = await supabase
+        .from("messages")
+        .insert({
+          seller_id: user.id,
+          customer_id: id,
+          content: "[Áudio - processando transcrição...]",
+          direction: "outgoing",
+          cycle_id: cycle.id,
+          attachment_url: audioUrl,
+          attachment_type: "audio",
+          attachment_name: fileName,
+        })
+        .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
+        .single();
+
+      if (msgError) {
+        console.error("Message creation error:", msgError);
+        toast.error("Erro ao salvar mensagem de áudio");
+        return;
+      }
+
+      setMessages(prev => [...prev, msgData]);
+
+      // Call analyze-audio edge function
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Sessão expirada");
+        return;
+      }
+
+      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-audio`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          audio_url: audioUrl,
+          message_id: msgData.id,
+          sender: "seller",
+        }),
+      }).then(async (response) => {
+        if (response.ok) {
+          const result = await response.json();
+          if (result.transcription) {
+            // Update the message in state with transcription
+            setMessages(prev => prev.map(m => 
+              m.id === msgData.id 
+                ? { ...m, content: result.transcription }
+                : m
+            ));
+          }
+        } else {
+          console.error("Audio analysis failed:", await response.text());
+        }
+      }).catch(err => {
+        console.error("Error calling analyze-audio:", err);
+      });
+
+      toast.success("Áudio enviado!");
+    } catch (error) {
+      console.error("Error sending audio:", error);
+      toast.error("Erro ao enviar áudio");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const simulateIncomingMessage = async () => {
