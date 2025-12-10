@@ -180,8 +180,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const refreshSellerLimit = async () => {
+    console.log("refreshSellerLimit called", { companyId: user?.companyId, sellerLimit: companyPlan?.sellerLimit });
     if (user?.companyId && companyPlan) {
       const limitInfo = await fetchSellerLimitInfo(user.companyId, companyPlan.sellerLimit);
+      console.log("New seller limit info:", limitInfo);
       setSellerLimitInfo(limitInfo);
     }
   };
