@@ -201,7 +201,7 @@ const ChatPage = () => {
       // and this was causing issues when user.id wasn't loaded yet
       const { data: messagesData, error: messagesError } = await supabase
         .from("messages")
-        .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
+        .select("id, content, direction, timestamp, cycle_id")
         .eq("customer_id", id)
         .order("timestamp", { ascending: true });
 
