@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Pencil } from "lucide-react";
+import { Loader2, Pencil, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -33,16 +33,20 @@ interface EditSellerModalProps {
 
 const editSellerSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(100),
+  email: z.string().email("Email inválido").max(255),
 });
 
 const EditSellerModal = ({ open, onOpenChange, seller, onSuccess }: EditSellerModalProps) => {
   const [name, setName] = useState(seller.name);
+  const [email, setEmail] = useState(seller.email);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (open) {
       setName(seller.name);
+      setEmail(seller.email);
       setErrors({});
     }
   }, [open, seller]);
@@ -51,8 +55,7 @@ const EditSellerModal = ({ open, onOpenChange, seller, onSuccess }: EditSellerMo
     e.preventDefault();
     setErrors({});
 
-    // Validate form
-    const result = editSellerSchema.safeParse({ name });
+    const result = editSellerSchema.safeParse({ name, email });
 
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
@@ -68,21 +71,53 @@ const EditSellerModal = ({ open, onOpenChange, seller, onSuccess }: EditSellerMo
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase
+      // Update profile
+      const { error: profileError } = await supabase
         .from("profiles")
-        .update({ name })
+        .update({ name, email })
         .eq("id", seller.id);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
+
+      // If email changed, update auth user email via edge function
+      if (email !== seller.email) {
+        const { data, error: updateError } = await supabase.functions.invoke("update-seller-email", {
+          body: { userId: seller.user_id, newEmail: email },
+        });
+
+        if (updateError || data?.error) {
+          throw new Error(data?.error || updateError?.message || "Erro ao atualizar e-mail");
+        }
+      }
 
       toast.success("Vendedor atualizado com sucesso!");
       onOpenChange(false);
       onSuccess();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating seller:", error);
-      toast.error("Erro ao atualizar vendedor");
+      toast.error(error?.message || "Erro ao atualizar vendedor");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    setIsResending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("resend-seller-welcome", {
+        body: { userId: seller.user_id },
+      });
+
+      if (error || data?.error) {
+        throw new Error(data?.error || error?.message || "Erro ao reenviar e-mail");
+      }
+
+      toast.success("E-mail de boas-vindas reenviado com nova senha temporária!");
+    } catch (error: any) {
+      console.error("Error resending email:", error);
+      toast.error(error?.message || "Erro ao reenviar e-mail");
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -119,12 +154,39 @@ const EditSellerModal = ({ open, onOpenChange, seller, onSuccess }: EditSellerMo
             <Input
               id="edit-email"
               type="email"
-              value={seller.email}
-              disabled
-              className="bg-muted"
+              placeholder="email@exemplo.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isSubmitting}
             />
-            <p className="text-xs text-muted-foreground">
-              O email não pode ser alterado
+            {errors.email && (
+              <p className="text-sm text-destructive">{errors.email}</p>
+            )}
+          </div>
+
+          <div className="pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={handleResendEmail}
+              disabled={isResending || isSubmitting}
+            >
+              {isResending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Reenviando...
+                </>
+              ) : (
+                <>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Reenviar e-mail com nova senha
+                </>
+              )}
+            </Button>
+            <p className="text-xs text-muted-foreground mt-1 text-center">
+              Uma nova senha temporária será gerada e enviada
             </p>
           </div>
 
