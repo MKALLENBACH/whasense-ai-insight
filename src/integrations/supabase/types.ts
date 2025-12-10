@@ -14,11 +14,98 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          awarded_at: string
+          badge_type: string
+          id: string
+          vendor_id: string
+        }
+        Insert: {
+          awarded_at?: string
+          badge_type: string
+          id?: string
+          vendor_id: string
+        }
+        Update: {
+          awarded_at?: string
+          badge_type?: string
+          id?: string
+          vendor_id?: string
+        }
+        Relationships: []
+      }
+      ai_scripts: {
+        Row: {
+          ai_persona: string | null
+          closing_techniques: string | null
+          company_id: string
+          created_at: string
+          example_responses: string | null
+          forbidden_phrases: string | null
+          id: string
+          is_active: boolean
+          objection_handling: string | null
+          opening_messages: string | null
+          product_context: string | null
+          recommended_phrases: string | null
+          sales_playbook: string | null
+          script_name: string
+          tone_of_voice: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_persona?: string | null
+          closing_techniques?: string | null
+          company_id: string
+          created_at?: string
+          example_responses?: string | null
+          forbidden_phrases?: string | null
+          id?: string
+          is_active?: boolean
+          objection_handling?: string | null
+          opening_messages?: string | null
+          product_context?: string | null
+          recommended_phrases?: string | null
+          sales_playbook?: string | null
+          script_name: string
+          tone_of_voice?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_persona?: string | null
+          closing_techniques?: string | null
+          company_id?: string
+          created_at?: string
+          example_responses?: string | null
+          forbidden_phrases?: string | null
+          id?: string
+          is_active?: boolean
+          objection_handling?: string | null
+          opening_messages?: string | null
+          product_context?: string | null
+          recommended_phrases?: string | null
+          sales_playbook?: string | null
+          script_name?: string
+          tone_of_voice?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_scripts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alerts: {
         Row: {
           alert_type: string
           created_at: string
           customer_id: string
+          cycle_id: string | null
           id: string
           message: string
           metadata: Json | null
@@ -30,6 +117,7 @@ export type Database = {
           alert_type: string
           created_at?: string
           customer_id: string
+          cycle_id?: string | null
           id?: string
           message: string
           metadata?: Json | null
@@ -41,6 +129,7 @@ export type Database = {
           alert_type?: string
           created_at?: string
           customer_id?: string
+          cycle_id?: string | null
           id?: string
           message?: string
           metadata?: Json | null
@@ -56,37 +145,196 @@ export type Database = {
             referencedRelation: "customers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "alerts_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "sale_cycles"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      companies: {
+      buyers: {
         Row: {
+          client_id: string
+          company_id: string
           created_at: string
-          description: string | null
+          email: string | null
           id: string
           name: string
+          notes: string | null
+          phone: string | null
+          role: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          company_id: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          company_id?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "buyers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "buyers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          cnpj: string | null
+          company_id: string
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
           segment: string | null
           updated_at: string
         }
         Insert: {
+          cnpj?: string | null
+          company_id: string
           created_at?: string
-          description?: string | null
           id?: string
           name: string
+          notes?: string | null
           segment?: string | null
           updated_at?: string
         }
         Update: {
+          cnpj?: string | null
+          company_id?: string
           created_at?: string
-          description?: string | null
           id?: string
           name?: string
+          notes?: string | null
           segment?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clients_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companies: {
+        Row: {
+          allow_followups: boolean
+          cnpj: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          plan_id: string | null
+          segment: string | null
+          updated_at: string
+        }
+        Insert: {
+          allow_followups?: boolean
+          cnpj?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          plan_id?: string | null
+          segment?: string | null
+          updated_at?: string
+        }
+        Update: {
+          allow_followups?: boolean
+          cnpj?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          plan_id?: string | null
+          segment?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "companies_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_settings: {
+        Row: {
+          company_id: string
+          created_at: string
+          followup_delay_hours: number
+          followups_enabled: boolean
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          followup_delay_hours?: number
+          followups_enabled?: boolean
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          followup_delay_hours?: number
+          followups_enabled?: boolean
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       customers: {
         Row: {
+          buyer_id: string | null
+          client_id: string | null
           company_id: string | null
           created_at: string
           email: string | null
@@ -99,6 +347,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          buyer_id?: string | null
+          client_id?: string | null
           company_id?: string | null
           created_at?: string
           email?: string | null
@@ -111,6 +361,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          buyer_id?: string | null
+          client_id?: string | null
           company_id?: string | null
           created_at?: string
           email?: string | null
@@ -124,7 +376,202 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "customers_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "buyers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "customers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      default_ai_script: {
+        Row: {
+          ai_persona: string | null
+          closing_techniques: string | null
+          created_at: string
+          example_responses: string | null
+          forbidden_phrases: string | null
+          id: string
+          objection_handling: string | null
+          opening_messages: string | null
+          product_context: string | null
+          recommended_phrases: string | null
+          sales_playbook: string | null
+          script_name: string
+          tone_of_voice: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_persona?: string | null
+          closing_techniques?: string | null
+          created_at?: string
+          example_responses?: string | null
+          forbidden_phrases?: string | null
+          id?: string
+          objection_handling?: string | null
+          opening_messages?: string | null
+          product_context?: string | null
+          recommended_phrases?: string | null
+          sales_playbook?: string | null
+          script_name?: string
+          tone_of_voice?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_persona?: string | null
+          closing_techniques?: string | null
+          created_at?: string
+          example_responses?: string | null
+          forbidden_phrases?: string | null
+          id?: string
+          objection_handling?: string | null
+          opening_messages?: string | null
+          product_context?: string | null
+          recommended_phrases?: string | null
+          sales_playbook?: string | null
+          script_name?: string
+          tone_of_voice?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      gamification_points: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          points: number
+          reason: string
+          sale_id: string | null
+          vendor_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          points: number
+          reason: string
+          sale_id?: string | null
+          vendor_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          points?: number
+          reason?: string
+          sale_id?: string | null
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gamification_points_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gamification_points_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goal_vendors: {
+        Row: {
+          current_value: number
+          goal_id: string
+          id: string
+          progress: number | null
+          status: string
+          target_value: number
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          current_value?: number
+          goal_id: string
+          id?: string
+          progress?: number | null
+          status?: string
+          target_value: number
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          current_value?: number
+          goal_id?: string
+          id?: string
+          progress?: number | null
+          status?: string
+          target_value?: number
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_vendors_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goals: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string
+          end_date: string
+          goal_type: string
+          id: string
+          start_date: string
+          target_value: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by: string
+          end_date: string
+          goal_type: string
+          id?: string
+          start_date: string
+          target_value: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string
+          end_date?: string
+          goal_type?: string
+          id?: string
+          start_date?: string
+          target_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
@@ -176,8 +623,51 @@ export type Database = {
           },
         ]
       }
+      leaderboard: {
+        Row: {
+          company_id: string
+          id: string
+          period: string
+          period_start: string
+          position: number | null
+          total_points: number
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          company_id: string
+          id?: string
+          period: string
+          period_start: string
+          position?: number | null
+          total_points?: number
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          company_id?: string
+          id?: string
+          period?: string
+          period_start?: string
+          position?: number | null
+          total_points?: number
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leaderboard_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
+          buyer_id: string | null
+          client_id: string | null
           content: string
           customer_id: string
           cycle_id: string | null
@@ -187,6 +677,8 @@ export type Database = {
           timestamp: string
         }
         Insert: {
+          buyer_id?: string | null
+          client_id?: string | null
           content: string
           customer_id: string
           cycle_id?: string | null
@@ -196,6 +688,8 @@ export type Database = {
           timestamp?: string
         }
         Update: {
+          buyer_id?: string | null
+          client_id?: string | null
           content?: string
           customer_id?: string
           cycle_id?: string | null
@@ -205,6 +699,20 @@ export type Database = {
           timestamp?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "buyers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_customer_id_fkey"
             columns: ["customer_id"]
@@ -221,6 +729,42 @@ export type Database = {
           },
         ]
       }
+      plans: {
+        Row: {
+          annual_price: number
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          monthly_price: number
+          name: string
+          seller_limit: number | null
+          updated_at: string
+        }
+        Insert: {
+          annual_price?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          monthly_price?: number
+          name: string
+          seller_limit?: number | null
+          updated_at?: string
+        }
+        Update: {
+          annual_price?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          monthly_price?: number
+          name?: string
+          seller_limit?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           company_id: string | null
@@ -228,6 +772,7 @@ export type Database = {
           email: string
           id: string
           name: string
+          seller_followups_enabled: boolean
           updated_at: string
           user_id: string
         }
@@ -237,6 +782,7 @@ export type Database = {
           email: string
           id?: string
           name: string
+          seller_followups_enabled?: boolean
           updated_at?: string
           user_id: string
         }
@@ -246,6 +792,7 @@ export type Database = {
           email?: string
           id?: string
           name?: string
+          seller_followups_enabled?: boolean
           updated_at?: string
           user_id?: string
         }
@@ -261,36 +808,59 @@ export type Database = {
       }
       sale_cycles: {
         Row: {
+          buyer_id: string | null
+          client_id: string | null
           closed_at: string | null
           created_at: string
           customer_id: string
           id: string
+          last_activity_at: string | null
           lost_reason: string | null
           seller_id: string
           status: Database["public"]["Enums"]["lead_status"]
           won_summary: string | null
         }
         Insert: {
+          buyer_id?: string | null
+          client_id?: string | null
           closed_at?: string | null
           created_at?: string
           customer_id: string
           id?: string
+          last_activity_at?: string | null
           lost_reason?: string | null
           seller_id: string
           status?: Database["public"]["Enums"]["lead_status"]
           won_summary?: string | null
         }
         Update: {
+          buyer_id?: string | null
+          client_id?: string | null
           closed_at?: string | null
           created_at?: string
           customer_id?: string
           id?: string
+          last_activity_at?: string | null
           lost_reason?: string | null
           seller_id?: string
           status?: Database["public"]["Enums"]["lead_status"]
           won_summary?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sale_cycles_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "buyers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_cycles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sale_cycles_customer_id_fkey"
             columns: ["customer_id"]
@@ -435,9 +1005,11 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_user_company_active: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "seller" | "manager"
+      app_role: "seller" | "manager" | "admin"
       lead_status: "pending" | "in_progress" | "won" | "lost"
       lead_temperature: "hot" | "warm" | "cold"
       message_direction: "incoming" | "outgoing"
@@ -574,7 +1146,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["seller", "manager"],
+      app_role: ["seller", "manager", "admin"],
       lead_status: ["pending", "in_progress", "won", "lost"],
       lead_temperature: ["hot", "warm", "cold"],
       message_direction: ["incoming", "outgoing"],
