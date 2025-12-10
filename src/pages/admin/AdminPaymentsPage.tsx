@@ -19,7 +19,8 @@ import {
   RefreshCw,
   CheckCircle,
   XCircle,
-  Calendar
+  Calendar,
+  RotateCcw
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -498,37 +499,44 @@ export default function AdminPaymentsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {payments.map((payment) => (
-                    <div 
-                      key={payment.id}
-                      className="flex items-center justify-between p-3 rounded-lg border"
-                    >
-                      <div className="flex items-center gap-3">
-                        {payment.status === "paid" ? (
-                          <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <XCircle className="h-5 w-5 text-red-500" />
-                        )}
-                        <div>
-                          <span className="font-medium">{payment.companies?.name}</span>
-                          <p className="text-sm text-muted-foreground">
-                            {payment.description || "Pagamento de assinatura"}
+                  {payments.map((payment) => {
+                    const isRefund = payment.status === "refunded" || payment.amount_cents < 0;
+                    const isPaid = payment.status === "paid";
+                    
+                    return (
+                      <div 
+                        key={payment.id}
+                        className={`flex items-center justify-between p-3 rounded-lg border ${isRefund ? 'bg-orange-50 border-orange-200' : ''}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {isRefund ? (
+                            <RotateCcw className="h-5 w-5 text-orange-500" />
+                          ) : isPaid ? (
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-red-500" />
+                          )}
+                          <div>
+                            <span className="font-medium">{payment.companies?.name}</span>
+                            <p className="text-sm text-muted-foreground">
+                              {payment.description || "Pagamento de assinatura"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className={`font-medium ${isRefund ? 'text-orange-600' : isPaid ? 'text-green-600' : 'text-red-600'}`}>
+                            {new Intl.NumberFormat("pt-BR", {
+                              style: "currency",
+                              currency: payment.currency.toUpperCase(),
+                            }).format(payment.amount_cents / 100)}
+                          </span>
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(payment.paid_at || payment.created_at), "dd/MM/yyyy HH:mm")}
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <span className="font-medium">
-                          {new Intl.NumberFormat("pt-BR", {
-                            style: "currency",
-                            currency: payment.currency.toUpperCase(),
-                          }).format(payment.amount_cents / 100)}
-                        </span>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(payment.paid_at || payment.created_at), "dd/MM/yyyy HH:mm")}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
