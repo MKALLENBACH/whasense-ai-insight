@@ -37,7 +37,7 @@ const ChangePasswordPage = () => {
 
     setIsLoading(true);
     try {
-      // Update password
+      // Update password and metadata
       const { error: updateError } = await supabase.auth.updateUser({
         password: password,
         data: {
@@ -51,11 +51,11 @@ const ChangePasswordPage = () => {
 
       toast.success("Senha alterada com sucesso!");
       
-      // Redirect to dashboard
-      navigate("/dashboard", { replace: true });
+      // Force a page reload to ensure auth state is refreshed
+      // This ensures the requiresPasswordChange flag is properly updated
+      window.location.href = "/dashboard";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao alterar senha");
-    } finally {
       setIsLoading(false);
     }
   };
