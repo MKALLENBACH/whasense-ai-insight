@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import ManagerInsightsPanel from "@/components/manager/ManagerInsightsPanel";
 import { 
   ArrowLeft, 
   Loader2, 
@@ -19,12 +20,9 @@ import {
   XCircle,
   Clock,
   Play,
-  AlertTriangle,
   ChevronRight,
   Thermometer,
   Target,
-  Brain,
-  TrendingUp,
   Building2,
   Phone,
 } from "lucide-react";
@@ -111,17 +109,6 @@ const lossReasonLabels: Record<string, string> = {
   other: "Outro motivo",
 };
 
-const objectionLabels: Record<string, string> = {
-  price: "Preço",
-  delivery: "Prazo de entrega",
-  competitor: "Concorrência",
-  doubt: "Dúvida sobre produto",
-  timing: "Momento inadequado",
-  trust: "Confiança",
-  need: "Necessidade",
-  none: "Nenhuma",
-};
-
 const intentionLabels: Record<string, string> = {
   doubt: "Dúvida",
   evaluating: "Avaliando",
@@ -135,12 +122,6 @@ const temperatureLabels: Record<string, { label: string; color: string }> = {
   hot: { label: "Quente", color: "text-orange-500" },
   warm: { label: "Morno", color: "text-yellow-500" },
   cold: { label: "Frio", color: "text-blue-500" },
-};
-
-const sentimentLabels: Record<string, { label: string; color: string }> = {
-  positive: { label: "Positivo", color: "text-success" },
-  neutral: { label: "Neutro", color: "text-muted-foreground" },
-  negative: { label: "Negativo", color: "text-destructive" },
 };
 
 export default function ManagerCycleViewPage() {
@@ -262,45 +243,20 @@ export default function ManagerCycleViewPage() {
     return insights.filter(i => i.objection && i.objection !== "none").length;
   };
 
-  const getUniqueObjections = () => {
-    const objections = insights
-      .filter(i => i.objection && i.objection !== "none")
-      .map(i => i.objection as string);
-    return [...new Set(objections)];
-  };
-
   const getFinalTemperature = () => {
     const temps = insights.filter(i => i.temperature);
     if (temps.length === 0) return null;
-    // Get the last temperature
-    const lastTemp = temps[temps.length - 1].temperature;
-    return lastTemp;
+    return temps[temps.length - 1].temperature;
   };
 
   const getAverageIntention = () => {
     const intentions = insights.filter(i => i.intention).map(i => i.intention as string);
     if (intentions.length === 0) return null;
-    // Get the most common intention
     const intentionCount: Record<string, number> = {};
     intentions.forEach(i => {
       intentionCount[i] = (intentionCount[i] || 0) + 1;
     });
     return Object.entries(intentionCount).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-  };
-
-  const getSentimentTrend = () => {
-    const sentiments = insights.filter(i => i.sentiment).map(i => i.sentiment as string);
-    if (sentiments.length === 0) return [];
-    return sentiments;
-  };
-
-  const getCriticalMoments = () => {
-    return insights.filter(i => 
-      i.sentiment === "negative" || 
-      (i.objection && i.objection !== "none") ||
-      i.intention === "complaining" ||
-      i.intention === "canceling"
-    );
   };
 
   if (!isManager) {
@@ -339,9 +295,6 @@ export default function ManagerCycleViewPage() {
   const startDate = cycle.start_message_timestamp || cycle.created_at;
   const finalTemp = getFinalTemperature();
   const avgIntention = getAverageIntention();
-  const uniqueObjections = getUniqueObjections();
-  const criticalMoments = getCriticalMoments();
-  const sentimentTrend = getSentimentTrend();
 
   return (
     <AppLayout>
@@ -563,170 +516,7 @@ export default function ManagerCycleViewPage() {
             </Card>
 
             {/* Insights Panel */}
-            <div className="w-72 flex-shrink-0 flex flex-col gap-4">
-              {/* AI Summary */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Brain className="h-4 w-4" />
-                    Resumo IA
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {/* Temperature */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Temperatura Final</span>
-                    {finalTemp ? (
-                      <Badge variant="outline" className={temperatureLabels[finalTemp]?.color}>
-                        {temperatureLabels[finalTemp]?.label}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">N/A</span>
-                    )}
-                  </div>
-
-                  {/* Intention */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Intenção Principal</span>
-                    {avgIntention ? (
-                      <Badge variant="outline">
-                        {intentionLabels[avgIntention] || avgIntention}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">N/A</span>
-                    )}
-                  </div>
-
-                  {/* Sentiment Trend */}
-                  {sentimentTrend.length > 0 && (
-                    <div>
-                      <span className="text-xs text-muted-foreground block mb-1">Evolução do Sentimento</span>
-                      <div className="flex gap-1 flex-wrap">
-                        {sentimentTrend.slice(-10).map((s, i) => (
-                          <div
-                            key={i}
-                            className={cn(
-                              "w-2 h-2 rounded-full",
-                              s === "positive" && "bg-success",
-                              s === "neutral" && "bg-muted-foreground",
-                              s === "negative" && "bg-destructive"
-                            )}
-                            title={sentimentLabels[s]?.label || s}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Objections */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4" />
-                    Objeções Detectadas
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {uniqueObjections.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Nenhuma objeção detectada</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {uniqueObjections.map((obj, i) => (
-                        <Badge key={i} variant="secondary" className="mr-1 mb-1">
-                          {objectionLabels[obj] || obj}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Critical Moments */}
-              <Card className="flex-1 overflow-hidden">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" />
-                    Momentos Críticos
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <ScrollArea className="h-[180px]">
-                    {criticalMoments.length === 0 ? (
-                      <p className="text-xs text-muted-foreground px-4 py-2">
-                        Nenhum momento crítico identificado
-                      </p>
-                    ) : (
-                      <div className="space-y-2 p-4 pt-0">
-                        {criticalMoments.slice(0, 5).map((insight, i) => {
-                          const message = messages.find(m => m.id === insight.message_id);
-                          return (
-                            <div key={i} className="text-xs border rounded-md p-2">
-                              <div className="flex gap-2 mb-1">
-                                {insight.sentiment === "negative" && (
-                                  <Badge variant="destructive" className="text-[10px] px-1 py-0">
-                                    Negativo
-                                  </Badge>
-                                )}
-                                {insight.objection && insight.objection !== "none" && (
-                                  <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                                    {objectionLabels[insight.objection] || insight.objection}
-                                  </Badge>
-                                )}
-                                {insight.intention && (insight.intention === "complaining" || insight.intention === "canceling") && (
-                                  <Badge variant="outline" className="text-[10px] px-1 py-0 text-destructive">
-                                    {intentionLabels[insight.intention]}
-                                  </Badge>
-                                )}
-                              </div>
-                              {message && (
-                                <p className="text-muted-foreground line-clamp-2">
-                                  {message.content.substring(0, 100)}...
-                                </p>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-
-              {/* Win/Loss Analysis */}
-              {(cycle.status === "won" || cycle.status === "lost") && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      {cycle.status === "won" ? (
-                        <Trophy className="h-4 w-4 text-success" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-destructive" />
-                      )}
-                      {cycle.status === "won" ? "Análise da Venda" : "Razão da Perda"}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {cycle.status === "won" && (
-                      <p className="text-xs text-muted-foreground">
-                        {cycle.won_summary || "Sem resumo disponível"}
-                      </p>
-                    )}
-                    {cycle.status === "lost" && (
-                      <div>
-                        <Badge variant="destructive" className="mb-2">
-                          {lossReasonLabels[cycle.lost_reason || ""] || cycle.lost_reason || "Motivo não especificado"}
-                        </Badge>
-                        <p className="text-xs text-muted-foreground">
-                          Objeções não resolvidas: {uniqueObjections.length}
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+            <ManagerInsightsPanel cycleId={cycleId} />
           </div>
         </div>
       </div>

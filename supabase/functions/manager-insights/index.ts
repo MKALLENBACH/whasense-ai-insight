@@ -12,28 +12,48 @@ serve(async (req) => {
   }
 
   try {
-    const { customerId } = await req.json();
+    const { customerId, cycleId } = await req.json();
     
-    if (!customerId) {
-      console.error("Missing customerId");
+    if (!customerId && !cycleId) {
+      console.error("Missing customerId or cycleId");
       return new Response(
-        JSON.stringify({ error: "customerId is required" }),
+        JSON.stringify({ error: "customerId or cycleId is required" }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log("Generating manager insights for customer:", customerId);
+    console.log("Generating manager insights for:", cycleId ? `cycle: ${cycleId}` : `customer: ${customerId}`);
 
     // Create Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    let targetCustomerId = customerId;
+    let cycle: any = null;
+
+    // If cycleId provided, get the cycle and its customer_id
+    if (cycleId) {
+      const { data: cycleData, error: cycleError } = await supabase
+        .from('sale_cycles')
+        .select('*')
+        .eq('id', cycleId)
+        .single();
+
+      if (cycleError) {
+        console.error("Error fetching cycle:", cycleError);
+        throw cycleError;
+      }
+      
+      cycle = cycleData;
+      targetCustomerId = cycleData.customer_id;
+    }
+
     // Fetch customer data
     const { data: customer, error: customerError } = await supabase
       .from('customers')
       .select('*')
-      .eq('id', customerId)
+      .eq('id', targetCustomerId)
       .single();
 
     if (customerError) {
@@ -41,36 +61,62 @@ serve(async (req) => {
       throw customerError;
     }
 
-    // Fetch all messages for this customer
-    const { data: messages, error: messagesError } = await supabase
+    // Fetch messages - if cycleId provided, only get messages for that cycle
+    let messagesQuery = supabase
       .from('messages')
       .select('*')
-      .eq('customer_id', customerId)
       .order('timestamp', { ascending: true });
+    
+    if (cycleId) {
+      messagesQuery = messagesQuery.eq('cycle_id', cycleId);
+    } else {
+      messagesQuery = messagesQuery.eq('customer_id', targetCustomerId);
+    }
+
+    const { data: messages, error: messagesError } = await messagesQuery;
 
     if (messagesError) {
       console.error("Error fetching messages:", messagesError);
       throw messagesError;
     }
 
-    // Fetch sale status if exists
-    const { data: sale, error: saleError } = await supabase
-      .from('sales')
-      .select('*')
-      .eq('customer_id', customerId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Determine lead status from cycle or sale
+    let leadStatus: 'pending' | 'won' | 'lost' = 'pending';
+    let saleReason: string | null = null;
 
-    if (saleError) {
-      console.error("Error fetching sale:", saleError);
+    if (cycle) {
+      // Use cycle status
+      if (cycle.status === 'won') {
+        leadStatus = 'won';
+        saleReason = cycle.won_summary;
+      } else if (cycle.status === 'lost') {
+        leadStatus = 'lost';
+        saleReason = cycle.lost_reason;
+      } else {
+        leadStatus = cycle.status === 'in_progress' ? 'pending' : 'pending';
+      }
+    } else {
+      // Fallback to sale status if no cycle
+      const { data: sale, error: saleError } = await supabase
+        .from('sales')
+        .select('*')
+        .eq('customer_id', targetCustomerId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!saleError && sale) {
+        leadStatus = sale.status;
+        saleReason = sale.reason;
+      }
     }
 
     // Fetch seller profile
+    const sellerId = cycle?.seller_id || customer.seller_id;
     const { data: seller, error: sellerError } = await supabase
       .from('profiles')
       .select('name, email')
-      .eq('user_id', customer.seller_id)
+      .eq('user_id', sellerId)
       .maybeSingle();
 
     if (sellerError) {
@@ -129,12 +175,6 @@ serve(async (req) => {
     // Extract objections from insights
     const objections = [...new Set(insights.filter(i => i.objection && i.objection !== 'none').map(i => i.objection))];
 
-    // Determine lead status
-    let leadStatus: 'pending' | 'won' | 'lost' = 'pending';
-    if (sale) {
-      leadStatus = sale.status;
-    }
-
     // Prepare conversation context for AI
     const conversationContext = messages?.map(m => 
       `[${m.direction === 'incoming' ? 'Cliente' : 'Vendedor'}]: ${m.content}`
@@ -145,6 +185,10 @@ serve(async (req) => {
       delay: "Prazo de entrega",
       trust: "Falta de confiança",
       doubt: "Dúvidas sobre o produto",
+      delivery: "Prazo de entrega",
+      competitor: "Concorrência",
+      timing: "Momento inadequado",
+      need: "Necessidade",
       none: "Nenhuma objeção",
     };
 
@@ -178,14 +222,17 @@ Retorne um JSON válido com a seguinte estrutura:
   "negotiation_stage": "Estágio atual da negociação (prospecção, qualificação, proposta, fechamento, etc)"
 }`;
 
+    const cycleContext = cycleId ? `\nEsta análise é para um CICLO DE VENDA ESPECÍFICO, não para todo o histórico do cliente.` : '';
+
     const userPrompt = `Status do lead: ${leadStatus}
-Motivo registrado (se houver): ${sale?.reason || 'Não registrado'}
+Motivo registrado (se houver): ${saleReason || 'Não registrado'}
 Objeções identificadas: ${formattedObjections.join(', ') || 'Nenhuma'}
 Total de mensagens: ${totalMessages}
 Mensagens do cliente: ${incomingMessages.length}
 Mensagens do vendedor: ${outgoingMessages.length}
 Tempo médio de resposta: ${avgResponseTimeMinutes} minutos
 Atrasos críticos: ${criticalDelays.join('; ') || 'Nenhum'}
+${cycleContext}
 
 CONVERSA:
 ${conversationContext}`;
@@ -246,8 +293,8 @@ ${conversationContext}`;
       sellerName: seller?.name || 'Vendedor não identificado',
       summary: aiInsights.summary || 'Análise não disponível',
       reason_stuck: leadStatus === 'pending' ? (aiInsights.reason_stuck || 'Não identificado') : null,
-      reason_won: leadStatus === 'won' ? (aiInsights.reason_won || sale?.reason || 'Não registrado') : null,
-      reason_lost: leadStatus === 'lost' ? (aiInsights.reason_lost || sale?.reason || 'Não registrado') : null,
+      reason_won: leadStatus === 'won' ? (aiInsights.reason_won || saleReason || 'Não registrado') : null,
+      reason_lost: leadStatus === 'lost' ? (aiInsights.reason_lost || saleReason || 'Não registrado') : null,
       timeline,
       key_objections: formattedObjections,
       key_events: aiInsights.key_events || [],
@@ -261,7 +308,7 @@ ${conversationContext}`;
         avgResponseTimeMinutes,
         criticalDelays: criticalDelays.length,
       },
-      saleReason: sale?.reason || null,
+      saleReason,
     };
 
     console.log("Manager insights generated successfully");

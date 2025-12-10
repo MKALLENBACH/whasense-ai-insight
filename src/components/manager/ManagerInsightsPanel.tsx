@@ -52,7 +52,8 @@ interface ManagerInsights {
 }
 
 interface ManagerInsightsPanelProps {
-  customerId: string;
+  customerId?: string;
+  cycleId?: string;
 }
 
 const statusConfig = {
@@ -73,24 +74,31 @@ const statusConfig = {
   },
 };
 
-const ManagerInsightsPanel = ({ customerId }: ManagerInsightsPanelProps) => {
+const ManagerInsightsPanel = ({ customerId, cycleId }: ManagerInsightsPanelProps) => {
   const [insights, setInsights] = useState<ManagerInsights | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (customerId) {
+    if (customerId || cycleId) {
       fetchManagerInsights();
     }
-  }, [customerId]);
+  }, [customerId, cycleId]);
 
   const fetchManagerInsights = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
+      const body: { customerId?: string; cycleId?: string } = {};
+      if (cycleId) {
+        body.cycleId = cycleId;
+      } else if (customerId) {
+        body.customerId = customerId;
+      }
+
       const { data, error: fnError } = await supabase.functions.invoke("manager-insights", {
-        body: { customerId },
+        body,
       });
 
       if (fnError) throw fnError;
