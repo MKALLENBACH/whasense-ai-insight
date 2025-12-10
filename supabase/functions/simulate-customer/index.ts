@@ -184,8 +184,9 @@ serve(async (req) => {
       : `O vendedor ainda não respondeu. Envie uma mensagem inicial como cliente interessado em produtos fitness, ou faça um follow-up natural.`;
 
     // Determine if this should be an audio message (simulated)
-    // About 15% chance of being an "audio" message when sendAudio flag is passed
-    const isAudioMessage = sendAudio || (Math.random() < 0.15);
+    // Disabled random audio generation to avoid confusion with fake audio alerts
+    // Only create audio if explicitly requested via sendAudio flag
+    const isAudioMessage = sendAudio === true;
 
     // Call Lovable AI Gateway
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
