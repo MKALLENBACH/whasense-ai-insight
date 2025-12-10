@@ -254,13 +254,22 @@ const handleSubscriptionDeleted = async (subscription: Stripe.Subscription) => {
   logStep("Subscription canceled and company inactivated", { companyId: sub.company_id });
 };
 
-const handleChargeRefunded = async (charge: Stripe.Charge) => {
-  logStep("Charge refunded", { chargeId: charge.id, customerId: charge.customer, amountRefunded: charge.amount_refunded });
+const handleRefundCreated = async (refund: Stripe.Refund) => {
+  logStep("Refund created", { refundId: refund.id, amount: refund.amount, status: refund.status });
 
+  // Get the charge to find the customer
+  const chargeId = refund.charge as string;
+  if (!chargeId) {
+    logStep("No charge ID in refund", { refundId: refund.id });
+    return;
+  }
+
+  // Fetch the charge to get customer ID
+  const charge = await stripe.charges.retrieve(chargeId);
   const customerId = charge.customer as string;
 
   if (!customerId) {
-    logStep("No customer ID in charge", { chargeId: charge.id });
+    logStep("No customer ID in charge", { chargeId });
     return;
   }
 
@@ -280,16 +289,16 @@ const handleChargeRefunded = async (charge: Stripe.Charge) => {
   await supabaseAdmin.from("payment_history").insert({
     company_id: sub.company_id,
     stripe_payment_intent_id: charge.payment_intent as string,
-    amount_cents: -charge.amount_refunded, // Negative amount for refund
-    currency: charge.currency,
+    amount_cents: -refund.amount, // Negative amount for refund
+    currency: refund.currency,
     status: "refunded",
-    description: charge.refunds?.data[0]?.reason 
-      ? `Reembolso: ${charge.refunds.data[0].reason}` 
+    description: refund.reason 
+      ? `Reembolso: ${refund.reason}` 
       : "Reembolso processado",
     paid_at: new Date().toISOString(),
   });
 
-  logStep("Refund recorded", { companyId: sub.company_id, amountRefunded: charge.amount_refunded });
+  logStep("Refund recorded", { companyId: sub.company_id, amount: refund.amount });
 };
 
 serve(async (req) => {
@@ -320,8 +329,8 @@ serve(async (req) => {
       case "customer.subscription.deleted":
         await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
         break;
-      case "charge.refunded":
-        await handleChargeRefunded(event.data.object as Stripe.Charge);
+      case "refund.created":
+        await handleRefundCreated(event.data.object as Stripe.Refund);
         break;
       default:
         logStep("Unhandled event type", { type: event.type });
