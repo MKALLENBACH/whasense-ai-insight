@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@14.21.0";
+import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
@@ -40,10 +40,10 @@ serve(async (req) => {
     logStep("User authenticated", { userId: user.id, email: user.email });
 
     // Get request body
-    const { priceId, planId, successUrl, cancelUrl } = await req.json();
+    const { priceId, planId, successUrl, cancelUrl, billingCycle } = await req.json();
     
     if (!priceId) throw new Error("Price ID is required");
-    logStep("Request params", { priceId, planId });
+    logStep("Request params", { priceId, planId, billingCycle });
 
     // Get user's company
     const { data: profile } = await supabaseClient
@@ -62,12 +62,12 @@ serve(async (req) => {
       .eq("id", profile.company_id)
       .single();
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
     // Check if company already has a Stripe customer
     const { data: existingSub } = await supabaseClient
       .from("company_subscriptions")
-      .select("stripe_customer_id")
+      .select("stripe_customer_id, stripe_subscription_id, status")
       .eq("company_id", profile.company_id)
       .single();
 
@@ -86,7 +86,7 @@ serve(async (req) => {
       customerId = customer.id;
       logStep("Created Stripe customer", { customerId });
 
-      // Create or update subscription record
+      // Create subscription record
       await supabaseClient
         .from("company_subscriptions")
         .upsert({
@@ -100,47 +100,53 @@ serve(async (req) => {
     }
 
     // Check for existing active subscription
-    const subscriptions = await stripe.subscriptions.list({
-      customer: customerId,
-      status: "active",
-      limit: 1,
-    });
-
-    if (subscriptions.data.length > 0) {
-      logStep("Customer already has active subscription");
-      // Redirect to customer portal for upgrades
+    if (existingSub?.stripe_subscription_id && existingSub.status === "active") {
+      logStep("Customer already has active subscription, redirecting to portal");
+      // Redirect to customer portal for upgrades/downgrades
       const portalSession = await stripe.billingPortal.sessions.create({
         customer: customerId,
         return_url: successUrl || `${req.headers.get("origin")}/financeiro`,
       });
-      return new Response(JSON.stringify({ url: portalSession.url }), {
+      return new Response(JSON.stringify({ url: portalSession.url, isPortal: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
     }
 
-    // Create checkout session
+    // Create checkout session with promo codes enabled
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
+      allow_promotion_codes: true,
       success_url: successUrl || `${req.headers.get("origin")}/financeiro?success=true`,
       cancel_url: cancelUrl || `${req.headers.get("origin")}/financeiro?canceled=true`,
+      billing_address_collection: "auto",
       metadata: {
         company_id: profile.company_id,
         plan_id: planId,
+        billing_cycle: billingCycle || "monthly",
       },
       subscription_data: {
         metadata: {
           company_id: profile.company_id,
           plan_id: planId,
+          billing_cycle: billingCycle || "monthly",
         },
       },
     });
 
     logStep("Checkout session created", { sessionId: session.id, url: session.url });
 
-    return new Response(JSON.stringify({ url: session.url }), {
+    // Update plan_id in subscription record
+    if (planId) {
+      await supabaseClient
+        .from("company_subscriptions")
+        .update({ plan_id: planId })
+        .eq("company_id", profile.company_id);
+    }
+
+    return new Response(JSON.stringify({ url: session.url, isPortal: false }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });

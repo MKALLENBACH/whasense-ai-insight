@@ -1,9 +1,9 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@14.21.0";
+import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-  apiVersion: "2023-10-16",
+  apiVersion: "2025-08-27.basil",
 });
 
 const supabaseAdmin = createClient(
@@ -15,6 +15,26 @@ const supabaseAdmin = createClient(
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : "";
   console.log(`[STRIPE-WEBHOOK] ${step}${detailsStr}`);
+};
+
+const findPlanByStripePrice = async (priceId: string) => {
+  // First try to find by stripe_monthly_price_id
+  const { data: monthlyPlan } = await supabaseAdmin
+    .from("plans")
+    .select("id, name")
+    .eq("stripe_monthly_price_id", priceId)
+    .single();
+  
+  if (monthlyPlan) return monthlyPlan;
+
+  // Then try stripe_annual_price_id
+  const { data: annualPlan } = await supabaseAdmin
+    .from("plans")
+    .select("id, name")
+    .eq("stripe_annual_price_id", priceId)
+    .single();
+  
+  return annualPlan;
 };
 
 const updateSubscriptionFromStripe = async (subscription: Stripe.Subscription) => {
@@ -35,7 +55,7 @@ const updateSubscriptionFromStripe = async (subscription: Stripe.Subscription) =
   }
 
   // Map Stripe status to our status
-  let status = subscription.status;
+  let status = subscription.status as string;
   if (status === "incomplete" || status === "incomplete_expired") {
     status = "inactive";
   }
@@ -45,20 +65,14 @@ const updateSubscriptionFromStripe = async (subscription: Stripe.Subscription) =
   let planId = null;
 
   if (priceId) {
-    // Try to find plan by matching price (we store stripe_price_id in plans table)
-    const { data: plan } = await supabaseAdmin
-      .from("plans")
-      .select("id")
-      .or(`monthly_price.eq.${subscription.items.data[0]?.price?.unit_amount || 0},annual_price.eq.${subscription.items.data[0]?.price?.unit_amount || 0}`)
-      .limit(1)
-      .single();
-    
+    const plan = await findPlanByStripePrice(priceId);
     if (plan) {
       planId = plan.id;
+      logStep("Found matching plan", { planId, planName: plan.name });
     }
   }
 
-  const updateData: any = {
+  const updateData: Record<string, unknown> = {
     stripe_subscription_id: subscription.id,
     status: status,
     current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
@@ -70,6 +84,11 @@ const updateSubscriptionFromStripe = async (subscription: Stripe.Subscription) =
 
   if (planId) {
     updateData.plan_id = planId;
+    // Also update company's plan_id
+    await supabaseAdmin
+      .from("companies")
+      .update({ plan_id: planId })
+      .eq("id", existingSub.company_id);
   }
 
   const { error: updateError } = await supabaseAdmin
@@ -121,7 +140,7 @@ const handleInvoicePaid = async (invoice: Stripe.Invoice) => {
   // Find company
   const { data: sub } = await supabaseAdmin
     .from("company_subscriptions")
-    .select("company_id")
+    .select("company_id, id")
     .eq("stripe_customer_id", customerId)
     .single();
 
@@ -138,17 +157,25 @@ const handleInvoicePaid = async (invoice: Stripe.Invoice) => {
     amount_cents: invoice.amount_paid,
     currency: invoice.currency,
     status: "paid",
-    description: invoice.lines.data[0]?.description || "Subscription payment",
+    description: invoice.lines.data[0]?.description || "Pagamento de assinatura",
     paid_at: invoice.status_transitions?.paid_at 
       ? new Date(invoice.status_transitions.paid_at * 1000).toISOString() 
       : new Date().toISOString(),
   });
 
-  // Update subscription status to active
+  // Update subscription status to active and update next_billing_date
+  const nextBillingDate = invoice.lines.data[0]?.period?.end 
+    ? new Date(invoice.lines.data[0].period.end * 1000).toISOString()
+    : null;
+
   await supabaseAdmin
     .from("company_subscriptions")
-    .update({ status: "active", updated_at: new Date().toISOString() })
-    .eq("stripe_customer_id", customerId);
+    .update({ 
+      status: "active", 
+      next_billing_date: nextBillingDate,
+      updated_at: new Date().toISOString() 
+    })
+    .eq("id", sub.id);
 
   // Ensure company is active
   await supabaseAdmin
@@ -156,7 +183,7 @@ const handleInvoicePaid = async (invoice: Stripe.Invoice) => {
     .update({ is_active: true })
     .eq("id", sub.company_id);
 
-  logStep("Invoice payment recorded", { companyId: sub.company_id });
+  logStep("Invoice payment recorded and company activated", { companyId: sub.company_id });
 };
 
 const handleInvoiceFailed = async (invoice: Stripe.Invoice) => {
@@ -166,7 +193,7 @@ const handleInvoiceFailed = async (invoice: Stripe.Invoice) => {
 
   const { data: sub } = await supabaseAdmin
     .from("company_subscriptions")
-    .select("company_id")
+    .select("company_id, id")
     .eq("stripe_customer_id", customerId)
     .single();
 
@@ -183,14 +210,14 @@ const handleInvoiceFailed = async (invoice: Stripe.Invoice) => {
     amount_cents: invoice.amount_due,
     currency: invoice.currency,
     status: "failed",
-    description: invoice.lines.data[0]?.description || "Failed payment attempt",
+    description: invoice.lines.data[0]?.description || "Tentativa de pagamento falhou",
   });
 
-  // Update subscription status
+  // Update subscription status to past_due
   await supabaseAdmin
     .from("company_subscriptions")
     .update({ status: "past_due", updated_at: new Date().toISOString() })
-    .eq("stripe_customer_id", customerId);
+    .eq("id", sub.id);
 
   logStep("Failed payment recorded", { companyId: sub.company_id });
 };
@@ -202,12 +229,13 @@ const handleSubscriptionDeleted = async (subscription: Stripe.Subscription) => {
 
   const { data: sub } = await supabaseAdmin
     .from("company_subscriptions")
-    .select("company_id")
+    .select("company_id, id")
     .eq("stripe_customer_id", customerId)
     .single();
 
   if (!sub) return;
 
+  // Mark subscription as canceled
   await supabaseAdmin
     .from("company_subscriptions")
     .update({ 
@@ -215,9 +243,15 @@ const handleSubscriptionDeleted = async (subscription: Stripe.Subscription) => {
       stripe_subscription_id: null,
       updated_at: new Date().toISOString() 
     })
-    .eq("stripe_customer_id", customerId);
+    .eq("id", sub.id);
 
-  logStep("Subscription marked as canceled", { companyId: sub.company_id });
+  // Inactivate company immediately
+  await supabaseAdmin
+    .from("companies")
+    .update({ is_active: false })
+    .eq("id", sub.company_id);
+
+  logStep("Subscription canceled and company inactivated", { companyId: sub.company_id });
 };
 
 serve(async (req) => {
