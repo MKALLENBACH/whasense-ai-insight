@@ -86,7 +86,7 @@ const SaleCycleHistory = ({
         <CardContent className="pt-0">
           <ScrollArea className="h-[220px]">
             <div className="space-y-2">
-              {cycles.map((cycle, index) => {
+              {[...cycles].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map((cycle, index) => {
                 const status = statusConfig[cycle.status] || statusConfig.pending;
                 const StatusIcon = status.icon;
                 const isActive = cycle.id === activeCycleId;
