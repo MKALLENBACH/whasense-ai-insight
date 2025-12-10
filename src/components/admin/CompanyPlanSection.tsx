@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -11,8 +12,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CreditCard, Users, Infinity, Loader2, Save } from "lucide-react";
+import { CreditCard, Users, Infinity, Loader2, Save, Calendar, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { format, addDays } from "date-fns";
 
 interface Plan {
   id: string;
@@ -28,6 +30,8 @@ interface CompanyPlanSectionProps {
   onPlanUpdated: () => void;
 }
 
+const FREE_PLAN_ID = "8af5c9e1-02a3-4705-b312-6f33bcc0d965";
+
 const CompanyPlanSection = ({
   companyId,
   currentPlanId,
@@ -37,14 +41,29 @@ const CompanyPlanSection = ({
   const [selectedPlanId, setSelectedPlanId] = useState<string>(currentPlanId || "");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [freeStartDate, setFreeStartDate] = useState<string>("");
+  const [freeEndDate, setFreeEndDate] = useState<string>("");
+  const [currentFreeStartDate, setCurrentFreeStartDate] = useState<string | null>(null);
+  const [currentFreeEndDate, setCurrentFreeEndDate] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPlans();
-  }, []);
+    fetchCompanyTrialDates();
+  }, [companyId]);
 
   useEffect(() => {
     setSelectedPlanId(currentPlanId || "");
   }, [currentPlanId]);
+
+  // When Free plan is selected, set default dates
+  useEffect(() => {
+    if (selectedPlanId === FREE_PLAN_ID && !freeStartDate && !currentFreeStartDate) {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const endDate = format(addDays(new Date(), 7), "yyyy-MM-dd");
+      setFreeStartDate(today);
+      setFreeEndDate(endDate);
+    }
+  }, [selectedPlanId, freeStartDate, currentFreeStartDate]);
 
   const fetchPlans = async () => {
     try {
@@ -64,12 +83,58 @@ const CompanyPlanSection = ({
     }
   };
 
+  const fetchCompanyTrialDates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("free_start_date, free_end_date")
+        .eq("id", companyId)
+        .single();
+
+      if (error) throw error;
+      
+      if (data?.free_start_date) {
+        setCurrentFreeStartDate(data.free_start_date);
+        setFreeStartDate(data.free_start_date);
+      }
+      if (data?.free_end_date) {
+        setCurrentFreeEndDate(data.free_end_date);
+        setFreeEndDate(data.free_end_date);
+      }
+    } catch (error) {
+      console.error("Error fetching company trial dates:", error);
+    }
+  };
+
   const handleSave = async () => {
+    const isFreePlan = selectedPlanId === FREE_PLAN_ID;
+    
+    // Validate free plan dates
+    if (isFreePlan) {
+      if (!freeStartDate || !freeEndDate) {
+        toast.error("Datas de início e fim do trial são obrigatórias para o plano Free");
+        return;
+      }
+      if (new Date(freeEndDate) <= new Date(freeStartDate)) {
+        toast.error("Data de fim deve ser posterior à data de início");
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
+      const updateData: Record<string, unknown> = { 
+        plan_id: selectedPlanId || null 
+      };
+      
+      if (isFreePlan) {
+        updateData.free_start_date = freeStartDate;
+        updateData.free_end_date = freeEndDate;
+      }
+
       const { error } = await supabase
         .from("companies")
-        .update({ plan_id: selectedPlanId || null })
+        .update(updateData)
         .eq("id", companyId);
 
       if (error) throw error;
@@ -85,6 +150,8 @@ const CompanyPlanSection = ({
   };
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
+  const isFreePlan = selectedPlanId === FREE_PLAN_ID;
+  const isTrialExpired = currentFreeEndDate && new Date(currentFreeEndDate) < new Date();
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -128,7 +195,7 @@ const CompanyPlanSection = ({
                   <div className="flex items-center gap-2">
                     <span>{plan.name}</span>
                     <span className="text-slate-400 text-sm">
-                      - {formatCurrency(plan.monthly_price)}/mês
+                      - {plan.monthly_price === 0 ? "Grátis" : `${formatCurrency(plan.monthly_price)}/mês`}
                     </span>
                   </div>
                 </SelectItem>
@@ -136,6 +203,47 @@ const CompanyPlanSection = ({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Free Plan Date Fields */}
+        {isFreePlan && (
+          <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4 space-y-4">
+            <div className="flex items-center gap-2 text-cyan-400">
+              <Calendar className="h-4 w-4" />
+              <span className="font-medium">Período de Trial</span>
+            </div>
+            
+            {isTrialExpired && currentPlanId === FREE_PLAN_ID && (
+              <div className="flex items-center gap-2 text-amber-400 bg-amber-500/10 p-3 rounded">
+                <AlertTriangle className="h-4 w-4" />
+                <span className="text-sm">Trial expirado! A empresa será convertida para "Sem Plano".</span>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-slate-300">Data de Início *</Label>
+                <Input
+                  type="date"
+                  value={freeStartDate}
+                  onChange={(e) => setFreeStartDate(e.target.value)}
+                  className="bg-slate-900/50 border-slate-700 text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-slate-300">Data de Fim *</Label>
+                <Input
+                  type="date"
+                  value={freeEndDate}
+                  onChange={(e) => setFreeEndDate(e.target.value)}
+                  className="bg-slate-900/50 border-slate-700 text-white"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">
+              Após a data de fim, o plano será automaticamente convertido para "Sem Plano".
+            </p>
+          </div>
+        )}
 
         {selectedPlan && (
           <div className="bg-slate-900/50 rounded-lg p-4 space-y-3">
@@ -146,7 +254,7 @@ const CompanyPlanSection = ({
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Preço Mensal</span>
               <span className="text-white font-medium">
-                {formatCurrency(selectedPlan.monthly_price)}
+                {selectedPlan.monthly_price === 0 ? "Grátis" : formatCurrency(selectedPlan.monthly_price)}
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -173,7 +281,7 @@ const CompanyPlanSection = ({
 
         <Button
           onClick={handleSave}
-          disabled={isSaving || selectedPlanId === currentPlanId}
+          disabled={isSaving || (selectedPlanId === currentPlanId && !isFreePlan)}
           className="w-full bg-orange-500 hover:bg-orange-600"
         >
           {isSaving ? (

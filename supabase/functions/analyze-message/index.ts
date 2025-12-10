@@ -487,6 +487,62 @@ serve(async (req) => {
     const body = await req.json();
     const { message, message_id, cycleMessages, companyId, cycleType, async: useAsync } = body;
 
+    // Check if company has valid plan before processing AI
+    if (companyId) {
+      const FREE_PLAN_ID = "8af5c9e1-02a3-4705-b312-6f33bcc0d965";
+      const INACTIVE_PLAN_ID = "fadfe68e-1f50-4e59-8815-40fc9d590fa8";
+      
+      const { data: company, error: companyError } = await supabase
+        .from("companies")
+        .select("plan_id, is_active, free_end_date")
+        .eq("id", companyId)
+        .single();
+      
+      if (companyError) {
+        console.error("Error checking company plan:", companyError);
+      } else if (company) {
+        // Check if company is inactive
+        if (!company.is_active) {
+          console.log("AI blocked: company is inactive");
+          return new Response(
+            JSON.stringify({ error: "Empresa inativa. IA bloqueada." }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        // Check if no plan or inactive plan
+        if (!company.plan_id || company.plan_id === INACTIVE_PLAN_ID) {
+          console.log("AI blocked: no valid plan");
+          return new Response(
+            JSON.stringify({ error: "Sem plano ativo. IA bloqueada." }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        // Check if FREE trial has expired
+        if (company.plan_id === FREE_PLAN_ID && company.free_end_date) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const endDate = new Date(company.free_end_date);
+          endDate.setHours(23, 59, 59, 999);
+          
+          if (today > endDate) {
+            console.log("AI blocked: FREE trial expired");
+            // Auto-expire the trial
+            await supabase
+              .from("companies")
+              .update({ plan_id: null })
+              .eq("id", companyId);
+            
+            return new Response(
+              JSON.stringify({ error: "Período de teste expirado. IA bloqueada." }),
+              { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+      }
+    }
+
     // Validate input
     if (!message || typeof message !== 'string') {
       return new Response(

@@ -3,8 +3,9 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { UserRole } from "@/types";
 
-// ID do plano "Inativo" no banco
+// IDs dos planos no banco
 const INACTIVE_PLAN_ID = "fadfe68e-1f50-4e59-8815-40fc9d590fa8";
+const FREE_PLAN_ID = "8af5c9e1-02a3-4705-b312-6f33bcc0d965";
 
 interface AuthUser {
   id: string;
@@ -107,13 +108,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { data: company, error } = await supabase
       .from("companies")
-      .select("id, plan_id, is_active, plans:plan_id(id, name, seller_limit, features)")
+      .select("id, plan_id, is_active, free_start_date, free_end_date, plans:plan_id(id, name, seller_limit, features)")
       .eq("id", companyId)
       .maybeSingle();
 
     if (error || !company) {
       console.error("Error fetching company plan:", error);
       return null;
+    }
+
+    // Check if FREE trial has expired
+    const isFreePlan = company.plan_id === FREE_PLAN_ID;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (isFreePlan && company.free_end_date) {
+      const endDate = new Date(company.free_end_date);
+      endDate.setHours(23, 59, 59, 999);
+      
+      if (today > endDate) {
+        // Trial expired - auto-convert to no plan
+        console.log("FREE trial expired, removing plan");
+        await supabase
+          .from("companies")
+          .update({ plan_id: null })
+          .eq("id", companyId);
+        
+        return {
+          planId: null,
+          planName: null,
+          isActive: company.is_active,
+          hasValidPlan: false,
+          sellerLimit: null,
+          features: null,
+        };
+      }
     }
 
     const planData = company.plans as unknown as { id: string; name: string; seller_limit: number | null; features: PlanFeatures | null } | null;

@@ -32,10 +32,11 @@ export function usePlanPermissions(): PlanPermissions {
 
   const planName = companyPlan?.planName || null;
   const isInactive = planName === 'Inativo';
-  const isNoPlan = !planName || !companyPlan?.isActive;
+  const isNoPlan = !planName || !companyPlan?.hasValidPlan;
+  const isFree = planName === 'Free';
   
-  // Check if trial expired (for Free plan)
-  const isTrialExpired = false; // TODO: implement trial check with trial_ends_at
+  // Check if trial expired is handled by AuthContext (hasValidPlan becomes false)
+  const isTrialExpired = isFree && isNoPlan;
   
   // Get features from plan or use defaults
   const features: PlanFeatures = companyPlan?.features 
@@ -45,8 +46,8 @@ export function usePlanPermissions(): PlanPermissions {
   // Seller limit based on plan
   const sellerLimit = planName ? (SELLER_LIMITS[planName] ?? null) : 0;
 
-  // Has full access (Enterprise or Admin)
-  const hasFullAccess = planName === 'Enterprise' || user?.role === 'admin';
+  // Has full access (Enterprise, Free during trial, or Admin)
+  const hasFullAccess = planName === 'Enterprise' || (isFree && !isTrialExpired) || user?.role === 'admin';
 
   // If inactive or no plan, override all features to false
   const effectiveFeatures: PlanFeatures = (isInactive || isNoPlan) 
