@@ -107,7 +107,7 @@ export default function FinanceiroPage() {
         .from("company_subscriptions")
         .select(`*, plans:plan_id (*)`)
         .eq("company_id", user.companyId)
-        .single();
+        .maybeSingle();
       
       setSubscription(subData);
 

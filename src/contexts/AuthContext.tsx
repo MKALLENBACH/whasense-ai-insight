@@ -314,32 +314,50 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   useEffect(() => {
+    let isMounted = true;
+    let hasInitialized = false;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!isMounted) return;
+        
         setSession(session);
         
-        if (session?.user) {
-          setTimeout(() => {
-            updateAuthUser(session.user);
-          }, 0);
-        } else {
+        // Only handle sign in/out events after initial load
+        // INITIAL_SESSION is handled by getSession
+        if (event === 'SIGNED_IN' && hasInitialized) {
+          updateAuthUser(session!.user);
+        } else if (event === 'SIGNED_OUT') {
+          memoryCache.clear();
           setUser(null);
           setCompanyPlan(null);
           setSellerLimitInfo(null);
+          setIsLoading(false);
+        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          // Token refresh doesn't need to re-fetch user data, just update session
+          setIsLoading(false);
         }
-        setIsLoading(false);
       }
     );
 
+    // Initial load - only runs once
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
+      
+      hasInitialized = true;
       setSession(session);
+      
       if (session?.user) {
         updateAuthUser(session.user);
+      } else {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<{ role: UserRole }> => {
