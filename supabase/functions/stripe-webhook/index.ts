@@ -254,6 +254,44 @@ const handleSubscriptionDeleted = async (subscription: Stripe.Subscription) => {
   logStep("Subscription canceled and company inactivated", { companyId: sub.company_id });
 };
 
+const handleChargeRefunded = async (charge: Stripe.Charge) => {
+  logStep("Charge refunded", { chargeId: charge.id, customerId: charge.customer, amountRefunded: charge.amount_refunded });
+
+  const customerId = charge.customer as string;
+
+  if (!customerId) {
+    logStep("No customer ID in charge", { chargeId: charge.id });
+    return;
+  }
+
+  // Find company by stripe_customer_id
+  const { data: sub } = await supabaseAdmin
+    .from("company_subscriptions")
+    .select("company_id, id")
+    .eq("stripe_customer_id", customerId)
+    .single();
+
+  if (!sub) {
+    logStep("No company found for customer", { customerId });
+    return;
+  }
+
+  // Record refund in payment_history
+  await supabaseAdmin.from("payment_history").insert({
+    company_id: sub.company_id,
+    stripe_payment_intent_id: charge.payment_intent as string,
+    amount_cents: -charge.amount_refunded, // Negative amount for refund
+    currency: charge.currency,
+    status: "refunded",
+    description: charge.refunds?.data[0]?.reason 
+      ? `Reembolso: ${charge.refunds.data[0].reason}` 
+      : "Reembolso processado",
+    paid_at: new Date().toISOString(),
+  });
+
+  logStep("Refund recorded", { companyId: sub.company_id, amountRefunded: charge.amount_refunded });
+};
+
 serve(async (req) => {
   const signature = req.headers.get("stripe-signature");
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
@@ -281,6 +319,9 @@ serve(async (req) => {
         break;
       case "customer.subscription.deleted":
         await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+        break;
+      case "charge.refunded":
+        await handleChargeRefunded(event.data.object as Stripe.Charge);
         break;
       default:
         logStep("Unhandled event type", { type: event.type });
