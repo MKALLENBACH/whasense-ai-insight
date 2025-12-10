@@ -14,12 +14,20 @@ interface AuthUser {
   companyId: string | null;
 }
 
-interface CompanyPlanInfo {
+export interface PlanFeatures {
+  canAccess360: boolean;
+  canUseGamification: boolean;
+  canUseFollowups: boolean;
+  canAccessFullDashboard: boolean;
+}
+
+export interface CompanyPlanInfo {
   planId: string | null;
   planName: string | null;
   isActive: boolean;
   hasValidPlan: boolean;
   sellerLimit: number | null;
+  features: PlanFeatures | null;
 }
 
 interface SellerLimitInfo {
@@ -99,7 +107,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { data: company, error } = await supabase
       .from("companies")
-      .select("id, plan_id, is_active, plans:plan_id(id, name, seller_limit)")
+      .select("id, plan_id, is_active, plans:plan_id(id, name, seller_limit, features)")
       .eq("id", companyId)
       .maybeSingle();
 
@@ -108,7 +116,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return null;
     }
 
-    const planData = company.plans as { id: string; name: string; seller_limit: number | null } | null;
+    const planData = company.plans as unknown as { id: string; name: string; seller_limit: number | null; features: PlanFeatures | null } | null;
     const hasValidPlan = company.is_active && 
                          company.plan_id !== null && 
                          company.plan_id !== INACTIVE_PLAN_ID;
@@ -119,6 +127,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isActive: company.is_active,
       hasValidPlan,
       sellerLimit: planData?.seller_limit ?? null,
+      features: planData?.features || null,
     };
   };
 
