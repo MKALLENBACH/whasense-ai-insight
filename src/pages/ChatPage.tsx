@@ -97,6 +97,16 @@ const objectionLabels: Record<string, string> = {
   delay: "Prazo de entrega",
   trust: "Falta de confiança",
   doubt: "Dúvidas sobre o produto",
+  complaint: "Reclamação",
+  competition: "Concorrência",
+  quality: "Qualidade",
+  support: "Suporte",
+  delivery: "Entrega",
+  defect: "Defeito",
+  refund: "Reembolso",
+  exchange: "Troca",
+  problem: "Problema",
+  question: "Dúvida",
   none: "Nenhuma objeção",
 };
 

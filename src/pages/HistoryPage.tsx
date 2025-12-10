@@ -86,6 +86,15 @@ const objectionLabels: Record<string, string> = {
   trust: "Confiança",
   doubt: "Dúvida",
   competition: "Concorrência",
+  complaint: "Reclamação",
+  quality: "Qualidade",
+  support: "Suporte",
+  delivery: "Entrega",
+  defect: "Defeito",
+  refund: "Reembolso",
+  exchange: "Troca",
+  problem: "Problema",
+  question: "Dúvida",
   none: "-",
 };
 
