@@ -106,24 +106,16 @@ const Client360Page = () => {
     
     setIsLoading(true);
     try {
-      // For sellers, first verify they have access to this client
+      // For sellers, first verify they have access to this client via sale_cycles
       if (isSeller) {
-        // Check if seller has any messages with customers linked to this client
         const { data: accessCheck, error: accessError } = await supabase
-          .from("messages")
-          .select(`
-            id,
-            customers!inner (
-              client_id
-            )
-          `)
+          .from("sale_cycles")
+          .select("id")
+          .eq("client_id", clientId)
           .eq("seller_id", user.id)
           .limit(1);
         
-        // Filter by client_id in customers
-        const hasAccess = accessCheck?.some(m => (m.customers as any)?.client_id === clientId);
-        
-        if (!hasAccess) {
+        if (accessError || !accessCheck || accessCheck.length === 0) {
           setClient(null);
           setIsLoading(false);
           return;
