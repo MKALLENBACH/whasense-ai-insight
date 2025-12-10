@@ -134,6 +134,7 @@ const Client360Objections = ({ clientId, sellerId }: Client360ObjectionsProps) =
           <div className="text-center py-12">
             <AlertTriangle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground">Nenhuma objeção registrada</p>
+            <p className="text-xs text-muted-foreground mt-2">As objeções são detectadas automaticamente pela IA nas conversas</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>

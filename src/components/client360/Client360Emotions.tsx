@@ -127,6 +127,7 @@ const Client360Emotions = ({ clientId, sellerId }: Client360EmotionsProps) => {
           <div className="text-center py-12">
             <LineChartIcon className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground">Sem dados de emoções disponíveis</p>
+            <p className="text-xs text-muted-foreground mt-2">As emoções são detectadas automaticamente pela IA nas conversas</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
