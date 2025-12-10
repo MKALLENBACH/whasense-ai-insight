@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.expire-free-trials]
 verify_jwt = false
+
+[functions.create-trial-checkout]
+verify_jwt = false
