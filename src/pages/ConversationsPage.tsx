@@ -373,12 +373,25 @@ const ConversationsPage = () => {
               </span>
             </div>
 
-            {/* Company name */}
-            {conv.customer.companyName && (
+            {/* Company name or link button */}
+            {conv.customer.companyName ? (
               <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                 <Building2 className="h-3 w-3" />
                 <span>{conv.customer.companyName}</span>
               </div>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 px-1.5 text-[10px] text-primary hover:text-primary/80 mt-0.5 -ml-1.5"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/cliente360/${conv.customer.id}`);
+                }}
+              >
+                <Building2 className="h-3 w-3 mr-1" />
+                Vincular empresa
+              </Button>
             )}
 
             {/* Seller name for manager */}
