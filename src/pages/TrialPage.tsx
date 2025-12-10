@@ -22,7 +22,11 @@ const TrialPage = () => {
         if (fnError) throw fnError;
 
         if (data?.url) {
-          window.location.href = data.url;
+          // Use window.open for better iframe compatibility, then fallback to location.href
+          const opened = window.open(data.url, "_self");
+          if (!opened) {
+            window.location.href = data.url;
+          }
         } else {
           throw new Error("URL do checkout não retornada");
         }
