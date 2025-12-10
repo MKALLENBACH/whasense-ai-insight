@@ -25,6 +25,7 @@ import {
   Target,
   Building2,
   Phone,
+  HeadphonesIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -98,6 +99,7 @@ const statusConfig = {
   in_progress: { label: "Em Andamento", icon: Play, color: "bg-primary/10 text-primary" },
   won: { label: "Venda Realizada", icon: Trophy, color: "bg-success/10 text-success" },
   lost: { label: "Perdido", icon: XCircle, color: "bg-destructive/10 text-destructive" },
+  closed: { label: "Pós-venda Concluído", icon: HeadphonesIcon, color: "bg-blue-500/10 text-blue-500" },
 };
 
 const lossReasonLabels: Record<string, string> = {
