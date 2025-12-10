@@ -6,6 +6,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const logStep = (step: string, details?: unknown) => {
+  const detailsStr = details ? ` - ${JSON.stringify(details)}` : "";
+  console.log(`[CREATE-SELLER] ${step}${detailsStr}`);
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -73,15 +78,15 @@ serve(async (req) => {
 
     const companyId = managerProfile.company_id;
 
-    // Get company's plan
+    // Get company's plan and name
     const { data: company, error: companyError } = await supabase
       .from('companies')
-      .select('plan_id')
+      .select('plan_id, name')
       .eq('id', companyId)
       .single();
 
     if (companyError) {
-      console.error('Error fetching company:', companyError);
+      logStep('Error fetching company', companyError);
     }
 
     // Check seller limit if company has a plan
@@ -93,7 +98,7 @@ serve(async (req) => {
         .single();
 
       if (planError) {
-        console.error('Error fetching plan:', planError);
+        logStep('Error fetching plan', planError);
       }
 
       // If plan has a seller limit (not unlimited)
@@ -114,12 +119,12 @@ serve(async (req) => {
             .eq('role', 'seller');
 
           if (rolesError) {
-            console.error('Error counting sellers:', rolesError);
+            logStep('Error counting sellers', rolesError);
           }
 
           const currentSellerCount = sellerRoles?.length || 0;
 
-          console.log(`Plan: ${plan.name}, Limit: ${plan.seller_limit}, Current: ${currentSellerCount}`);
+          logStep('Seller limit check', { plan: plan.name, limit: plan.seller_limit, current: currentSellerCount });
 
           if (currentSellerCount >= plan.seller_limit) {
             return new Response(
@@ -154,18 +159,21 @@ serve(async (req) => {
       );
     }
 
-    console.log('Creating seller:', { name, email, companyId });
+    logStep('Creating seller', { name, email, companyId });
 
-    // Create the seller user
+    // Create the seller user with requires_password_change flag
     const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { name },
+      user_metadata: { 
+        name,
+        requires_password_change: true,
+      },
     });
 
     if (createError) {
-      console.error('Error creating user:', createError);
+      logStep('Error creating user', createError);
       if (createError.message.includes('already been registered')) {
         return new Response(
           JSON.stringify({ error: 'Este email já está cadastrado' }),
@@ -175,14 +183,23 @@ serve(async (req) => {
       throw createError;
     }
 
-    // Update the profile with company_id
+    logStep('Auth user created', { userId: newUser.user.id });
+
+    // Update the profile with company_id (may have been created by trigger)
     const { error: updateProfileError } = await supabase
       .from('profiles')
-      .update({ company_id: companyId })
-      .eq('user_id', newUser.user.id);
+      .upsert({
+        user_id: newUser.user.id,
+        company_id: companyId,
+        name,
+        email,
+        is_active: true,
+      }, { onConflict: 'user_id' });
 
     if (updateProfileError) {
-      console.error('Error updating profile:', updateProfileError);
+      logStep('Error updating profile', updateProfileError);
+    } else {
+      logStep('Profile created/updated', { userId: newUser.user.id, companyId });
     }
 
     // Insert user role as seller
@@ -194,10 +211,42 @@ serve(async (req) => {
       });
 
     if (roleInsertError) {
-      console.error('Error inserting role:', roleInsertError);
+      logStep('Error inserting role', roleInsertError);
     }
 
-    console.log('Seller created successfully:', newUser.user.id);
+    // Send welcome email with credentials
+    try {
+      logStep('Sending welcome email to seller', { email, name });
+      
+      const emailResponse = await fetch(
+        `${supabaseUrl}/functions/v1/send-seller-welcome`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+          },
+          body: JSON.stringify({
+            email,
+            name,
+            temporaryPassword: password,
+            companyName: company?.name || 'sua empresa',
+          }),
+        }
+      );
+
+      if (!emailResponse.ok) {
+        const errorBody = await emailResponse.text();
+        logStep('Failed to send welcome email', { status: emailResponse.status, error: errorBody });
+      } else {
+        logStep('Welcome email sent successfully', { email });
+      }
+    } catch (emailError) {
+      logStep('Error sending welcome email', { error: String(emailError) });
+      // Don't fail the request if email fails
+    }
+
+    logStep('Seller created successfully', { userId: newUser.user.id, email });
 
     return new Response(
       JSON.stringify({ 
@@ -213,7 +262,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in create-seller:', error);
+    logStep('Error in create-seller', error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
