@@ -43,6 +43,7 @@ interface Plan {
   annual_price: number;
   seller_limit: number | null;
   is_active: boolean;
+  visible_to_managers: boolean;
   created_at: string;
   stripe_monthly_price_id: string | null;
   stripe_annual_price_id: string | null;
@@ -63,6 +64,7 @@ const AdminPlansPage = () => {
   const [sellerLimit, setSellerLimit] = useState("");
   const [isUnlimited, setIsUnlimited] = useState(false);
   const [isActive, setIsActive] = useState(true);
+  const [visibleToManagers, setVisibleToManagers] = useState(true);
   const [stripeMonthlyPriceId, setStripeMonthlyPriceId] = useState("");
   const [stripeAnnualPriceId, setStripeAnnualPriceId] = useState("");
 
@@ -95,6 +97,7 @@ const AdminPlansPage = () => {
     setSellerLimit("");
     setIsUnlimited(false);
     setIsActive(true);
+    setVisibleToManagers(true);
     setStripeMonthlyPriceId("");
     setStripeAnnualPriceId("");
     setEditingPlan(null);
@@ -114,6 +117,7 @@ const AdminPlansPage = () => {
     setIsUnlimited(plan.seller_limit === null);
     setSellerLimit(plan.seller_limit?.toString() || "");
     setIsActive(plan.is_active);
+    setVisibleToManagers(plan.visible_to_managers);
     setStripeMonthlyPriceId(plan.stripe_monthly_price_id || "");
     setStripeAnnualPriceId(plan.stripe_annual_price_id || "");
     setIsModalOpen(true);
@@ -137,6 +141,7 @@ const AdminPlansPage = () => {
         annual_price: parseFloat(annualPrice) || 0,
         seller_limit: isUnlimited ? null : (parseInt(sellerLimit) || 1),
         is_active: isActive,
+        visible_to_managers: visibleToManagers,
         stripe_monthly_price_id: stripeMonthlyPriceId.trim() || null,
         stripe_annual_price_id: stripeAnnualPriceId.trim() || null,
       };
@@ -243,6 +248,7 @@ const AdminPlansPage = () => {
                     <TableHead className="text-slate-400">Preço Mensal</TableHead>
                     <TableHead className="text-slate-400">Preço Anual</TableHead>
                     <TableHead className="text-slate-400 text-center">Limite Vendedores</TableHead>
+                    <TableHead className="text-slate-400 text-center">Visível Gestor</TableHead>
                     <TableHead className="text-slate-400">Status</TableHead>
                     <TableHead className="text-slate-400 text-right">Ações</TableHead>
                   </TableRow>
@@ -294,6 +300,17 @@ const AdminPlansPage = () => {
                             <span className="text-white">{plan.seller_limit}</span>
                           </div>
                         )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          className={
+                            plan.visible_to_managers
+                              ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                              : "bg-slate-700 text-slate-400"
+                          }
+                        >
+                          {plan.visible_to_managers ? "Sim" : "Não"}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -459,6 +476,17 @@ const AdminPlansPage = () => {
                 <Switch
                   checked={isActive}
                   onCheckedChange={setIsActive}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-slate-300">Visível para Gestores</Label>
+                  <p className="text-xs text-slate-500">Mostrar como opção de plano no frontend</p>
+                </div>
+                <Switch
+                  checked={visibleToManagers}
+                  onCheckedChange={setVisibleToManagers}
                 />
               </div>
 
