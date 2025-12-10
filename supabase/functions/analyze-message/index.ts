@@ -420,15 +420,20 @@ async function analyzeMessage(
       return objectionMap[normalized] || normalized;
     };
 
-    // Normalize temperature values
+    // Normalize temperature values to enum values (hot, warm, cold)
     const normalizeTemperature = (temp: string): string => {
-      const normalized = String(temp || "morno").toLowerCase().trim();
+      const normalized = String(temp || "warm").toLowerCase().trim();
       const tempMap: Record<string, string> = {
-        "cold": "frio",
-        "warm": "morno",
-        "hot": "quente",
+        // Portuguese to English enum values
+        "frio": "cold",
+        "morno": "warm",
+        "quente": "hot",
+        // Already English - keep as is
+        "cold": "cold",
+        "warm": "warm",
+        "hot": "hot",
       };
-      return tempMap[normalized] || normalized;
+      return tempMap[normalized] || "warm";
     };
     
     // Validate and normalize response
