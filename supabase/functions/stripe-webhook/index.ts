@@ -375,9 +375,18 @@ const handleInvoicePaid = async (invoice: Stripe.Invoice) => {
   logStep("Invoice paid", { invoiceId: invoice.id, customerId: invoice.customer });
 
   const customerId = invoice.customer as string;
-  const sub = await findCompanyByStripeCustomer(customerId);
+  
+  // Get subscription with more details
+  const { data: sub, error: subError } = await supabaseAdmin
+    .from("company_subscriptions")
+    .select("id, company_id, status, current_period_end, plan_id")
+    .eq("stripe_customer_id", customerId)
+    .single();
 
-  if (!sub) return;
+  if (subError || !sub) {
+    logStep("No subscription found for customer", { customerId, error: subError });
+    return;
+  }
 
   // Get plan from invoice price
   const priceId = invoice.lines.data[0]?.price?.id;
@@ -387,7 +396,14 @@ const handleInvoicePaid = async (invoice: Stripe.Invoice) => {
     const plan = await findPlanByStripePrice(priceId);
     if (plan) {
       planId = plan.id;
+      logStep("Found plan from price", { planId, planName: plan.name });
     }
+  }
+
+  // If no plan found from price, use existing subscription plan_id
+  if (!planId && sub.plan_id) {
+    planId = sub.plan_id;
+    logStep("Using existing subscription plan", { planId });
   }
 
   // Registrar pagamento
