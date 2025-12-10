@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
       .from("profiles")
       .select("name")
       .eq("user_id", vendor_id)
-      .single();
+      .maybeSingle();
 
     const vendorName = profile?.name || "Vendedor";
 

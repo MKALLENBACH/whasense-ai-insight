@@ -45,7 +45,7 @@ serve(async (req) => {
       .from("company_limits")
       .select("is_throttled, max_ai_ops_per_minute")
       .eq("company_id", company_id)
-      .single();
+      .maybeSingle();
 
     if (limits?.is_throttled) {
       return new Response(JSON.stringify({ 

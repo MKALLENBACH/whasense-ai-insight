@@ -83,7 +83,7 @@ serve(async (req) => {
       .from('companies')
       .select('plan_id, name')
       .eq('id', companyId)
-      .single();
+      .maybeSingle();
 
     if (companyError) {
       logStep('Error fetching company', companyError);
@@ -95,7 +95,7 @@ serve(async (req) => {
         .from('plans')
         .select('seller_limit, name')
         .eq('id', company.plan_id)
-        .single();
+        .maybeSingle();
 
       if (planError) {
         logStep('Error fetching plan', planError);

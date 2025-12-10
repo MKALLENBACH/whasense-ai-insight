@@ -40,7 +40,7 @@ serve(async (req) => {
       .select('seller_id, phone_number')
       .eq('phone_number', phoneNumber)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
     if (sessionError || !session) {
       const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-11);
@@ -69,7 +69,7 @@ serve(async (req) => {
       .from('profiles')
       .select('company_id')
       .eq('user_id', sellerId)
-      .single();
+      .maybeSingle();
 
     // Find or create customer
     let customerId: string;
@@ -79,7 +79,7 @@ serve(async (req) => {
       .select('id')
       .eq('phone', phoneNumber)
       .eq('seller_id', sellerId)
-      .single();
+      .maybeSingle();
 
     if (existingCustomer) {
       customerId = existingCustomer.id;
