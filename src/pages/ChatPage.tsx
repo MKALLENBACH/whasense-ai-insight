@@ -834,10 +834,10 @@ const ChatPage = () => {
                 </div>
               ) : (
                 (() => {
-                  // Group messages by cycle for visual separation
+                  // Group messages by cycle for visual separation (oldest first)
                   const cyclesWithMessages = cycles
                     .filter(c => messages.some(m => m.cycle_id === c.id))
-                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
                   
                   return cyclesWithMessages.map((cycle) => {
                     const cycleMessages = messages.filter(m => m.cycle_id === cycle.id);
