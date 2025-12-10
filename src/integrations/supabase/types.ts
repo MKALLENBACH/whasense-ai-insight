@@ -666,6 +666,9 @@ export type Database = {
       }
       messages: {
         Row: {
+          attachment_name: string | null
+          attachment_type: string | null
+          attachment_url: string | null
           buyer_id: string | null
           client_id: string | null
           content: string
@@ -677,6 +680,9 @@ export type Database = {
           timestamp: string
         }
         Insert: {
+          attachment_name?: string | null
+          attachment_type?: string | null
+          attachment_url?: string | null
           buyer_id?: string | null
           client_id?: string | null
           content: string
@@ -688,6 +694,9 @@ export type Database = {
           timestamp?: string
         }
         Update: {
+          attachment_name?: string | null
+          attachment_type?: string | null
+          attachment_url?: string | null
           buyer_id?: string | null
           client_id?: string | null
           content?: string

@@ -54,6 +54,9 @@ interface Message {
   direction: "incoming" | "outgoing";
   timestamp: string;
   cycle_id?: string | null;
+  attachment_url?: string | null;
+  attachment_type?: string | null;
+  attachment_name?: string | null;
 }
 
 interface AIAnalysis {
@@ -196,7 +199,7 @@ const ChatPage = () => {
       // Fetch messages for this customer
       const { data: messagesData, error: messagesError } = await supabase
         .from("messages")
-        .select("id, content, direction, timestamp, cycle_id")
+        .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
         .eq("customer_id", id)
         .order("timestamp", { ascending: true });
       
@@ -336,10 +339,12 @@ const ChatPage = () => {
   // Handler for ChatInput component (simplified - ignores attachments since columns don't exist yet)
   const handleSendMessageWithAttachments = async (
     content: string, 
-    _attachments?: { url: string; type: string; name: string }[]
+    attachments?: { url: string; type: string; name: string }[]
   ) => {
-    // Allow sending if there's content OR attachments (currently attachments not stored in DB)
-    if (!content.trim() || !id || !user || isSending || isViewingHistory) return;
+    // Allow sending if there's content OR attachments
+    const hasContent = content.trim().length > 0;
+    const hasAttachments = attachments && attachments.length > 0;
+    if ((!hasContent && !hasAttachments) || !id || !user || isSending || isViewingHistory) return;
 
     setIsSending(true);
     
@@ -351,16 +356,22 @@ const ChatPage = () => {
         await updateCycleStatus(cycle.id, 'in_progress');
       }
 
+      // Get the first attachment if any
+      const attachment = attachments?.[0];
+
       const { data, error } = await supabase
         .from("messages")
         .insert({
           seller_id: user.id,
           customer_id: id,
-          content: content.trim(),
+          content: content.trim() || (attachment ? `[${attachment.type}: ${attachment.name}]` : ""),
           direction: "outgoing",
           cycle_id: cycle.id,
+          attachment_url: attachment?.url || null,
+          attachment_type: attachment?.type || null,
+          attachment_name: attachment?.name || null,
         })
-        .select()
+        .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
         .single();
 
       if (error) throw error;
@@ -373,7 +384,7 @@ const ChatPage = () => {
         if (response) {
           const { data: newMsg } = await supabase
             .from("messages")
-            .select("id, content, direction, timestamp, cycle_id")
+            .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
             .eq("id", response.messageId)
             .single();
           
@@ -633,6 +644,9 @@ const ChatPage = () => {
                     content={message.content}
                     direction={message.direction}
                     timestamp={message.timestamp}
+                    attachmentUrl={message.attachment_url}
+                    attachmentType={message.attachment_type}
+                    attachmentName={message.attachment_name}
                   />
                 ))
               )}
