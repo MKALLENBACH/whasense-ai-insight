@@ -206,7 +206,9 @@ export default function FinanceiroPage() {
     );
   }
 
-  const currentPlan = subscription?.plans;
+  // Only show current plan if subscription is active
+  const isSubscriptionActive = subscription?.status === "active";
+  const currentPlan = isSubscriptionActive ? subscription?.plans : null;
   const status = statusMap[subscription?.status || "inactive"] || statusMap.inactive;
 
   return (
