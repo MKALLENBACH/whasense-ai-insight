@@ -81,7 +81,7 @@ const PlanLimitBanner = ({
           <div className="text-right px-4 py-2 rounded-lg bg-destructive/10">
             <p className="text-sm font-semibold text-destructive">Limite atingido</p>
             <p className="text-xs text-muted-foreground">
-              Contate Whasense para upgrade
+              Acesse Financeiro e faça o upgrade
             </p>
           </div>
         )}
