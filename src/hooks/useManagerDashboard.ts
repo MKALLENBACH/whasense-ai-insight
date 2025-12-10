@@ -569,13 +569,26 @@ export function useManagerDashboard() {
 
       // Analyze top issues from post-sale cycles (from objections/problems)
       const issuesCounts: Record<string, number> = {};
+      const issueLabels: Record<string, string> = {
+        problem: "Problema com produto",
+        question: "Dúvida de uso",
+        complaint: "Reclamação",
+        delay: "Prazo/Demora",
+        trust: "Confiança",
+        price: "Preço",
+        quality: "Qualidade",
+        support: "Suporte",
+        delivery: "Entrega",
+        defect: "Defeito",
+        refund: "Reembolso",
+        exchange: "Troca",
+        none: "",
+      };
+      
       postSaleInsights.forEach(insight => {
         const objection = insight.objection;
         if (objection && objection !== "none") {
-          const issue = objection === "problem" ? "Problema com produto" 
-            : objection === "question" ? "Dúvida de uso" 
-            : objection === "complaint" ? "Reclamação"
-            : objection;
+          const issue = issueLabels[objection.toLowerCase()] || objection;
           issuesCounts[issue] = (issuesCounts[issue] || 0) + 1;
         }
       });
