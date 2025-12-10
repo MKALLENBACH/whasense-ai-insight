@@ -47,6 +47,7 @@ import { useSaleCycles } from "@/hooks/useSaleCycles";
 import { ChatAlertsBanner } from "@/components/conversation/ChatAlertsBanner";
 import ChatInput from "@/components/conversation/ChatInput";
 import MessageBubble from "@/components/conversation/MessageBubble";
+import ImageInsightsCard from "@/components/conversation/ImageInsightsCard";
 
 interface Message {
   id: string;
@@ -123,6 +124,7 @@ const ChatPage = () => {
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [isViewingHistory, setIsViewingHistory] = useState(false);
+  const [imageInsights, setImageInsights] = useState<Array<{ imageUrl: string; data: any }>>([]);
 
   // Sale cycles hook
   const {
@@ -215,6 +217,7 @@ const ChatPage = () => {
             .from("insights")
             .select("*")
             .eq("message_id", lastIncomingMessage.id)
+            .eq("insight_type", "message_analysis")
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -228,6 +231,34 @@ const ChatPage = () => {
               suggestion: insightData.suggestion || "",
               next_action: insightData.next_action || "",
             });
+          }
+        }
+
+        // Fetch image insights for messages with image attachments
+        const imageMessages = typedMessages.filter(m => 
+          m.attachment_type?.startsWith('image/') || 
+          ['jpg', 'jpeg', 'png', 'webp', 'gif'].some(ext => m.attachment_name?.toLowerCase().endsWith(`.${ext}`))
+        );
+        
+        if (imageMessages.length > 0) {
+          const messageIds = imageMessages.map(m => m.id);
+          const { data: imgInsights } = await supabase
+            .from("insights")
+            .select("message_id, image_analysis_data")
+            .eq("insight_type", "image_analysis")
+            .in("message_id", messageIds);
+          
+          if (imgInsights && imgInsights.length > 0) {
+            const imgInsightsWithUrls = imgInsights
+              .filter(ins => ins.image_analysis_data)
+              .map(ins => {
+                const msg = imageMessages.find(m => m.id === ins.message_id);
+                return {
+                  imageUrl: msg?.attachment_url || "",
+                  data: ins.image_analysis_data,
+                };
+              });
+            setImageInsights(imgInsightsWithUrls);
           }
         }
       }
@@ -359,6 +390,8 @@ const ChatPage = () => {
 
       // Get the first attachment if any
       const attachment = attachments?.[0];
+      const isImageAttachment = attachment?.type?.startsWith('image/') || 
+        ['jpg', 'jpeg', 'png', 'webp', 'gif'].some(ext => attachment?.name?.toLowerCase().endsWith(`.${ext}`));
 
       const { data, error } = await supabase
         .from("messages")
@@ -378,6 +411,35 @@ const ChatPage = () => {
       if (error) throw error;
       setMessages((prev) => [...prev, data as unknown as Message]);
 
+      // Trigger Vision AI analysis for image attachments
+      if (isImageAttachment && attachment?.url && data?.id) {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession) {
+          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-image`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${currentSession.access_token}`,
+            },
+            body: JSON.stringify({
+              message_id: data.id,
+              image_url: attachment.url,
+              sender: "seller",
+            }),
+          }).then(async (response) => {
+            if (response.ok) {
+              const result = await response.json();
+              console.log("Image analysis complete:", result);
+              toast.success("Imagem analisada pela Vision AI");
+            } else {
+              console.error("Image analysis failed:", await response.text());
+            }
+          }).catch(err => {
+            console.error("Error calling analyze-image:", err);
+          });
+        }
+      }
+
       // Trigger AI customer response
       if (simulationEnabled && !isConversationCompleted) {
         setIsSimulatingResponse(true);
@@ -391,6 +453,32 @@ const ChatPage = () => {
           
           if (newMsg) {
             setMessages((prev) => [...prev, newMsg as unknown as Message]);
+            
+            // Check if incoming message has image attachment
+            const incomingIsImage = newMsg.attachment_type?.startsWith('image/') ||
+              ['jpg', 'jpeg', 'png', 'webp', 'gif'].some(ext => newMsg.attachment_name?.toLowerCase().endsWith(`.${ext}`));
+            
+            if (incomingIsImage && newMsg.attachment_url) {
+              // Trigger Vision AI analysis for incoming image
+              const { data: { session: currentSession } } = await supabase.auth.getSession();
+              if (currentSession) {
+                fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-image`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${currentSession.access_token}`,
+                  },
+                  body: JSON.stringify({
+                    message_id: newMsg.id,
+                    image_url: newMsg.attachment_url,
+                    sender: "client",
+                  }),
+                }).catch(err => {
+                  console.error("Error calling analyze-image for incoming:", err);
+                });
+              }
+            }
+            
             await analyzeMessage(response.message, response.messageId);
           }
         }
@@ -926,6 +1014,24 @@ const ChatPage = () => {
                         <p className="text-sm text-muted-foreground">{aiAnalysis.next_action}</p>
                       </CardContent>
                     </Card>
+
+                    {/* Image Insights */}
+                    {imageInsights.length > 0 && (
+                      <div className="space-y-2">
+                        <Separator />
+                        <h4 className="text-sm font-semibold flex items-center gap-2">
+                          📷 Análises de Imagens
+                        </h4>
+                        {imageInsights.slice(-3).map((img, idx) => (
+                          <ImageInsightsCard
+                            key={idx}
+                            imageUrl={img.imageUrl}
+                            analysisData={img.data}
+                            isSeller={img.data?.detected_type === "seller"}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center justify-center py-8 text-muted-foreground">

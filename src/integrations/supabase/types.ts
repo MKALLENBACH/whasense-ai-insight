@@ -583,6 +583,8 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          image_analysis_data: Json | null
+          insight_type: string | null
           intention: string | null
           message_id: string
           next_action: string | null
@@ -594,6 +596,8 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          image_analysis_data?: Json | null
+          insight_type?: string | null
           intention?: string | null
           message_id: string
           next_action?: string | null
@@ -605,6 +609,8 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          image_analysis_data?: Json | null
+          insight_type?: string | null
           intention?: string | null
           message_id?: string
           next_action?: string | null
