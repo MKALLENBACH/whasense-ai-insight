@@ -168,45 +168,23 @@ const ChatPage = () => {
   }, [messages]);
 
   useEffect(() => {
-    console.log("=== ChatPage useEffect triggered ===", {
-      id,
-      hasSession: !!session,
-      hasUser: !!user,
-      userId: user?.id,
-      isManager,
-      isSeller,
-      displayedCycleId,
-    });
     if (id && session && user) {
-      console.log("Calling fetchConversation...");
       fetchConversation();
-    } else {
-      console.log("Not calling fetchConversation - missing:", {
-        hasId: !!id,
-        hasSession: !!session,
-        hasUser: !!user,
-      });
     }
   }, [id, session, user, isManager, isSeller, displayedCycleId]);
 
   const fetchConversation = async () => {
-    console.log("=== fetchConversation called ===", { id, hasAccessToken: !!session?.access_token });
-    if (!id || !session?.access_token) {
-      console.log("fetchConversation early return - missing:", { hasId: !!id, hasAccessToken: !!session?.access_token });
-      return;
-    }
+    if (!id || !session?.access_token) return;
 
     setIsLoading(true);
     try {
       // Fetch customer info
-      console.log("Fetching customer data for id:", id);
       const { data: customerData, error: customerError } = await supabase
         .from("customers")
         .select("*, lead_status, is_incomplete")
         .eq("id", id)
         .maybeSingle();
 
-      console.log("Customer fetch result:", { customerData, customerError });
       if (customerError) throw customerError;
       setCustomer(customerData);
 
@@ -216,19 +194,11 @@ const ChatPage = () => {
       }
 
       // Fetch messages for this customer
-      console.log("Fetching messages for customer:", id);
       const { data: messagesData, error: messagesError } = await supabase
         .from("messages")
         .select("id, content, direction, timestamp, cycle_id")
         .eq("customer_id", id)
         .order("timestamp", { ascending: true });
-
-      console.log("Messages fetch result:", { 
-        messagesCount: messagesData?.length, 
-        messagesError,
-        firstMessage: messagesData?.[0],
-        lastMessage: messagesData?.[messagesData?.length - 1]
-      });
       
       const typedMessages = (messagesData as unknown as Message[]) || [];
       setMessages(typedMessages);
