@@ -65,29 +65,57 @@ export function LeadDistributionChart({ bySeller, byTemperature }: LeadDistribut
           <TabsContent value="seller" className="h-[280px]">
             {sellerData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sellerData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis type="number" tick={{ fontSize: 12 }} />
-                  <YAxis
+                <BarChart data={sellerData} layout="horizontal">
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                  <XAxis
                     type="category"
                     dataKey="name"
-                    tick={{ fontSize: 12 }}
-                    width={80}
+                    tick={{ fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
                   />
-                  <Tooltip content={<CustomTooltip />} />
+                  <YAxis
+                    type="number"
+                    tick={{ fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip 
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
+                            <p className="font-medium mb-2">{label}</p>
+                            {payload.map((entry: any, index: number) => (
+                              <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                {entry.name}: {entry.value} leads
+                              </p>
+                            ))}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend 
+                    verticalAlign="top" 
+                    height={36}
+                    formatter={(value) => <span className="text-xs text-foreground">{value}</span>}
+                  />
                   <Bar
                     dataKey="pending"
                     name="Pendentes"
-                    stackId="a"
                     fill="hsl(38 92% 50%)"
-                    radius={[0, 0, 0, 0]}
+                    radius={[4, 4, 0, 0]}
+                    barSize={32}
                   />
                   <Bar
                     dataKey="inProgress"
                     name="Em Progresso"
-                    stackId="a"
                     fill="hsl(173 58% 39%)"
-                    radius={[0, 4, 4, 0]}
+                    radius={[4, 4, 0, 0]}
+                    barSize={32}
                   />
                 </BarChart>
               </ResponsiveContainer>
