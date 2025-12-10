@@ -21,6 +21,8 @@ import FollowupsSettingsPage from "./pages/FollowupsSettingsPage";
 import ManagerGoalsPage from "./pages/ManagerGoalsPage";
 import SellerPerformancePage from "./pages/SellerPerformancePage";
 import NotFound from "./pages/NotFound";
+import ClientsListPage from "./pages/ClientsListPage";
+import Client360Page from "./pages/Client360Page";
 
 // Admin pages
 import AdminLoginPage from "./pages/admin/AdminLoginPage";
@@ -152,6 +154,24 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="gestor">
                   <ManagerGoalsPage />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Client 360 routes - accessible by both managers and sellers */}
+            <Route 
+              path="/clientes" 
+              element={
+                <ProtectedRoute>
+                  <ClientsListPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/cliente/:clientId" 
+              element={
+                <ProtectedRoute>
+                  <Client360Page />
                 </ProtectedRoute>
               } 
             />
