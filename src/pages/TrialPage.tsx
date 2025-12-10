@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Zap, Sparkles, Check } from "lucide-react";
+import { Loader2, Zap, Sparkles, Check, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 const TrialPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const createTrialCheckout = async () => {
@@ -22,11 +24,10 @@ const TrialPage = () => {
         if (fnError) throw fnError;
 
         if (data?.url) {
-          // Use window.open for better iframe compatibility, then fallback to location.href
-          const opened = window.open(data.url, "_self");
-          if (!opened) {
-            window.location.href = data.url;
-          }
+          setCheckoutUrl(data.url);
+          setIsLoading(false);
+          // Try automatic redirect
+          window.location.href = data.url;
         } else {
           throw new Error("URL do checkout não retornada");
         }
@@ -40,6 +41,12 @@ const TrialPage = () => {
 
     createTrialCheckout();
   }, []);
+
+  const handleOpenCheckout = () => {
+    if (checkoutUrl) {
+      window.open(checkoutUrl, "_blank");
+    }
+  };
 
   if (error) {
     return (
@@ -83,7 +90,7 @@ const TrialPage = () => {
           <div className="flex items-center justify-center gap-2 mb-6">
             <Sparkles className="h-6 w-6 text-primary" />
             <h2 className="text-xl font-bold text-card-foreground">
-              Iniciando seu período de teste
+              {isLoading ? "Preparando seu período de teste" : "Checkout pronto!"}
             </h2>
           </div>
 
@@ -106,10 +113,26 @@ const TrialPage = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-3">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <p className="text-muted-foreground">Redirecionando para o checkout seguro...</p>
-          </div>
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-3">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <p className="text-muted-foreground">Preparando checkout seguro...</p>
+            </div>
+          ) : checkoutUrl ? (
+            <div className="space-y-4">
+              <p className="text-muted-foreground text-sm">
+                Se o checkout não abriu automaticamente, clique no botão abaixo:
+              </p>
+              <Button 
+                onClick={handleOpenCheckout}
+                className="w-full gap-2"
+                size="lg"
+              >
+                <ExternalLink className="h-5 w-5" />
+                Abrir checkout seguro
+              </Button>
+            </div>
+          ) : null}
 
           <p className="text-xs text-muted-foreground/60 mt-6">
             Após o período de teste, sua assinatura será convertida automaticamente para o plano Starter (R$147/mês).
