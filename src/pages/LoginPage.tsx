@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Zap, Loader2, Mail, Lock, AlertCircle, Users } from "lucide-react";
+import { Zap, Loader2, Mail, Lock, AlertCircle, Users, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -171,7 +171,7 @@ const LoginPage = () => {
                 ) : (
                   "Entrar"
                 )}
-              </Button>
+            </Button>
             </form>
           </CardContent>
 
@@ -184,6 +184,19 @@ const LoginPage = () => {
             </Link>
 
             <div className="w-full border-t border-border pt-4 mt-2">
+              <div className="text-center mb-4">
+                <p className="text-sm text-muted-foreground mb-3">Ainda não tem conta?</p>
+                <Link to="/trial">
+                  <Button 
+                    variant="outline" 
+                    className="w-full h-11 text-base font-semibold border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-all"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Testar grátis por 7 dias
+                  </Button>
+                </Link>
+              </div>
+
               <div className="p-3 bg-muted/50 rounded-lg text-xs">
                 <p className="font-medium flex items-center gap-2 mb-2">
                   <Users className="h-3 w-3" />

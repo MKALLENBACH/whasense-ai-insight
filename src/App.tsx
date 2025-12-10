@@ -40,6 +40,10 @@ import AdminPaymentsPage from "./pages/admin/AdminPaymentsPage";
 // Manager pages
 import FinanceiroPage from "./pages/FinanceiroPage";
 
+// Trial pages
+import TrialPage from "./pages/TrialPage";
+import TrialSuccessPage from "./pages/TrialSuccessPage";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -54,6 +58,8 @@ const App = () => (
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/trial" element={<TrialPage />} />
+            <Route path="/trial-success" element={<TrialSuccessPage />} />
             
             {/* Admin routes */}
             <Route path="/admin/login" element={<AdminLoginPage />} />
