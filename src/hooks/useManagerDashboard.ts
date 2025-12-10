@@ -115,107 +115,120 @@ export function useManagerDashboard() {
 
     setIsLoading(true);
     try {
-      const todayStr = new Date().toISOString().split("T")[0];
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      // OTIMIZAÇÃO: Primeira rodada de queries paralelas
+      const [
+        profilesResult,
+        customersResult,
+        companyResult,
+        settingsResult,
+      ] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("user_id, name, company_id")
+          .eq("company_id", user.companyId),
+        supabase
+          .from("customers")
+          .select("id, name, lead_status, seller_id")
+          .eq("company_id", user.companyId)
+          .limit(1000),
+        supabase
+          .from("companies")
+          .select("allow_followups")
+          .eq("id", user.companyId)
+          .maybeSingle(),
+        supabase
+          .from("company_settings")
+          .select("followups_enabled")
+          .eq("company_id", user.companyId)
+          .maybeSingle(),
+      ]);
+
+      const profiles = profilesResult.data || [];
+      const customers = customersResult.data || [];
+      const companyData = companyResult.data;
+      const settingsData = settingsResult.data;
+      const sellerIds = profiles.map((p) => p.user_id);
+      const customerIds = customers.map((c) => c.id);
+
+      // Segunda rodada de queries paralelas
+      const [rolesResult, cyclesResult, salesResult, messagesResult] = await Promise.all([
+        sellerIds.length > 0
+          ? supabase
+              .from("user_roles")
+              .select("user_id, role")
+              .in("user_id", sellerIds)
+          : Promise.resolve({ data: [] }),
+        customerIds.length > 0
+          ? supabase
+              .from("sale_cycles")
+              .select("*")
+              .in("customer_id", customerIds)
+              .in("status", ["pending", "in_progress", "won", "lost"])
+              .order("created_at", { ascending: false })
+              .limit(500)
+          : Promise.resolve({ data: [] }),
+        supabase
+          .from("sales")
+          .select("*")
+          .eq("company_id", user.companyId)
+          .gte("created_at", thirtyDaysAgo.toISOString())
+          .order("created_at", { ascending: false })
+          .limit(200),
+        customerIds.length > 0
+          ? supabase
+              .from("messages")
+              .select("id, customer_id, seller_id, direction, timestamp, cycle_id")
+              .in("customer_id", customerIds)
+              .gte("timestamp", sevenDaysAgo.toISOString())
+              .order("timestamp", { ascending: false })
+              .limit(1000)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const roles = rolesResult.data || [];
+      const cycles = cyclesResult.data || [];
+      const sales = salesResult.data || [];
+      const messages = messagesResult.data || [];
+
+      const actualSellerIds = roles.filter((r) => r.role === "seller").map((r) => r.user_id);
+      const sellerProfiles = profiles.filter((p) => actualSellerIds.includes(p.user_id));
+
+      // Terceira rodada: insights
+      const messageIds = messages.map((m) => m.id);
+      const insightsResult = messageIds.length > 0
+        ? await supabase
+            .from("insights")
+            .select("*")
+            .in("message_id", messageIds)
+        : { data: [] };
       
-      // TRY to use aggregated analytics first (faster for high-load)
-      const { data: dailyAnalytics } = await supabase
-        .from("analytics_daily_company")
-        .select("*")
-        .eq("company_id", user.companyId)
-        .eq("date", todayStr)
-        .maybeSingle();
-
-      // Get all sellers in the company
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, name, company_id")
-        .eq("company_id", user.companyId);
-
-      const sellerIds = profiles?.map((p) => p.user_id) || [];
-
-      // Get user roles to filter only sellers
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("user_id, role")
-        .in("user_id", sellerIds);
-
-      const actualSellerIds = roles?.filter((r) => r.role === "seller").map((r) => r.user_id) || [];
-      const sellerProfiles = profiles?.filter((p) => actualSellerIds.includes(p.user_id)) || [];
-
-      // Get all customers for the company (limit for performance)
-      const { data: customers } = await supabase
-        .from("customers")
-        .select("id, name, lead_status, seller_id")
-        .eq("company_id", user.companyId)
-        .limit(1000);
-
-      const customerIds = customers?.map((c) => c.id) || [];
-
-      // Get active sale cycles only (limit for performance)
-      const { data: cycles } = await supabase
-        .from("sale_cycles")
-        .select("*")
-        .in("customer_id", customerIds.length > 0 ? customerIds : [""])
-        .in("status", ["pending", "in_progress", "won", "lost"])
-        .order("created_at", { ascending: false })
-        .limit(500);
+      const insights = insightsResult.data || [];
 
       // Separate cycles by type and status
-      const preSaleCycles = cycles?.filter(c => (c as any).cycle_type !== 'post_sale') || [];
-      const postSaleCycles = cycles?.filter(c => (c as any).cycle_type === 'post_sale') || [];
-      
+      const preSaleCycles = cycles.filter(c => (c as any).cycle_type !== 'post_sale');
+      const postSaleCycles = cycles.filter(c => (c as any).cycle_type === 'post_sale');
       const activeCycles = preSaleCycles.filter(c => c.status === "pending" || c.status === "in_progress");
       const closedCycles = preSaleCycles.filter(c => c.status === "won" || c.status === "lost");
 
-      // Get recent sales only (last 30 days)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      const { data: sales } = await supabase
-        .from("sales")
-        .select("*")
-        .eq("company_id", user.companyId)
-        .gte("created_at", thirtyDaysAgo.toISOString())
-        .order("created_at", { ascending: false })
-        .limit(200);
-
-      // Get recent messages only (last 7 days for insights)
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      const { data: messages } = await supabase
-        .from("messages")
-        .select("id, customer_id, seller_id, direction, timestamp, cycle_id")
-        .in("customer_id", customerIds.length > 0 ? customerIds : [""])
-        .gte("timestamp", sevenDaysAgo.toISOString())
-        .order("timestamp", { ascending: false })
-        .limit(1000);
-
-      const messageIds = messages?.map((m) => m.id) || [];
-
-      // Get insights for recent messages only
-      const { data: insights } = await supabase
-        .from("insights")
-        .select("*")
-        .in("message_id", messageIds.length > 0 ? messageIds : [""]);
-
-      // Calculate KPIs - use active cycles only for operational metrics
+      // Calculate KPIs
       const activeCustomerIds = activeCycles.map(c => c.customer_id);
       const pendingLeads = activeCycles.filter((c) => c.status === "pending").length;
       const inProgressLeads = activeCycles.filter((c) => c.status === "in_progress").length;
       
-      // Use data already filtered from queries
       const thirtyDaysAgoStr = thirtyDaysAgo.toISOString();
-      
-      // Last 30 days metrics from sales
-      const last30DaysSales = sales?.filter(s => s.created_at >= thirtyDaysAgoStr) || [];
+      const last30DaysSales = sales.filter(s => s.created_at >= thirtyDaysAgoStr);
       const wonSales = last30DaysSales.filter((s) => s.status === "won").length;
       const lostSales = last30DaysSales.filter((s) => s.status === "lost").length;
       const totalSales = wonSales + lostSales;
       const conversionRate = totalSales > 0 ? Math.round((wonSales / totalSales) * 100) : 0;
 
-      // Calculate avg response time for last 30 days
-      const last30DaysMessages = messages?.filter(m => m.timestamp >= thirtyDaysAgoStr) || [];
+      // Calculate avg response time
+      const last30DaysMessages = messages.filter(m => m.timestamp >= thirtyDaysAgoStr);
       let totalResponseTime = 0;
       let responseCount = 0;
       const sortedMessages = [...last30DaysMessages].sort(
@@ -240,16 +253,15 @@ export function useManagerDashboard() {
       }
       const avgResponseTime = responseCount > 0 ? Math.round(totalResponseTime / responseCount) : 0;
 
-      // Get hot leads (pending/in_progress with hot temperature)
       // Get hot leads from ACTIVE cycles only
       const activeMessageIds = messages
-        ?.filter(m => activeCycles.some(c => c.id === m.cycle_id))
-        .map(m => m.id) || [];
+        .filter(m => activeCycles.some(c => c.id === m.cycle_id))
+        .map(m => m.id);
       
-      const activeInsights = insights?.filter(i => activeMessageIds.includes(i.message_id)) || [];
+      const activeInsights = insights.filter(i => activeMessageIds.includes(i.message_id));
 
       const messageToCustomer = new Map<string, string>();
-      messages?.forEach((m) => messageToCustomer.set(m.id, m.customer_id));
+      messages.forEach((m) => messageToCustomer.set(m.id, m.customer_id));
 
       const customerTemperatures = new Map<string, string>();
       activeInsights
@@ -276,7 +288,7 @@ export function useManagerDashboard() {
         hotLeads,
       });
 
-      // Lead distribution by seller - ONLY ACTIVE CYCLES
+      // Lead distribution by seller
       const bySeller = sellerProfiles.map((seller) => {
         const sellerActiveCycles = activeCycles.filter((c) => c.seller_id === seller.user_id);
         return {
@@ -304,21 +316,19 @@ export function useManagerDashboard() {
         ],
       });
 
-      // Risk cycles - find cycles with issues (only active cycles)
+      // Risk cycles
       const risks: RiskCycle[] = [];
 
       for (const cycle of activeCycles) {
-        const customer = customers?.find((c) => c.id === cycle.customer_id);
+        const customer = customers.find((c) => c.id === cycle.customer_id);
         const seller = sellerProfiles.find((p) => p.user_id === cycle.seller_id);
-        const cycleMessages =
-          messages?.filter((m) => m.customer_id === cycle.customer_id) || [];
+        const cycleMessages = messages.filter((m) => m.customer_id === cycle.customer_id);
         const lastMessage = cycleMessages.sort(
           (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         )[0];
 
         let riskType = "";
 
-        // Check for unanswered messages
         if (lastMessage?.direction === "incoming") {
           const minutesSince =
             (Date.now() - new Date(lastMessage.timestamp).getTime()) / 60000;
@@ -327,17 +337,15 @@ export function useManagerDashboard() {
           }
         }
 
-        // Check for hot lead
         if (!riskType && customerTemperatures.get(cycle.customer_id) === "hot") {
           riskType = "Lead quente";
         }
 
-        // Check for open objection
         if (!riskType) {
-          const cycleInsights = insights?.filter((i) =>
+          const cycleInsights = insights.filter((i) =>
             cycleMessages.some((m) => m.id === i.message_id)
           );
-          const hasOpenObjection = cycleInsights?.some((i) => i.objection);
+          const hasOpenObjection = cycleInsights.some((i) => i.objection);
           if (hasOpenObjection) {
             riskType = "Objeção aberta";
           }
@@ -366,9 +374,8 @@ export function useManagerDashboard() {
         outra: 0,
       };
 
-      // From lost reasons
       cycles
-        ?.filter((c) => c.status === "lost" && c.lost_reason)
+        .filter((c) => c.status === "lost" && c.lost_reason)
         .forEach((c) => {
           const reason = c.lost_reason!.toLowerCase();
           if (reason.includes("preço") || reason.includes("caro")) objectionCounts["preço"]++;
@@ -380,9 +387,8 @@ export function useManagerDashboard() {
           else objectionCounts["outra"]++;
         });
 
-      // From insights objections
       insights
-        ?.filter((i) => i.objection)
+        .filter((i) => i.objection)
         .forEach((i) => {
           const obj = i.objection!.toLowerCase();
           if (obj.includes("preço") || obj.includes("caro")) objectionCounts["preço"]++;
@@ -402,8 +408,8 @@ export function useManagerDashboard() {
 
       // Seller performance
       const performance: SellerPerformance[] = sellerProfiles.map((seller) => {
-        const sellerSales = sales?.filter((s) => s.seller_id === seller.user_id) || [];
-        const sellerCustomers = customers?.filter((c) => c.seller_id === seller.user_id) || [];
+        const sellerSales = sales.filter((s) => s.seller_id === seller.user_id);
+        const sellerCustomers = customers.filter((c) => c.seller_id === seller.user_id);
         const sellerWon = sellerSales.filter((s) => s.status === "won").length;
         const sellerLost = sellerSales.filter((s) => s.status === "lost").length;
         const sellerTotal = sellerWon + sellerLost;
@@ -414,9 +420,7 @@ export function useManagerDashboard() {
           (id) => customerTemperatures.get(id) === "hot"
         ).length;
 
-        // Calculate seller response time
-        const sellerMessages =
-          messages?.filter((m) => m.seller_id === seller.user_id) || [];
+        const sellerMessages = messages.filter((m) => m.seller_id === seller.user_id);
         let sellerResponseTime = 0;
         let sellerResponseCount = 0;
         const sortedSellerMsgs = [...sellerMessages].sort(
@@ -432,8 +436,7 @@ export function useManagerDashboard() {
             curr.direction === "outgoing"
           ) {
             const diff =
-              (new Date(curr.timestamp).getTime() - new Date(prev.timestamp).getTime()) /
-              60000;
+              (new Date(curr.timestamp).getTime() - new Date(prev.timestamp).getTime()) / 60000;
             if (diff < 60) {
               sellerResponseTime += diff;
               sellerResponseCount++;
@@ -465,21 +468,13 @@ export function useManagerDashboard() {
         const date = new Date(timelineBaseDate);
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split("T")[0];
-        const dayWon =
-          sales?.filter((s) => s.status === "won" && s.created_at.startsWith(dateStr)).length ||
-          0;
-        const dayLost =
-          sales?.filter((s) => s.status === "lost" && s.created_at.startsWith(dateStr)).length ||
-          0;
-        timeline.push({
-          date: dateStr,
-          won: dayWon,
-          lost: dayLost,
-        });
+        const dayWon = sales.filter((s) => s.status === "won" && s.created_at.startsWith(dateStr)).length;
+        const dayLost = sales.filter((s) => s.status === "lost" && s.created_at.startsWith(dateStr)).length;
+        timeline.push({ date: dateStr, won: dayWon, lost: dayLost });
       }
       setSalesTimeline(timeline);
 
-      // Recent sales - use already defined closedCycles
+      // Recent sales
       const recent: RecentSale[] = [];
       const sortedClosedCycles = closedCycles
         .sort(
@@ -490,7 +485,7 @@ export function useManagerDashboard() {
         .slice(0, 20);
 
       for (const cycle of sortedClosedCycles) {
-        const customer = customers?.find((c) => c.id === cycle.customer_id);
+        const customer = customers.find((c) => c.id === cycle.customer_id);
         const seller = sellerProfiles.find((p) => p.user_id === cycle.seller_id);
         if (customer && seller) {
           recent.push({
@@ -506,40 +501,18 @@ export function useManagerDashboard() {
       }
       setRecentSales(recent);
 
-      // Fetch follow-up metrics
-      // Check if follow-ups are enabled for this company
-      const { data: companyData } = await supabase
-        .from("companies")
-        .select("allow_followups")
-        .eq("id", user.companyId)
-        .single();
-
-      const { data: settingsData } = await supabase
-        .from("company_settings")
-        .select("followups_enabled")
-        .eq("company_id", user.companyId)
-        .maybeSingle();
-
+      // Follow-up metrics
       const followupsEnabled = companyData?.allow_followups && settingsData?.followups_enabled;
 
-      if (followupsEnabled) {
-        // Count follow-up messages (messages containing "[Follow-up automático]")
+      if (followupsEnabled && actualSellerIds.length > 0) {
         const now = new Date();
         const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const last7days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-        const followupMessages = messages?.filter(m => 
-          m.direction === "outgoing" && 
-          // We need to check content, but messages query doesn't include content
-          // So we'll do a separate query
-          true
-        ) || [];
-
-        // Get follow-up messages with content
         const { data: followupMsgs } = await supabase
           .from("messages")
           .select("id, timestamp, content")
-          .in("seller_id", actualSellerIds.length > 0 ? actualSellerIds : [""])
+          .in("seller_id", actualSellerIds)
           .eq("direction", "outgoing")
           .ilike("content", "%[Follow-up automático]%");
 
@@ -562,11 +535,10 @@ export function useManagerDashboard() {
         });
       }
 
-      // Calculate post-sale metrics
+      // Post-sale metrics
       const activePostSale = postSaleCycles.filter(c => c.status === "in_progress" || c.status === "pending");
       const closedPostSale = postSaleCycles.filter(c => (c as any).status === "closed");
       
-      // Calculate average resolution time for closed post-sale cycles
       let totalResolutionTime = 0;
       let resolutionCount = 0;
       closedPostSale.forEach(cycle => {
@@ -578,12 +550,11 @@ export function useManagerDashboard() {
       });
       const avgResolutionTime = resolutionCount > 0 ? Math.round(totalResolutionTime / resolutionCount) : 0;
 
-      // Analyze sentiment from post-sale insights to determine satisfaction trend
       const postSaleMessageIds = messages
-        ?.filter(m => postSaleCycles.some(c => c.id === m.cycle_id))
-        .map(m => m.id) || [];
+        .filter(m => postSaleCycles.some(c => c.id === m.cycle_id))
+        .map(m => m.id);
       
-      const postSaleInsights = insights?.filter(i => postSaleMessageIds.includes(i.message_id)) || [];
+      const postSaleInsights = insights.filter(i => postSaleMessageIds.includes(i.message_id));
       
       let positiveCount = 0;
       let negativeCount = 0;
@@ -597,7 +568,6 @@ export function useManagerDashboard() {
       if (positiveCount > negativeCount * 2) satisfactionTrend = "positive";
       else if (negativeCount > positiveCount) satisfactionTrend = "negative";
 
-      // Analyze top issues from post-sale cycles (from objections/problems)
       const issuesCounts: Record<string, number> = {};
       const issueLabels: Record<string, string> = {
         problem: "Problema com produto",

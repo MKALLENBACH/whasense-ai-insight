@@ -157,9 +157,14 @@ export default function ManagerCycleViewPage() {
         .from("sale_cycles")
         .select("*")
         .eq("id", cycleId)
-        .single();
+        .maybeSingle();
 
       if (cycleError) throw cycleError;
+      if (!cycleData) {
+        toast.error("Ciclo não encontrado");
+        navigate("/dashboard");
+        return;
+      }
       setCycle(cycleData);
 
       // Fetch messages ONLY for this cycle
@@ -177,7 +182,7 @@ export default function ManagerCycleViewPage() {
         .from("customers")
         .select("id, name, phone")
         .eq("id", cycleData.customer_id)
-        .single();
+        .maybeSingle();
       setCustomer(customerData);
 
       // Fetch seller
@@ -185,7 +190,7 @@ export default function ManagerCycleViewPage() {
         .from("profiles")
         .select("user_id, name")
         .eq("user_id", cycleData.seller_id)
-        .single();
+        .maybeSingle();
       if (sellerData) {
         setSeller({ id: sellerData.user_id, name: sellerData.name });
       }
@@ -196,7 +201,7 @@ export default function ManagerCycleViewPage() {
           .from("buyers")
           .select("id, name, phone, email, role")
           .eq("id", cycleData.buyer_id)
-          .single();
+          .maybeSingle();
         setBuyer(buyerData);
       }
 
@@ -206,7 +211,7 @@ export default function ManagerCycleViewPage() {
           .from("clients")
           .select("id, name, cnpj, segment")
           .eq("id", cycleData.client_id)
-          .single();
+          .maybeSingle();
         setClient(clientData);
       }
 
