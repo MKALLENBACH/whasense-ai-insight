@@ -72,7 +72,7 @@ serve(async (req) => {
     // Get customers based on role
     let customersQuery = supabase
       .from('customers')
-      .select('id, name, phone, email, seller_id, lead_status')
+      .select('id, name, phone, email, seller_id, lead_status, client_id')
       .eq('company_id', userProfile.company_id)
       .order('updated_at', { ascending: false });
 
@@ -93,6 +93,22 @@ serve(async (req) => {
         JSON.stringify({ conversations: [] }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Get client IDs for company names
+    const clientIds = [...new Set(customers.map(c => c.client_id).filter(Boolean))];
+    
+    // Fetch client names if there are any
+    let clientsMap = new Map<string, string>();
+    if (clientIds.length > 0) {
+      const { data: clients } = await supabase
+        .from('clients')
+        .select('id, name')
+        .in('id', clientIds);
+      
+      if (clients) {
+        clientsMap = new Map(clients.map(c => [c.id, c.name]));
+      }
     }
 
     const customerIds = customers.map(c => c.id);
@@ -205,6 +221,7 @@ serve(async (req) => {
           phone: customer.phone,
           email: customer.email,
         },
+        clientName: customer.client_id ? clientsMap.get(customer.client_id) || null : null,
         seller: sellerProfile ? {
           name: sellerProfile.name,
           email: sellerProfile.email,

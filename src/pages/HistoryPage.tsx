@@ -48,6 +48,7 @@ interface ConversationHistory {
     phone: string | null;
     email: string | null;
   };
+  clientName: string | null;
   seller: {
     name: string;
     email: string;
@@ -151,7 +152,8 @@ const HistoryPage = () => {
       c.customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.customer.phone?.includes(searchQuery) ||
       c.customer.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.seller?.name.toLowerCase().includes(searchQuery.toLowerCase())
+      c.seller?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.clientName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const getStatusBadge = (sale: ConversationHistory['sale']) => {
@@ -258,6 +260,7 @@ const HistoryPage = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Cliente</TableHead>
+                    <TableHead>Empresa</TableHead>
                     <TableHead>Vendedor</TableHead>
                     <TableHead>Emoção</TableHead>
                     <TableHead>Objeção</TableHead>
@@ -296,6 +299,13 @@ const HistoryPage = () => {
                               </p>
                             </div>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {conversation.clientName ? (
+                            <span className="text-sm font-medium">{conversation.clientName}</span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           {conversation.seller ? (
