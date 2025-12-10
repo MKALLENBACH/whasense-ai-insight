@@ -1,4 +1,4 @@
-import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone, Users, Bot, Target, Trophy, Building2, CreditCard } from "lucide-react";
+import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone, Users, Bot, Target, Trophy, Building2, CreditCard, AlertTriangle } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const AppSidebar = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, hasRestrictedAccess } = useAuth();
   const [alertCount, setAlertCount] = useState(0);
 
   useEffect(() => {
@@ -74,7 +74,20 @@ const AppSidebar = () => {
     { to: "/dashboard/whatsapp-status", icon: Smartphone, label: "Status WhatsApp" },
   ];
 
-  const links = user?.role === "gestor" ? gestorLinks : vendedorLinks;
+  // Se gestor com acesso restrito, mostra apenas Financeiro
+  const gestorRestrictedLinks: NavLinkItem[] = [
+    { to: "/financeiro", icon: CreditCard, label: "Financeiro" },
+  ];
+
+  // Determina quais links mostrar
+  const getLinks = () => {
+    if (user?.role === "gestor") {
+      return hasRestrictedAccess ? gestorRestrictedLinks : gestorLinks;
+    }
+    return vendedorLinks;
+  };
+
+  const links = getLinks();
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col">
@@ -88,6 +101,21 @@ const AppSidebar = () => {
           <p className="text-xs text-sidebar-foreground/60">Inteligência em vendas</p>
         </div>
       </div>
+
+      {/* Restricted Access Warning */}
+      {hasRestrictedAccess && user?.role === "gestor" && (
+        <div className="mx-3 mt-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-xs font-medium text-yellow-500">Plano Inativo</p>
+              <p className="text-xs text-yellow-500/80 mt-0.5">
+                Regularize seu plano para ter acesso completo.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1">
