@@ -75,6 +75,7 @@ interface ConversationData {
   saleReason?: string | null;
   leadStatus: string;
   isIncomplete: boolean;
+  cycleType?: "pre_sale" | "post_sale";
 }
 
 const temperatureConfig = {
@@ -90,7 +91,7 @@ const ConversationsPage = () => {
   const [alerts, setAlerts] = useState<AlertData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"pending" | "completed">("pending");
+  const [activeTab, setActiveTab] = useState<"pending" | "completed" | "post_sale">("pending");
   const [searchQuery, setSearchQuery] = useState("");
   
   // Modal state for incomplete leads
@@ -215,14 +216,26 @@ const ConversationsPage = () => {
 
   // Filter conversations by tab - use cycleStatus (preferred) or fallback to leadStatus
   const getStatus = (c: ConversationData) => c.cycleStatus || c.leadStatus || 'pending';
+  const getCycleType = (c: ConversationData) => c.cycleType || 'pre_sale';
   
+  // Pending: pre_sale cycles with pending/in_progress status
   const pendingConversations = conversations.filter(c => {
     const status = getStatus(c);
-    return status === 'pending' || status === 'in_progress';
+    const cycleType = getCycleType(c);
+    return cycleType === 'pre_sale' && (status === 'pending' || status === 'in_progress');
   });
+  
+  // Completed: pre_sale cycles with won/lost status
   const completedConversations = conversations.filter(c => {
     const status = getStatus(c);
-    return status === 'won' || status === 'lost';
+    const cycleType = getCycleType(c);
+    return cycleType === 'pre_sale' && (status === 'won' || status === 'lost');
+  });
+  
+  // Post-sale: post_sale cycles (any status)
+  const postSaleConversations = conversations.filter(c => {
+    const cycleType = getCycleType(c);
+    return cycleType === 'post_sale';
   });
 
   // Apply search filter
@@ -238,7 +251,11 @@ const ConversationsPage = () => {
   };
 
   const currentConversations = filterBySearch(
-    activeTab === "pending" ? pendingConversations : completedConversations
+    activeTab === "pending" 
+      ? pendingConversations 
+      : activeTab === "completed" 
+        ? completedConversations 
+        : postSaleConversations
   );
 
   const getInitials = (name: string) => {
@@ -475,8 +492,8 @@ const ConversationsPage = () => {
             </div>
 
             {/* Tabs */}
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "pending" | "completed")}>
-              <TabsList className="grid grid-cols-2 w-full">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "pending" | "completed" | "post_sale")}>
+              <TabsList className="grid grid-cols-3 w-full">
                 <TabsTrigger value="pending" className="gap-2">
                   <Clock className="h-4 w-4" />
                   Pendente
@@ -489,6 +506,13 @@ const ConversationsPage = () => {
                   Concluída
                   <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs">
                     {completedConversations.length}
+                  </Badge>
+                </TabsTrigger>
+                <TabsTrigger value="post_sale" className="gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Pós-venda
+                  <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs">
+                    {postSaleConversations.length}
                   </Badge>
                 </TabsTrigger>
               </TabsList>
@@ -508,7 +532,9 @@ const ConversationsPage = () => {
                   <p className="text-sm">
                     {activeTab === "pending" 
                       ? "Nenhuma conversa pendente" 
-                      : "Nenhuma venda concluída"}
+                      : activeTab === "completed"
+                        ? "Nenhuma venda concluída"
+                        : "Nenhum atendimento pós-venda"}
                   </p>
                   <p className="text-xs mt-1">
                     {activeTab === "pending"

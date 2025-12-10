@@ -138,6 +138,8 @@ const ChatPage = () => {
     getCycleNumber,
     getOrCreateActiveCycle,
     fetchCycles,
+    markAsPostSale,
+    closePostSaleCycle,
   } = useSaleCycles({
     customerId: id || "",
     sellerId: user?.id,
@@ -150,7 +152,10 @@ const ChatPage = () => {
     : activeCycle;
 
   // Determine if conversation is completed
-  const isConversationCompleted = displayedCycle?.status === 'won' || displayedCycle?.status === 'lost';
+  const isConversationCompleted = displayedCycle?.status === 'won' || displayedCycle?.status === 'lost' || (displayedCycle as any)?.status === 'closed';
+  
+  // Check if current cycle is post-sale
+  const isPostSaleCycle = (displayedCycle as any)?.cycle_type === 'post_sale';
 
   // AI Customer Simulation
   const {
