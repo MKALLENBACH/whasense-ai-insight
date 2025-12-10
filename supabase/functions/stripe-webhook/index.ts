@@ -146,7 +146,7 @@ const handleCheckoutCompleted = async (session: Stripe.Checkout.Session) => {
   const userExists = existingUser?.users?.find(u => u.email === customerEmail);
   
   if (userExists) {
-    logStep("User already exists, linking to existing account", { userId: userExists.id });
+    logStep("User already exists, checking for existing company", { userId: userExists.id });
     
     // Get the user's company
     const { data: profile } = await supabaseAdmin
@@ -157,8 +157,83 @@ const handleCheckoutCompleted = async (session: Stripe.Checkout.Session) => {
 
     if (profile?.company_id) {
       // Update existing company with trial
+      logStep("User has existing company, updating with trial", { companyId: profile.company_id });
       await updateCompanyWithTrial(profile.company_id, customerId, session);
+      return;
     }
+    
+    // User exists but has no company/profile - create everything for them
+    logStep("User exists but has no company, creating company and profile");
+    
+    // Generate new password and update user to require password change
+    const temporaryPassword = generateTemporaryPassword();
+    await supabaseAdmin.auth.admin.updateUserById(userExists.id, {
+      password: temporaryPassword,
+      user_metadata: {
+        ...userExists.user_metadata,
+        requires_password_change: true,
+      },
+    });
+    
+    // Create company
+    const { data: company, error: companyError } = await supabaseAdmin
+      .from("companies")
+      .insert({
+        name: customerName,
+        is_active: true,
+        allow_followups: true,
+      })
+      .select()
+      .single();
+
+    if (companyError || !company) {
+      logStep("ERROR creating company for existing user", { error: companyError });
+      return;
+    }
+
+    logStep("Company created for existing user", { companyId: company.id });
+
+    // Create profile
+    await supabaseAdmin.from("profiles").insert({
+      user_id: userExists.id,
+      company_id: company.id,
+      name: customerName,
+      email: customerEmail,
+      is_active: true,
+    });
+
+    // Create user role as manager
+    await supabaseAdmin.from("user_roles").upsert({
+      user_id: userExists.id,
+      role: "manager",
+    }, { onConflict: "user_id" });
+
+    // Update company with trial data
+    await updateCompanyWithTrial(company.id, customerId, session);
+
+    // Create company settings
+    await supabaseAdmin.from("company_settings").insert({
+      company_id: company.id,
+      followups_enabled: true,
+      followup_delay_hours: 24,
+    });
+
+    // Create company limits
+    await supabaseAdmin.from("company_limits").insert({
+      company_id: company.id,
+      max_requests_per_second: 100,
+      max_ai_ops_per_minute: 60,
+      max_messages_per_day: 100000,
+    });
+
+    // Send welcome email with new credentials
+    await sendWelcomeEmail(customerEmail, customerName, temporaryPassword);
+
+    logStep("Trial signup completed for existing user", { 
+      companyId: company.id, 
+      userId: userExists.id,
+      email: customerEmail 
+    });
     return;
   }
 
