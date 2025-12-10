@@ -234,8 +234,8 @@ ${cycleType === "post_sale" ? `
   "analysis": "Resumo em 1-2 frases do que está acontecendo.",
   "suggestion": "Melhor resposta seguindo o script da empresa (1-3 frases).",
   "next_action": "Próxima ação recomendada para ${cycleType === "post_sale" ? "resolver" : "avançar"}.",
-  "objection": "${cycleType === "post_sale" ? "problem | question | complaint | none" : "price | delay | trust | doubt | none"}",
-  "temperature": "${cycleType === "post_sale" ? "cold" : "cold | warm | hot"}"
+  "objection": "${cycleType === "post_sale" ? "problema | duvida | reclamacao | nenhuma" : "preco | prazo | confianca | duvida | concorrencia | nenhuma"}",
+  "temperature": "${cycleType === "post_sale" ? "frio" : "frio | morno | quente"}"
 }
 `;
 }
@@ -396,13 +396,48 @@ async function analyzeMessage(
     
     const parsed = JSON.parse(jsonContent);
     
+    // Normalize objection values (handle both English and Portuguese)
+    const normalizeObjection = (obj: string): string => {
+      const normalized = String(obj || "nenhuma").toLowerCase().trim();
+      const objectionMap: Record<string, string> = {
+        // English to Portuguese mapping
+        "price": "preco",
+        "delay": "prazo",
+        "trust": "confianca",
+        "doubt": "duvida",
+        "competition": "concorrencia",
+        "problem": "problema",
+        "question": "duvida",
+        "complaint": "reclamacao",
+        "none": "nenhuma",
+        // Portuguese variants
+        "preço": "preco",
+        "dúvida": "duvida",
+        "confiança": "confianca",
+        "concorrência": "concorrencia",
+        "reclamação": "reclamacao",
+      };
+      return objectionMap[normalized] || normalized;
+    };
+
+    // Normalize temperature values
+    const normalizeTemperature = (temp: string): string => {
+      const normalized = String(temp || "morno").toLowerCase().trim();
+      const tempMap: Record<string, string> = {
+        "cold": "frio",
+        "warm": "morno",
+        "hot": "quente",
+      };
+      return tempMap[normalized] || normalized;
+    };
+    
     // Validate and normalize response
     return {
       sales_stage: String(parsed.sales_stage || "descoberta"),
       sentiment: String(parsed.sentiment || "neutral"),
       intention: Number(parsed.intention) || 50,
-      objection: String(parsed.objection || "none"),
-      temperature: String(parsed.temperature || "warm"),
+      objection: normalizeObjection(parsed.objection),
+      temperature: normalizeTemperature(parsed.temperature),
       analysis: String(parsed.analysis || ""),
       suggestion: String(parsed.suggestion || "Continue a conversa de forma natural."),
       next_action: String(parsed.next_action || "Responder ao cliente"),
@@ -414,8 +449,8 @@ async function analyzeMessage(
       sales_stage: "descoberta",
       sentiment: "neutral",
       intention: 50,
-      objection: "none",
-      temperature: "warm",
+      objection: "nenhuma",
+      temperature: "morno",
       analysis: "Análise não disponível.",
       suggestion: "Continue a conversa de forma natural.",
       next_action: "Responder ao cliente",

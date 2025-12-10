@@ -108,12 +108,25 @@ const objectionLabels: Record<string, string> = {
   problem: "Problema",
   question: "Dúvida",
   none: "Nenhuma objeção",
+  // Portuguese values (new)
+  preco: "Preço alto",
+  prazo: "Prazo de entrega",
+  confianca: "Falta de confiança",
+  duvida: "Dúvidas sobre o produto",
+  reclamacao: "Reclamação",
+  concorrencia: "Concorrência",
+  problema: "Problema com produto",
+  nenhuma: "Nenhuma objeção",
 };
 
 const temperatureConfig: Record<string, { label: string; color: string }> = {
   hot: { label: "Quente", color: "bg-destructive text-destructive-foreground" },
   warm: { label: "Morno", color: "bg-warning text-warning-foreground" },
   cold: { label: "Frio", color: "bg-muted text-muted-foreground" },
+  // Portuguese values (new)
+  quente: { label: "Quente", color: "bg-destructive text-destructive-foreground" },
+  morno: { label: "Morno", color: "bg-warning text-warning-foreground" },
+  frio: { label: "Frio", color: "bg-muted text-muted-foreground" },
 };
 
 const ChatPage = () => {

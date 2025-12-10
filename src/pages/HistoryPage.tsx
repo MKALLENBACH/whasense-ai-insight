@@ -96,6 +96,15 @@ const objectionLabels: Record<string, string> = {
   problem: "Problema",
   question: "Dúvida",
   none: "-",
+  // Portuguese values (new)
+  preco: "Preço",
+  prazo: "Prazo",
+  confianca: "Confiança",
+  duvida: "Dúvida",
+  reclamacao: "Reclamação",
+  concorrencia: "Concorrência",
+  problema: "Problema",
+  nenhuma: "-",
 };
 
 const HistoryPage = () => {
