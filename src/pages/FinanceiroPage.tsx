@@ -108,11 +108,12 @@ export default function FinanceiroPage() {
       
       setPayments(paymentData || []);
 
-      // Load all plans
+      // Load all plans (excluding Free plan - admin only)
       const { data: plansData } = await supabase
         .from("plans")
         .select("*")
         .eq("is_active", true)
+        .gt("monthly_price", 0)
         .order("monthly_price", { ascending: true });
       
       setPlans(plansData || []);
