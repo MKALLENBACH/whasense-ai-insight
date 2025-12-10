@@ -534,6 +534,7 @@ serve(async (req) => {
         .from('insights')
         .insert({
           message_id,
+          insight_type: 'message_analysis',
           sentiment: analysis.sentiment,
           intention: String(analysis.intention),
           objection: analysis.objection,
