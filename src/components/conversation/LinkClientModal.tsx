@@ -70,14 +70,33 @@ const LinkClientModal = ({
   };
 
   const handleLinkClient = async (clientId: string) => {
+    if (!user?.companyId) return;
+    
     setIsLoading(true);
     try {
-      const { error } = await supabase
+      // Create a buyer for this customer in the client
+      const { data: newBuyer, error: buyerError } = await supabase
+        .from("buyers")
+        .insert({
+          client_id: clientId,
+          company_id: user.companyId,
+          name: customerName,
+        })
+        .select("id")
+        .single();
+
+      if (buyerError) throw buyerError;
+
+      // Link customer to both client and buyer
+      const { error: linkError } = await supabase
         .from("customers")
-        .update({ client_id: clientId })
+        .update({ 
+          client_id: clientId,
+          buyer_id: newBuyer.id 
+        })
         .eq("id", customerId);
 
-      if (error) throw error;
+      if (linkError) throw linkError;
 
       toast.success("Cliente vinculado com sucesso!");
       onSuccess();
@@ -119,10 +138,26 @@ const LinkClientModal = ({
 
       if (createError) throw createError;
 
-      // Link to customer
+      // Create a buyer for this customer in the new client
+      const { data: newBuyer, error: buyerError } = await supabase
+        .from("buyers")
+        .insert({
+          client_id: newClient.id,
+          company_id: user.companyId,
+          name: customerName,
+        })
+        .select("id")
+        .single();
+
+      if (buyerError) throw buyerError;
+
+      // Link customer to both client and buyer
       const { error: linkError } = await supabase
         .from("customers")
-        .update({ client_id: newClient.id })
+        .update({ 
+          client_id: newClient.id,
+          buyer_id: newBuyer.id 
+        })
         .eq("id", customerId);
 
       if (linkError) throw linkError;
