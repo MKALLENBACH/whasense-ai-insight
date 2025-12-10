@@ -131,8 +131,15 @@ Deno.serve(async (req) => {
       if (!whisperSuccess && lovableApiKey) {
         console.log("Transcribing with Gemini (fallback)...");
         
-        // Convert audio to base64 for Gemini
-        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+        // Convert audio to base64 for Gemini using chunked approach to avoid stack overflow
+        const uint8Array = new Uint8Array(audioBuffer);
+        let binaryString = "";
+        const chunkSize = 32768; // Process in 32KB chunks
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+          const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+          binaryString += String.fromCharCode.apply(null, Array.from(chunk));
+        }
+        const base64Audio = btoa(binaryString);
         
         try {
           const geminiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
