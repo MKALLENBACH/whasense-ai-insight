@@ -209,6 +209,18 @@ serve(async (req) => {
         console.error('Error updating gamification:', gamError);
         // Don't fail the sale registration if gamification fails
       }
+
+      // Trigger full gamification recalculation (leaderboards, etc.)
+      try {
+        console.log('Triggering calculate-gamification for full recalculation');
+        await supabase.functions.invoke('calculate-gamification', {
+          body: { company_id: companyId }
+        });
+        console.log('Calculate-gamification triggered successfully');
+      } catch (calcError) {
+        console.error('Error triggering calculate-gamification:', calcError);
+        // Don't fail the sale registration
+      }
     }
 
     return new Response(
