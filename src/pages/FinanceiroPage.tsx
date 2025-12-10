@@ -20,7 +20,8 @@ import {
   XCircle,
   MessageCircle,
   Clock,
-  Star
+  Star,
+  Check
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -42,7 +43,16 @@ interface Plan {
   seller_limit: number | null;
   stripe_monthly_price_id: string | null;
   stripe_annual_price_id: string | null;
+  features: unknown;
 }
+
+// Helper to parse features from JSON
+const parseFeatures = (features: unknown): string[] => {
+  if (Array.isArray(features)) {
+    return features.filter((f): f is string => typeof f === "string");
+  }
+  return [];
+};
 
 interface Subscription {
   id: string;
@@ -479,6 +489,18 @@ export default function FinanceiroPage() {
                     <p className="text-sm text-muted-foreground mt-2">
                       {plan.seller_limit ? `Até ${plan.seller_limit} vendedores` : "Vendedores ilimitados"}
                     </p>
+                    
+                    {/* Features list */}
+                    {parseFeatures(plan.features).length > 0 && (
+                      <ul className="mt-3 space-y-1.5 border-t pt-3">
+                        {parseFeatures(plan.features).slice(0, 5).map((feature, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-xs">
+                            <Check className={`h-3.5 w-3.5 mt-0.5 flex-shrink-0 ${isPopular ? "text-amber-500" : "text-green-500"}`} />
+                            <span className="text-muted-foreground">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     
                     {!isCurrentPlan && (hasMonthly || hasAnnual) && (
                       <div className="flex flex-col gap-2 mt-4">
