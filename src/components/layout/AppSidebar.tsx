@@ -1,4 +1,4 @@
-import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone, Users } from "lucide-react";
+import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone, Users, Bot, Target, Trophy } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -55,7 +55,9 @@ const AppSidebar = () => {
   }
 
   const vendedorLinks: NavLinkItem[] = [
+    { to: "/dashboard-vendedor", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/conversas", icon: MessageSquare, label: "Conversas" },
+    { to: "/vendedor/performance", icon: Trophy, label: "Performance" },
     { to: "/alertas", icon: Bell, label: "Alertas", badge: alertCount },
     { to: "/whatsapp-connect", icon: Smartphone, label: "WhatsApp" },
   ];
@@ -63,6 +65,8 @@ const AppSidebar = () => {
   const gestorLinks: NavLinkItem[] = [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/gestor/vendedores", icon: Users, label: "Vendedores" },
+    { to: "/gestor/metas", icon: Target, label: "Metas" },
+    { to: "/gestor/followups", icon: Bot, label: "Follow-ups" },
     { to: "/historico", icon: History, label: "Histórico" },
     { to: "/dashboard/whatsapp-status", icon: Smartphone, label: "Status WhatsApp" },
   ];

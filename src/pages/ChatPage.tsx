@@ -44,6 +44,9 @@ import NewLeadModal from "@/components/lead/NewLeadModal";
 import SaleCycleHistory from "@/components/sale/SaleCycleHistory";
 import CurrentCycleBadge from "@/components/sale/CurrentCycleBadge";
 import { useSaleCycles } from "@/hooks/useSaleCycles";
+import { ChatAlertsBanner } from "@/components/conversation/ChatAlertsBanner";
+import ChatInput from "@/components/conversation/ChatInput";
+import MessageBubble from "@/components/conversation/MessageBubble";
 
 interface Message {
   id: string;
@@ -51,6 +54,9 @@ interface Message {
   direction: "incoming" | "outgoing";
   timestamp: string;
   cycle_id?: string | null;
+  attachment_url?: string | null;
+  attachment_type?: string | null;
+  attachment_name?: string | null;
 }
 
 interface AIAnalysis {
@@ -193,7 +199,7 @@ const ChatPage = () => {
       // Fetch messages for this customer (filtered by cycle if viewing history)
       let messagesQuery = supabase
         .from("messages")
-        .select("id, content, direction, timestamp, cycle_id")
+        .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
         .eq("customer_id", id)
         .order("timestamp", { ascending: true });
 
@@ -210,11 +216,14 @@ const ChatPage = () => {
 
       if (messagesError) throw messagesError;
       
-      setMessages(messagesData || []);
+      // Cast to Message type since attachment columns were just added
+      // Cast to Message type since attachment columns were just added
+      const typedMessages = (messagesData as unknown as Message[]) || [];
+      setMessages(typedMessages);
 
       // Get the latest insight if exists (only for non-completed conversations)
-      if (messagesData && messagesData.length > 0 && !isConversationCompleted) {
-        const lastIncomingMessage = [...messagesData].reverse().find(m => m.direction === "incoming");
+      if (typedMessages && typedMessages.length > 0 && !isConversationCompleted) {
+        const lastIncomingMessage = [...typedMessages].reverse().find(m => m.direction === "incoming");
         if (lastIncomingMessage) {
           const { data: insightData } = await supabase
             .from("insights")
@@ -266,6 +275,7 @@ const ChatPage = () => {
           message: messageContent, 
           message_id: messageId,
           cycleMessages,
+          companyId: user?.companyId, // Pass company ID for script lookup
         },
       });
 
@@ -313,7 +323,7 @@ const ChatPage = () => {
 
       if (error) throw error;
 
-      setMessages((prev) => [...prev, data]);
+      setMessages((prev) => [...prev, data as unknown as Message]);
 
       // Trigger AI customer response after seller sends a message
       if (simulationEnabled && !isConversationCompleted) {
@@ -322,12 +332,12 @@ const ChatPage = () => {
         if (response) {
           const { data: newMsg } = await supabase
             .from("messages")
-            .select("id, content, direction, timestamp, cycle_id")
+            .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
             .eq("id", response.messageId)
             .single();
           
           if (newMsg) {
-            setMessages((prev) => [...prev, newMsg]);
+            setMessages((prev) => [...prev, newMsg as unknown as Message]);
             await analyzeMessage(response.message, response.messageId);
           }
         }
@@ -336,6 +346,173 @@ const ChatPage = () => {
     } catch (error) {
       console.error("Error sending message:", error);
       toast.error("Erro ao enviar mensagem");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // New function for sending messages with attachments
+  const handleSendMessageWithAttachments = async (
+    content: string, 
+    attachments?: { url: string; type: string; name: string }[]
+  ) => {
+    if (!id || !user || isViewingHistory) return;
+
+    setIsSending(true);
+    
+    try {
+      // Get or create active cycle
+      const cycle = await getOrCreateActiveCycle();
+      if (!cycle) throw new Error("Failed to get or create cycle");
+
+      // Update cycle status to in_progress if it's pending
+      if (cycle.status === 'pending') {
+        await updateCycleStatus(cycle.id, 'in_progress');
+      }
+
+      // If we have attachments, send each as a separate message
+      if (attachments && attachments.length > 0) {
+        for (const attachment of attachments) {
+          const { data: attachmentMsg, error: attachmentError } = await supabase
+            .from("messages")
+            .insert({
+              seller_id: user.id,
+              customer_id: id,
+              content: "",
+              direction: "outgoing",
+              cycle_id: cycle.id,
+              attachment_url: attachment.url,
+              attachment_type: attachment.type,
+              attachment_name: attachment.name,
+            })
+            .select()
+            .single();
+
+          if (attachmentError) throw attachmentError;
+          setMessages((prev) => [...prev, attachmentMsg as unknown as Message]);
+        }
+      }
+
+      // Send text message if there's content
+      if (content.trim()) {
+        const { data, error } = await supabase
+          .from("messages")
+          .insert({
+            seller_id: user.id,
+            customer_id: id,
+            content: content.trim(),
+            direction: "outgoing",
+            cycle_id: cycle.id,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        setMessages((prev) => [...prev, data as unknown as Message]);
+
+        // Trigger AI customer response after seller sends a message
+        if (simulationEnabled && !isConversationCompleted) {
+          setIsSimulatingResponse(true);
+          const response = await triggerResponseAfterSellerMessage(content.trim());
+          if (response) {
+            const { data: newMsg } = await supabase
+              .from("messages")
+              .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
+              .eq("id", response.messageId)
+              .single();
+            
+            if (newMsg) {
+              setMessages((prev) => [...prev, newMsg as unknown as Message]);
+              await analyzeMessage(response.message, response.messageId);
+            }
+          }
+          setIsSimulatingResponse(false);
+        }
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast.error("Erro ao enviar mensagem");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Handle audio recording and sending
+  const handleSendAudio = async (audioBlob: Blob) => {
+    if (!id || !user || isViewingHistory) return;
+
+    setIsSending(true);
+    
+    try {
+      // Get or create active cycle
+      const cycle = await getOrCreateActiveCycle();
+      if (!cycle) throw new Error("Failed to get or create cycle");
+
+      // Update cycle status to in_progress if it's pending
+      if (cycle.status === 'pending') {
+        await updateCycleStatus(cycle.id, 'in_progress');
+      }
+
+      // Upload audio to Supabase Storage
+      const fileName = `audio-${Date.now()}.webm`;
+      const filePath = `${user.companyId}/${id}/${cycle.id}/audio/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("message_attachments")
+        .upload(filePath, audioBlob, {
+          contentType: audioBlob.type || "audio/webm",
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("message_attachments")
+        .getPublicUrl(filePath);
+
+      // Create message with audio attachment
+      const { data: audioMsg, error: msgError } = await supabase
+        .from("messages")
+        .insert({
+          seller_id: user.id,
+          customer_id: id,
+          content: "[Transcrevendo áudio...]",
+          direction: "outgoing",
+          cycle_id: cycle.id,
+          attachment_url: urlData.publicUrl,
+          attachment_type: "audio",
+          attachment_name: fileName,
+        })
+        .select()
+        .single();
+
+      if (msgError) throw msgError;
+
+      setMessages((prev) => [...prev, audioMsg as unknown as Message]);
+      toast.success("Áudio enviado!");
+
+      // Trigger audio analysis in the background
+      supabase.functions.invoke("analyze-audio", {
+        body: {
+          audio_url: urlData.publicUrl,
+          message_id: audioMsg.id,
+          sender: "seller",
+        },
+      }).then(({ data, error }) => {
+        if (!error && data?.transcription) {
+          // Update local message with transcription
+          setMessages((prev) => 
+            prev.map(m => 
+              m.id === audioMsg.id 
+                ? { ...m, content: data.transcription }
+                : m
+            )
+          );
+        }
+      }).catch(console.error);
+
+    } catch (error) {
+      console.error("Error sending audio:", error);
+      toast.error("Erro ao enviar áudio");
     } finally {
       setIsSending(false);
     }
@@ -551,6 +728,14 @@ const ChatPage = () => {
             )}
           </div>
 
+          {/* Alerts Banner - Only for active conversations */}
+          {isSeller && !isConversationCompleted && !isViewingHistory && (
+            <ChatAlertsBanner 
+              customerId={id || ""} 
+              cycleId={displayedCycleId} 
+            />
+          )}
+
           {/* Messages Area */}
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
@@ -564,34 +749,15 @@ const ChatPage = () => {
                 </div>
               ) : (
                 messages.map((message) => (
-                  <div
+                  <MessageBubble
                     key={message.id}
-                    className={cn(
-                      "flex",
-                      message.direction === "outgoing" ? "justify-end" : "justify-start"
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "max-w-[70%] rounded-2xl px-4 py-2 shadow-sm",
-                        message.direction === "outgoing"
-                          ? "bg-primary text-primary-foreground rounded-br-md"
-                          : "bg-muted rounded-bl-md"
-                      )}
-                    >
-                      <p className="text-sm">{message.content}</p>
-                      <p
-                        className={cn(
-                          "text-[10px] mt-1",
-                          message.direction === "outgoing"
-                            ? "text-primary-foreground/70"
-                            : "text-muted-foreground"
-                        )}
-                      >
-                        {format(new Date(message.timestamp), "HH:mm", { locale: ptBR })}
-                      </p>
-                    </div>
-                  </div>
+                    content={message.content}
+                    direction={message.direction}
+                    timestamp={message.timestamp}
+                    attachmentUrl={message.attachment_url}
+                    attachmentType={message.attachment_type}
+                    attachmentName={message.attachment_name}
+                  />
                 ))
               )}
               <div ref={messagesEndRef} />
@@ -599,25 +765,17 @@ const ChatPage = () => {
           </ScrollArea>
 
           {/* Message Input - Only for sellers on active conversations */}
-          {isSeller && !isConversationCompleted && !isViewingHistory && (
-            <form onSubmit={handleSendMessage} className="p-4 border-t border-border">
-              <div className="flex gap-2">
-                <Input
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Digite sua mensagem..."
-                  disabled={isSending}
-                  className="flex-1"
-                />
-                <Button type="submit" disabled={isSending || !newMessage.trim()}>
-                  {isSending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </form>
+          {isSeller && !isConversationCompleted && !isViewingHistory && activeCycle && (
+            <ChatInput
+              onSendMessage={handleSendMessageWithAttachments}
+              onSendAudio={handleSendAudio}
+              disabled={isSending}
+              companyId={user?.companyId}
+              customerId={id || ""}
+              cycleId={activeCycle.id}
+              initialMessage={newMessage}
+              onMessageChange={setNewMessage}
+            />
           )}
 
           {/* Read-only message for completed/history conversations */}

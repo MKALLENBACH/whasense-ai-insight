@@ -6,33 +6,101 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ANALYSIS_PROMPT = `Você é um vendedor da **Exercit Esportes**, altamente treinado em vendas consultivas, suplementos, equipamentos e acessórios de academia.
+interface AIScript {
+  ai_persona: string | null;
+  sales_playbook: string | null;
+  forbidden_phrases: string | null;
+  recommended_phrases: string | null;
+  tone_of_voice: string | null;
+  product_context: string | null;
+  objection_handling: string | null;
+  closing_techniques: string | null;
+  opening_messages: string | null;
+  example_responses: string | null;
+}
 
-🏋️ PRODUTOS EXERCIT ESPORTES:
-- Suplementos: whey protein, creatina, pré-treinos, BCAA, glutamina, hipercalóricos, termogênicos, vitaminas, colágeno, ômega 3
-- Equipamentos: halteres, barras, anilhas, racks, máquinas, bancos, esteiras, bicicletas ergométricas
-- Acessórios: luvas, cintos, straps, tapetes, rolos de liberação, elásticos, cordas
-- Roupas: leggings, shorts, regatas, tênis, tops femininos, bermudas masculinas
-- Recuperação: melatonina, ZMA, eletrólitos, massageadores
+// Build dynamic prompt based on company script
+function buildAnalysisPrompt(script: AIScript | null): string {
+  // Use script values or defaults
+  const aiPersona = script?.ai_persona || `Você é um assistente de vendas profissional, consultivo e atencioso. Seu objetivo é entender as necessidades do cliente e oferecer soluções adequadas.`;
+  
+  const salesPlaybook = script?.sales_playbook || `1. Saudação cordial e apresentação
+2. Identificar necessidade do cliente
+3. Fazer perguntas consultivas
+4. Apresentar soluções relevantes
+5. Lidar com objeções
+6. Fechar a venda
+7. Confirmar próximos passos`;
 
-ANALISE:
-- Toda a conversa do ciclo atual (histórico completo)
-- A mensagem atual do cliente
+  const forbiddenPhrases = script?.forbidden_phrases || `Nunca use: "infelizmente", "não posso", "impossível", linguagem negativa, gírias excessivas, promessas que não pode cumprir.`;
 
------------------------------------------
+  const recommendedPhrases = script?.recommended_phrases || `Use frequentemente: "excelente escolha", "perfeito para você", "vou te ajudar", "entendo perfeitamente", "ótima pergunta".`;
+
+  const toneOfVoice = script?.tone_of_voice || `Profissional, amigável, consultivo. Transmita confiança sem ser arrogante. Seja empático e atencioso.`;
+
+  const productContext = script?.product_context || `Produto/serviço da empresa. Adapte conforme contexto da conversa.`;
+
+  const objectionHandling = script?.objection_handling || `Técnica Feel-Felt-Found: Entendo como você se sente, outros clientes sentiram o mesmo, e descobriram que...`;
+
+  const closingTechniques = script?.closing_techniques || `Pergunte sobre próximos passos, ofereça opções claras, crie senso de urgência moderado sem pressão excessiva.`;
+
+  const openingMessages = script?.opening_messages || `Olá! Tudo bem? Como posso te ajudar hoje?`;
+
+  const exampleResponses = script?.example_responses || `Cliente: Está caro.
+Resposta: Entendo sua preocupação com o investimento. Muitos clientes tinham a mesma dúvida e perceberam que o valor se paga rapidamente pelos benefícios. Posso explicar melhor como isso funciona?`;
+
+  return `
+═══════════════════════════════════════════════════════════════
+🎯 SCRIPT DA EMPRESA (SIGA FIELMENTE)
+═══════════════════════════════════════════════════════════════
+
+📋 PERSONA DO VENDEDOR:
+${aiPersona}
+
+📘 PLAYBOOK DE VENDAS:
+${salesPlaybook}
+
+✅ VOCABULÁRIO RECOMENDADO:
+${recommendedPhrases}
+
+🚫 VOCABULÁRIO PROIBIDO:
+${forbiddenPhrases}
+
+🎤 TOM DE VOZ:
+${toneOfVoice}
+
+📦 CONTEXTO DE PRODUTOS/SERVIÇOS:
+${productContext}
+
+🛡️ COMO LIDAR COM OBJEÇÕES:
+${objectionHandling}
+
+🎯 TÉCNICAS DE FECHAMENTO:
+${closingTechniques}
+
+💬 MENSAGENS DE ABERTURA RECOMENDADAS:
+${openingMessages}
+
+📝 EXEMPLOS DE RESPOSTAS IDEAIS:
+${exampleResponses}
+
+═══════════════════════════════════════════════════════════════
+📊 ANÁLISE DA CONVERSA
+═══════════════════════════════════════════════════════════════
+
 HISTÓRICO DO CICLO:
 """
 {{cycleMessages}}
 """
------------------------------------------
 
 MENSAGEM ATUAL DO CLIENTE:
 """
 {{message}}
 """
------------------------------------------
 
+═══════════════════════════════════════════════════════════════
 🎯 TÉCNICAS DE VENDAS A APLICAR:
+═══════════════════════════════════════════════════════════════
 
 1. **SPIN Selling**
    - Situação: entender contexto atual do cliente
@@ -42,7 +110,7 @@ MENSAGEM ATUAL DO CLIENTE:
 
 2. **GAP Selling**
    - Onde o cliente está agora
-   - Onde ele quer chegar (objetivo fitness)
+   - Onde ele quer chegar (objetivo)
    - O que está faltando para chegar lá
 
 3. **Rapport Empático**
@@ -60,18 +128,9 @@ MENSAGEM ATUAL DO CLIENTE:
    - Sempre mover a conversa para frente
    - Sugerir próximo passo claro
 
------------------------------------------
-🎯 TOM EXERCIT ESPORTES:
-
-- Profissional e confiante
-- Consultivo e empático
-- Conhecimento profundo de produtos esportivos
-- Linguagem humana e natural
-- Direto e claro (1 a 3 frases)
-- Personalizado conforme objetivo: ganho de massa, emagrecimento, performance, recuperação, montar home gym
-
------------------------------------------
+═══════════════════════════════════════════════════════════════
 🎯 FASES DA VENDA (classifique):
+═══════════════════════════════════════════════════════════════
 
 - abertura
 - descoberta
@@ -84,33 +143,36 @@ MENSAGEM ATUAL DO CLIENTE:
 - pos_venda
 - reativacao
 
------------------------------------------
-🧠 REGRAS:
+═══════════════════════════════════════════════════════════════
+🧠 REGRAS IMPORTANTES:
+═══════════════════════════════════════════════════════════════
 
 - Responda como humano (natural e simpático)
-- Use no máximo 1–3 frases
+- Use no máximo 1–3 frases na sugestão
 - Nunca ofereça desconto espontaneamente
 - Nunca invente informações sobre produtos
 - Não repita a mensagem do cliente
 - Não seja robótico
 - SE houver objeção, acolha antes de redirecionar
-- Personalize conforme objetivo fitness do cliente
+- Personalize conforme contexto do cliente
+- SIGA FIELMENTE O SCRIPT DA EMPRESA ACIMA
 
------------------------------------------
+═══════════════════════════════════════════════════════════════
 📦 RETORNE APENAS JSON VÁLIDO:
+═══════════════════════════════════════════════════════════════
 
 {
   "sales_stage": "fase_da_venda",
   "sentiment": "positive | neutral | negative | angry | insecure | excited",
   "intention": 0-100,
   "analysis": "Resumo em 1-2 frases do que está acontecendo.",
-  "suggestion": "Melhor resposta como vendedor Exercit Esportes (1-3 frases).",
+  "suggestion": "Melhor resposta seguindo o script da empresa (1-3 frases).",
   "next_action": "Próxima ação recomendada para avançar.",
   "objection": "price | delay | trust | doubt | none",
   "temperature": "cold | warm | hot"
 }
-
------------------------------------------`;
+`;
+}
 
 interface CycleMessage {
   from: "client" | "seller";
@@ -130,10 +192,55 @@ function formatCycleMessages(cycleMessages: CycleMessage[]): string {
   }).join("\n");
 }
 
+// Fetch company script
+async function getCompanyScript(supabaseUrl: string, serviceKey: string, companyId: string): Promise<AIScript | null> {
+  console.log(`Fetching script for company: ${companyId}`);
+  
+  const supabaseClient = createClient(supabaseUrl, serviceKey);
+  
+  // Try to get company's active script
+  const { data: companyScript, error: companyError } = await supabaseClient
+    .from("ai_scripts")
+    .select("*")
+    .eq("company_id", companyId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (companyError) {
+    console.error("Error fetching company script:", companyError);
+  }
+
+  if (companyScript) {
+    console.log(`Using company script: ${(companyScript as AIScript & { script_name?: string }).script_name || 'unnamed'}`);
+    return companyScript as AIScript;
+  }
+
+  // Fallback to default script
+  console.log("No active company script, fetching default");
+  const { data: defaultScript, error: defaultError } = await supabaseClient
+    .from("default_ai_script")
+    .select("*")
+    .limit(1)
+    .maybeSingle();
+
+  if (defaultError) {
+    console.error("Error fetching default script:", defaultError);
+  }
+
+  if (defaultScript) {
+    console.log("Using default script");
+    return defaultScript as AIScript;
+  }
+
+  console.log("No script found, using built-in defaults");
+  return null;
+}
+
 // IA Service - handles Lovable AI communication
 async function analyzeMessage(
   message: string, 
-  cycleMessages: CycleMessage[] = []
+  cycleMessages: CycleMessage[] = [],
+  script: AIScript | null = null
 ): Promise<{
   sales_stage: string;
   sentiment: string;
@@ -153,12 +260,14 @@ async function analyzeMessage(
   // Format the cycle messages for the prompt
   const formattedCycleMessages = formatCycleMessages(cycleMessages);
 
-  // Build the prompt with the cycle context
-  const systemPrompt = ANALYSIS_PROMPT
+  // Build the prompt with the company script
+  const basePrompt = buildAnalysisPrompt(script);
+  const systemPrompt = basePrompt
     .replace("{{cycleMessages}}", formattedCycleMessages)
     .replace("{{message}}", message);
 
-  console.log("Analyzing with cycle context:", {
+  console.log("Analyzing with script context:", {
+    hasScript: !!script,
     messageCount: cycleMessages.length,
     currentMessage: message.substring(0, 50) + "...",
   });
@@ -178,7 +287,7 @@ async function analyzeMessage(
         },
         { 
           role: 'user', 
-          content: `Analise a mensagem atual do cliente considerando todo o histórico do ciclo acima e retorne o JSON com sua análise completa.`
+          content: `Analise a mensagem atual do cliente considerando todo o histórico do ciclo e o script da empresa. Retorne o JSON com sua análise completa.`
         }
       ],
       temperature: 0.3,
@@ -262,9 +371,14 @@ serve(async (req) => {
       );
     }
 
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     // Parse request body
     const body = await req.json();
-    const { message, message_id, cycleMessages } = body;
+    const { message, message_id, cycleMessages, companyId } = body;
 
     // Validate input
     if (!message || typeof message !== 'string') {
@@ -288,27 +402,31 @@ serve(async (req) => {
       );
     }
 
-    console.log('Analyzing message with cycle context:', {
+    console.log('Analyzing message:', {
       message: message.substring(0, 100) + '...',
       cycleMessagesCount: cycleMessages?.length || 0,
+      companyId: companyId || 'not provided',
     });
 
-    // Call IA Service to analyze the message with full cycle context
-    const analysis = await analyzeMessage(message, cycleMessages || []);
+    // Fetch company script if companyId is provided
+    let script: AIScript | null = null;
+    if (companyId) {
+      script = await getCompanyScript(supabaseUrl, supabaseServiceKey, companyId);
+    }
+
+    // Call IA Service to analyze the message with full cycle context and company script
+    const analysis = await analyzeMessage(message, cycleMessages || [], script);
 
     console.log('Analysis result:', {
       sales_stage: analysis.sales_stage,
       sentiment: analysis.sentiment,
       temperature: analysis.temperature,
       objection: analysis.objection,
+      usedScript: !!script,
     });
 
     // Save to database if message_id is provided
     if (message_id) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
       const { error: insertError } = await supabase
         .from('insights')
         .insert({

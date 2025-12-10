@@ -9,14 +9,27 @@ import LoginPage from "./pages/LoginPage";
 import ConversationsPage from "./pages/ConversationsPage";
 import ChatPage from "./pages/ChatPage";
 import AlertsPage from "./pages/AlertsPage";
-import DashboardPage from "./pages/DashboardPage";
+import ManagerDashboardPage from "./pages/ManagerDashboardPage";
+import SellerDashboardPage from "./pages/SellerDashboardPage";
 import HistoryPage from "./pages/HistoryPage";
 import WhatsAppConnectPage from "./pages/WhatsAppConnectPage";
 import WhatsAppStatusPage from "./pages/WhatsAppStatusPage";
 import SellersPage from "./pages/SellersPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import FollowupsSettingsPage from "./pages/FollowupsSettingsPage";
+import ManagerGoalsPage from "./pages/ManagerGoalsPage";
+import SellerPerformancePage from "./pages/SellerPerformancePage";
 import NotFound from "./pages/NotFound";
+
+// Admin pages
+import AdminLoginPage from "./pages/admin/AdminLoginPage";
+import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
+import AdminCompaniesPage from "./pages/admin/AdminCompaniesPage";
+import AdminCompanyDetailsPage from "./pages/admin/AdminCompanyDetailsPage";
+import AdminManagersPage from "./pages/admin/AdminManagersPage";
+import AdminAIScriptsPage from "./pages/admin/AdminAIScriptsPage";
+import AdminPlansPage from "./pages/admin/AdminPlansPage";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +45,15 @@ const App = () => (
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            
+            {/* Admin routes */}
+            <Route path="/admin/login" element={<AdminLoginPage />} />
+            <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+            <Route path="/admin/empresas" element={<AdminCompaniesPage />} />
+            <Route path="/admin/empresa/:id" element={<AdminCompanyDetailsPage />} />
+            <Route path="/admin/gestores" element={<AdminManagersPage />} />
+            <Route path="/admin/ai" element={<AdminAIScriptsPage />} />
+            <Route path="/admin/planos" element={<AdminPlansPage />} />
             
             {/* Seller routes */}
             <Route 
@@ -67,12 +89,29 @@ const App = () => (
               } 
             />
             
+            {/* Seller dashboard */}
+            <Route 
+              path="/dashboard-vendedor" 
+              element={
+                <ProtectedRoute requiredRole="vendedor">
+                  <SellerDashboardPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/vendedor/performance" 
+              element={
+                <ProtectedRoute requiredRole="vendedor">
+                  <SellerPerformancePage />
+                </ProtectedRoute>
+              } 
+            />
             {/* Manager routes */}
             <Route 
               path="/dashboard" 
               element={
                 <ProtectedRoute requiredRole="gestor">
-                  <DashboardPage />
+                  <ManagerDashboardPage />
                 </ProtectedRoute>
               } 
             />
@@ -97,6 +136,22 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="gestor">
                   <SellersPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/gestor/followups" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <FollowupsSettingsPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/gestor/metas" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <ManagerGoalsPage />
                 </ProtectedRoute>
               } 
             />

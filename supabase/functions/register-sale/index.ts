@@ -92,6 +92,125 @@ serve(async (req) => {
 
     console.log('Sale registered successfully:', sale);
 
+    // Award gamification points for won sales
+    if (status === 'won' && companyId) {
+      try {
+        console.log('Awarding gamification points for sale');
+        
+        // Insert gamification points directly
+        await supabase
+          .from('gamification_points')
+          .insert({
+            company_id: companyId,
+            vendor_id: seller_id,
+            points: 10,
+            reason: 'Venda concluída',
+            sale_id: sale.id,
+          });
+
+        // Update goal progress for sales-type goals
+        const { data: activeGoals } = await supabase
+          .from('goals')
+          .select('id')
+          .eq('company_id', companyId)
+          .eq('goal_type', 'vendas')
+          .lte('start_date', new Date().toISOString().split('T')[0])
+          .gte('end_date', new Date().toISOString().split('T')[0]);
+
+        if (activeGoals && activeGoals.length > 0) {
+          for (const goal of activeGoals) {
+            // Get current goal_vendor record
+            const { data: gv } = await supabase
+              .from('goal_vendors')
+              .select('*')
+              .eq('goal_id', goal.id)
+              .eq('vendor_id', seller_id)
+              .single();
+
+            if (gv) {
+              const newCurrentValue = (gv.current_value || 0) + 1;
+              const newProgress = Math.min(100, (newCurrentValue / gv.target_value) * 100);
+              const newStatus = newProgress >= 100 ? 'achieved' : newProgress >= 70 ? 'on_track' : 'behind';
+
+              await supabase
+                .from('goal_vendors')
+                .update({
+                  current_value: newCurrentValue,
+                  progress: newProgress,
+                  status: newStatus,
+                })
+                .eq('id', gv.id);
+
+              // Award bonus points if goal is achieved
+              if (newProgress >= 100 && gv.progress < 100) {
+                await supabase
+                  .from('gamification_points')
+                  .insert({
+                    company_id: companyId,
+                    vendor_id: seller_id,
+                    points: 20,
+                    reason: 'Meta atingida',
+                  });
+
+                // Award achievement badge
+                const { data: existingBadge } = await supabase
+                  .from('achievements')
+                  .select('id')
+                  .eq('vendor_id', seller_id)
+                  .eq('badge_type', 'meta_batida')
+                  .single();
+
+                if (!existingBadge) {
+                  await supabase
+                    .from('achievements')
+                    .insert({
+                      vendor_id: seller_id,
+                      badge_type: 'meta_batida',
+                    });
+                }
+              }
+            }
+          }
+        }
+
+        // Check for Closer Master badge (10 sales in 7 days)
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        const { count: recentSalesCount } = await supabase
+          .from('sales')
+          .select('*', { count: 'exact', head: true })
+          .eq('seller_id', seller_id)
+          .eq('status', 'won')
+          .gte('created_at', sevenDaysAgo.toISOString());
+
+        if (recentSalesCount && recentSalesCount >= 10) {
+          const { data: existingCloserBadge } = await supabase
+            .from('achievements')
+            .select('id')
+            .eq('vendor_id', seller_id)
+            .eq('badge_type', 'closer_master')
+            .single();
+
+          if (!existingCloserBadge) {
+            await supabase
+              .from('achievements')
+              .insert({
+                vendor_id: seller_id,
+                badge_type: 'closer_master',
+              });
+
+            console.log('Awarded Closer Master badge');
+          }
+        }
+
+        console.log('Gamification updated successfully');
+      } catch (gamError) {
+        console.error('Error updating gamification:', gamError);
+        // Don't fail the sale registration if gamification fails
+      }
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 

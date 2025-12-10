@@ -31,7 +31,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
 
   const mapDbRoleToAppRole = (dbRole: string): UserRole => {
-    return dbRole === "manager" ? "gestor" : "vendedor";
+    if (dbRole === "manager") return "gestor";
+    if (dbRole === "admin") return "admin";
+    return "vendedor";
   };
 
   const fetchUserRole = async (userId: string): Promise<UserRole> => {
@@ -124,6 +126,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const role = await fetchUserRole(data.user.id);
+
+    // Check if user's company is active (skip for admins)
+    if (role !== "admin") {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("company_id")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+
+      if (profile?.company_id) {
+        const { data: company } = await supabase
+          .from("companies")
+          .select("is_active")
+          .eq("id", profile.company_id)
+          .maybeSingle();
+
+        if (company && !company.is_active) {
+          await supabase.auth.signOut();
+          throw new Error("Sua empresa está inativa. Entre em contato com o suporte.");
+        }
+      }
+    }
+
     return { role };
   };
 
