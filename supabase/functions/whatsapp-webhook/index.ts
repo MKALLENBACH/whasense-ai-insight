@@ -103,10 +103,13 @@ serve(async (req) => {
       customerId = newCustomer.id;
     }
 
+    const messageTimestamp = timestamp || new Date().toISOString();
+
     // Get or create active cycle for this customer
     let cycleId: string;
+    let isNewCycle = false;
     
-    // Check for existing active cycle
+    // Check for existing active cycle (pending or in_progress)
     const { data: existingCycle } = await supabase
       .from('sale_cycles')
       .select('id, status')
@@ -119,13 +122,15 @@ serve(async (req) => {
       cycleId = existingCycle.id;
       console.log('Using existing cycle:', cycleId);
     } else {
-      // Create new cycle
+      // Create new cycle with in_progress status (client initiated contact)
+      isNewCycle = true;
       const { data: newCycle, error: cycleError } = await supabase
         .from('sale_cycles')
         .insert({
           customer_id: customerId,
           seller_id: sellerId,
-          status: 'pending',
+          status: 'in_progress', // Client contact = active cycle
+          start_message_timestamp: messageTimestamp,
         })
         .select('id')
         .single();
@@ -146,7 +151,7 @@ serve(async (req) => {
         seller_id: sellerId,
         content: message,
         direction: 'incoming',
-        timestamp: timestamp || new Date().toISOString(),
+        timestamp: messageTimestamp,
         cycle_id: cycleId,
       })
       .select('id')
@@ -154,6 +159,15 @@ serve(async (req) => {
 
     if (messageError) {
       throw messageError;
+    }
+
+    // If this is a new cycle, update start_message_id now that we have the message
+    if (isNewCycle) {
+      await supabase
+        .from('sale_cycles')
+        .update({ start_message_id: savedMessage.id })
+        .eq('id', cycleId);
+      console.log('Updated cycle start_message_id:', savedMessage.id);
     }
 
     // Trigger AI analysis asynchronously
@@ -182,6 +196,7 @@ serve(async (req) => {
       customerId,
       cycleId,
       isNewCustomer,
+      isNewCycle,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

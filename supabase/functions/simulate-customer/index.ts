@@ -119,8 +119,11 @@ serve(async (req) => {
       });
     }
 
+    const messageTimestamp = new Date().toISOString();
+
     // Get or create active cycle for this customer
     let cycleId: string;
+    let isNewCycle = false;
     
     const { data: existingCycle } = await supabase
       .from('sale_cycles')
@@ -133,13 +136,15 @@ serve(async (req) => {
     if (existingCycle) {
       cycleId = existingCycle.id;
     } else {
-      // Create new cycle
+      // Create new cycle with in_progress status (client contact)
+      isNewCycle = true;
       const { data: newCycle, error: cycleError } = await supabase
         .from('sale_cycles')
         .insert({
           customer_id: customerId,
           seller_id: sellerId,
-          status: 'pending',
+          status: 'in_progress',
+          start_message_timestamp: messageTimestamp,
         })
         .select('id')
         .single();
@@ -184,8 +189,6 @@ serve(async (req) => {
       : `O vendedor ainda não respondeu. Envie uma mensagem inicial como cliente interessado em produtos fitness, ou faça um follow-up natural.`;
 
     // Determine if this should be an audio message (simulated)
-    // Disabled random audio generation to avoid confusion with fake audio alerts
-    // Only create audio if explicitly requested via sendAudio flag
     const isAudioMessage = sendAudio === true;
 
     // Call Lovable AI Gateway
@@ -222,16 +225,9 @@ serve(async (req) => {
     let messageContent = customerMessage;
 
     if (isAudioMessage) {
-      // Create a simulated audio placeholder - in real implementation this would be real audio from WhatsApp
-      // For now we store the transcription directly but mark it as audio type
-      messageContent = customerMessage; // The "transcription" of the audio
-      
-      // Create a mock audio file path (in production, this would come from WhatsApp)
+      messageContent = customerMessage;
       const audioFileName = `client_audio_${Date.now()}.ogg`;
       const audioPath = `${companyId}/${customerId}/${cycleId}/audio/${audioFileName}`;
-      
-      // Note: In a real implementation, this would be the actual audio URL from WhatsApp
-      // For simulation, we'll store a placeholder URL that indicates it's a simulated audio
       audioUrl = `simulated://audio/${audioPath}`;
     }
 
@@ -243,7 +239,7 @@ serve(async (req) => {
         seller_id: sellerId,
         content: isAudioMessage ? "[Transcrevendo áudio...]" : customerMessage,
         direction: 'incoming',
-        timestamp: new Date().toISOString(),
+        timestamp: messageTimestamp,
         cycle_id: cycleId,
         ...(isAudioMessage && {
           attachment_type: 'audio',
@@ -258,9 +254,17 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // For audio messages, update with transcription after a brief delay (simulating transcription)
+    // If this is a new cycle, update start_message_id
+    if (isNewCycle) {
+      await supabase
+        .from('sale_cycles')
+        .update({ start_message_id: savedMessage.id })
+        .eq('id', cycleId);
+      console.log('Updated cycle start_message_id:', savedMessage.id);
+    }
+
+    // For audio messages, update with transcription after a brief delay
     if (isAudioMessage) {
-      // Update message with the "transcription"
       await supabase
         .from('messages')
         .update({ content: customerMessage })
@@ -276,7 +280,6 @@ serve(async (req) => {
     // Trigger AI analysis for insights with full cycle context
     try {
       if (isAudioMessage) {
-        // For audio messages, use analyze-audio endpoint
         await fetch(`${supabaseUrl}/functions/v1/analyze-audio`, {
           method: 'POST',
           headers: {
@@ -287,7 +290,6 @@ serve(async (req) => {
             audio_url: audioUrl || '',
             message_id: savedMessage.id,
             sender: 'client',
-            // Pass the transcription directly for simulated audios
             simulated_transcription: customerMessage,
           }),
         });
@@ -315,6 +317,7 @@ serve(async (req) => {
       messageId: savedMessage.id,
       cycleId,
       isAudio: isAudioMessage,
+      isNewCycle,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

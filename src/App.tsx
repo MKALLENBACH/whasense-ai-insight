@@ -20,6 +20,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import FollowupsSettingsPage from "./pages/FollowupsSettingsPage";
 import ManagerGoalsPage from "./pages/ManagerGoalsPage";
 import SellerPerformancePage from "./pages/SellerPerformancePage";
+import ManagerCycleViewPage from "./pages/ManagerCycleViewPage";
 import NotFound from "./pages/NotFound";
 import ClientsListPage from "./pages/ClientsListPage";
 import Client360Page from "./pages/Client360Page";
@@ -154,6 +155,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="gestor">
                   <ManagerGoalsPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/gestor/ciclo/:id" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <ManagerCycleViewPage />
                 </ProtectedRoute>
               } 
             />

@@ -832,6 +832,8 @@ export type Database = {
           last_activity_at: string | null
           lost_reason: string | null
           seller_id: string
+          start_message_id: string | null
+          start_message_timestamp: string | null
           status: Database["public"]["Enums"]["lead_status"]
           won_summary: string | null
         }
@@ -845,6 +847,8 @@ export type Database = {
           last_activity_at?: string | null
           lost_reason?: string | null
           seller_id: string
+          start_message_id?: string | null
+          start_message_timestamp?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
           won_summary?: string | null
         }
@@ -858,6 +862,8 @@ export type Database = {
           last_activity_at?: string | null
           lost_reason?: string | null
           seller_id?: string
+          start_message_id?: string | null
+          start_message_timestamp?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
           won_summary?: string | null
         }
@@ -881,6 +887,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_cycles_start_message_id_fkey"
+            columns: ["start_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
         ]
