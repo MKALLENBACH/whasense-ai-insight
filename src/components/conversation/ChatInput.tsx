@@ -39,6 +39,16 @@ const ChatInput = ({
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 128)}px`; // max-h-32 = 128px
+    }
+  };
 
   // Sync with external initialMessage when it changes (e.g., when suggestion is applied)
   useEffect(() => {
@@ -46,6 +56,11 @@ const ChatInput = ({
       setMessage(initialMessage);
     }
   }, [initialMessage]);
+
+  // Adjust height when message changes
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [message]);
 
   const getFileType = (file: File): PendingFile["type"] => {
     if (file.type.startsWith("image/")) return "image";
@@ -243,12 +258,13 @@ const ChatInput = ({
         {/* Textarea */}
         <div className="flex-1 relative">
           <Textarea
+            ref={textareaRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Digite sua mensagem..."
             disabled={disabled || isSending}
-            className="min-h-[44px] max-h-32 resize-none pr-20"
+            className="min-h-[44px] max-h-32 resize-none pr-20 overflow-y-auto"
             rows={1}
           />
           <span className="absolute bottom-2 right-2 text-[10px] text-muted-foreground pointer-events-none">
