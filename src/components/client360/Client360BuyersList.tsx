@@ -75,38 +75,59 @@ const Client360BuyersList = ({ buyers, clientId, onRefresh }: Client360BuyersLis
     try {
       const enriched = await Promise.all(
         buyers.map(async (buyer) => {
-          // Get current cycle
-          const { data: cycleData } = await supabase
-            .from("sale_cycles")
-            .select("id, status")
+          // First get customer linked to this buyer
+          const { data: customerData } = await supabase
+            .from("customers")
+            .select("id")
             .eq("buyer_id", buyer.id)
-            .in("status", ["pending", "in_progress"])
             .limit(1)
             .maybeSingle();
 
-          // Get last message
-          const { data: messageData } = await supabase
-            .from("messages")
-            .select("content, timestamp")
-            .eq("buyer_id", buyer.id)
-            .order("timestamp", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+          let cycleData = null;
+          let messageData = null;
+          let temperature: "hot" | "warm" | "cold" | undefined = undefined;
 
-          // Get latest temperature from insights
-          const { data: insightData } = await supabase
-            .from("insights")
-            .select("temperature, message_id")
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+          if (customerData) {
+            // Get current cycle via customer_id
+            const { data: cycle } = await supabase
+              .from("sale_cycles")
+              .select("id, status")
+              .eq("customer_id", customerData.id)
+              .in("status", ["pending", "in_progress"])
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            cycleData = cycle;
+
+            // Get last message via customer_id
+            const { data: message } = await supabase
+              .from("messages")
+              .select("content, timestamp, id")
+              .eq("customer_id", customerData.id)
+              .order("timestamp", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            messageData = message;
+
+            // Get latest temperature from insights of this customer's messages
+            if (message) {
+              const { data: insight } = await supabase
+                .from("insights")
+                .select("temperature")
+                .eq("message_id", message.id)
+                .maybeSingle();
+              temperature = (insight?.temperature as "hot" | "warm" | "cold") || undefined;
+            }
+          }
 
           return {
             ...buyer,
             currentCycleStatus: cycleData?.status,
-            lastMessage: messageData?.content?.substring(0, 50) + (messageData?.content?.length > 50 ? "..." : ""),
+            lastMessage: messageData?.content ? 
+              messageData.content.substring(0, 50) + (messageData.content.length > 50 ? "..." : "") : 
+              undefined,
             lastMessageTime: messageData?.timestamp,
-            temperature: (insightData?.temperature as "hot" | "warm" | "cold") || undefined,
+            temperature,
           };
         })
       );
