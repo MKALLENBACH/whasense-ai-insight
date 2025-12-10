@@ -26,21 +26,21 @@ interface CompanyStats {
 }
 
 const AdminMonitorPage = () => {
-  const { user, role } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState<CompanyStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    if (role !== "admin") {
+    if (!user || user.role !== "admin") {
       navigate("/admin/login");
       return;
     }
     fetchStats();
-    const interval = setInterval(fetchStats, 30000); // Refresh every 30s
+    const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
-  }, [role]);
+  }, [user]);
 
   const fetchStats = async () => {
     try {

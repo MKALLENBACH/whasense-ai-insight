@@ -33,6 +33,7 @@ import AdminCompanyDetailsPage from "./pages/admin/AdminCompanyDetailsPage";
 import AdminManagersPage from "./pages/admin/AdminManagersPage";
 import AdminAIScriptsPage from "./pages/admin/AdminAIScriptsPage";
 import AdminPlansPage from "./pages/admin/AdminPlansPage";
+import AdminMonitorPage from "./pages/admin/AdminMonitorPage";
 
 const queryClient = new QueryClient();
 
@@ -57,6 +58,7 @@ const App = () => (
             <Route path="/admin/gestores" element={<AdminManagersPage />} />
             <Route path="/admin/ai" element={<AdminAIScriptsPage />} />
             <Route path="/admin/planos" element={<AdminPlansPage />} />
+            <Route path="/admin/monitor" element={<AdminMonitorPage />} />
             
             {/* Seller routes */}
             <Route 

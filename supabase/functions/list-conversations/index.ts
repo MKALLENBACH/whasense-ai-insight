@@ -60,6 +60,7 @@ serve(async (req) => {
     const companyId = profileResult.data?.company_id;
 
     // Get all customers that have messages with this seller (or all for manager)
+    // PERFORMANCE: Limit to most recent messages and paginate
     let messagesQuery = supabase
       .from('messages')
       .select(`
@@ -82,7 +83,8 @@ serve(async (req) => {
           client_id
         )
       `)
-      .order('timestamp', { ascending: false });
+      .order('timestamp', { ascending: false })
+      .limit(2000); // Limit total messages fetched for performance
 
     if (!isManager) {
       messagesQuery = messagesQuery.eq('seller_id', user.id);
