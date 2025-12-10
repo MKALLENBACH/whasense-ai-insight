@@ -171,9 +171,25 @@ const ChatPage = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Scroll to bottom when new messages arrive (only if not viewing history)
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (!selectedCycleId) {
+      scrollToBottom();
+    }
+  }, [messages, selectedCycleId]);
+
+  // Scroll to selected cycle when it changes
+  useEffect(() => {
+    if (selectedCycleId) {
+      // Use requestAnimationFrame to ensure DOM is updated
+      requestAnimationFrame(() => {
+        const cycleElement = cycleRefs.current.get(selectedCycleId);
+        if (cycleElement) {
+          cycleElement.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    }
+  }, [selectedCycleId]);
 
   useEffect(() => {
     if (id && session && user) {
@@ -676,18 +692,9 @@ const ChatPage = () => {
     if (cycleId === activeCycle?.id) {
       setSelectedCycleId(null);
       setIsViewingHistory(false);
-      // Scroll to bottom (current messages)
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     } else {
       setSelectedCycleId(cycleId);
       setIsViewingHistory(true);
-      // Scroll to the selected cycle divider
-      setTimeout(() => {
-        const cycleElement = cycleRefs.current.get(cycleId);
-        if (cycleElement) {
-          cycleElement.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      }, 100);
     }
   };
 
