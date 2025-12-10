@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { UserRole } from "@/types";
+import { memoryCache, CACHE_KEYS, CACHE_TTL } from "@/lib/cache";
 
 // IDs dos planos no banco
 const INACTIVE_PLAN_ID = "fadfe68e-1f50-4e59-8815-40fc9d590fa8";
@@ -75,6 +76,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const fetchUserRole = async (userId: string): Promise<UserRole> => {
+    // Check cache first
+    const cacheKey = CACHE_KEYS.userRole(userId);
+    const cached = memoryCache.get<UserRole>(cacheKey);
+    if (cached) return cached;
+
     const { data, error } = await supabase
       .from("user_roles")
       .select("role")
@@ -86,10 +92,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return "vendedor";
     }
 
-    return mapDbRoleToAppRole(data?.role || "seller");
+    const role = mapDbRoleToAppRole(data?.role || "seller");
+    memoryCache.set(cacheKey, role, CACHE_TTL.session);
+    return role;
   };
 
   const fetchUserProfile = async (userId: string): Promise<{ name: string; email: string; companyId: string | null; isActive: boolean } | null> => {
+    // Check cache first
+    const cacheKey = CACHE_KEYS.profile(userId);
+    const cached = memoryCache.get<{ name: string; email: string; companyId: string | null; isActive: boolean }>(cacheKey);
+    if (cached) return cached;
+
     const { data, error } = await supabase
       .from("profiles")
       .select("name, email, company_id, is_active")
@@ -101,12 +114,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return null;
     }
 
-    return data ? { name: data.name, email: data.email, companyId: data.company_id, isActive: data.is_active } : null;
+    const profile = data ? { name: data.name, email: data.email, companyId: data.company_id, isActive: data.is_active } : null;
+    if (profile) {
+      memoryCache.set(cacheKey, profile, CACHE_TTL.medium);
+    }
+    return profile;
   };
 
-  const fetchCompanyPlan = async (companyId: string | null): Promise<CompanyPlanInfo | null> => {
+  const fetchCompanyPlan = async (companyId: string | null, skipCache = false): Promise<CompanyPlanInfo | null> => {
     if (!companyId) {
       return null;
+    }
+
+    // Check cache first (unless skipCache is true)
+    const cacheKey = CACHE_KEYS.companyPlan(companyId);
+    if (!skipCache) {
+      const cached = memoryCache.get<CompanyPlanInfo>(cacheKey);
+      if (cached) return cached;
     }
 
     const { data: company, error } = await supabase
@@ -137,6 +161,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           .update({ plan_id: null })
           .eq("id", companyId);
         
+        // Clear cache since plan changed
+        memoryCache.invalidate(cacheKey);
+        
         return {
           planId: null,
           planName: null,
@@ -155,7 +182,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                          company.plan_id !== null && 
                          company.plan_id !== INACTIVE_PLAN_ID;
 
-    return {
+    const planInfo: CompanyPlanInfo = {
       planId: company.plan_id,
       planName: planData?.name || null,
       isActive: company.is_active,
@@ -165,11 +192,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       freeStartDate: company.free_start_date,
       freeEndDate: company.free_end_date,
     };
+
+    // Cache the result
+    memoryCache.set(cacheKey, planInfo, CACHE_TTL.medium);
+    
+    return planInfo;
   };
 
-  const fetchSellerLimitInfo = async (companyId: string | null, sellerLimit: number | null): Promise<SellerLimitInfo | null> => {
+  const fetchSellerLimitInfo = async (companyId: string | null, sellerLimit: number | null, skipCache = false): Promise<SellerLimitInfo | null> => {
     if (!companyId || sellerLimit === null) {
       return null;
+    }
+
+    // Check cache first (unless skipCache is true)
+    const cacheKey = CACHE_KEYS.sellerLimit(companyId);
+    if (!skipCache) {
+      const cached = memoryCache.get<SellerLimitInfo>(cacheKey);
+      if (cached && cached.allowedLimit === sellerLimit) return cached;
     }
 
     // Count active sellers in the company
@@ -185,7 +224,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     if (!profiles || profiles.length === 0) {
-      return { isExceeded: false, currentActiveCount: 0, allowedLimit: sellerLimit };
+      const limitInfo = { isExceeded: false, currentActiveCount: 0, allowedLimit: sellerLimit };
+      memoryCache.set(cacheKey, limitInfo, CACHE_TTL.short);
+      return limitInfo;
     }
 
     const userIds = profiles.map(p => p.user_id);
@@ -204,21 +245,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const activeSellerCount = roles?.length || 0;
 
-    return {
+    const limitInfo: SellerLimitInfo = {
       isExceeded: activeSellerCount > sellerLimit,
       currentActiveCount: activeSellerCount,
       allowedLimit: sellerLimit,
     };
+
+    // Cache with short TTL since seller count can change frequently
+    memoryCache.set(cacheKey, limitInfo, CACHE_TTL.short);
+
+    return limitInfo;
   };
 
   const refreshCompanyPlan = async () => {
     if (user?.companyId) {
-      const planInfo = await fetchCompanyPlan(user.companyId);
+      // Skip cache to force refresh
+      memoryCache.invalidate(CACHE_KEYS.companyPlan(user.companyId));
+      const planInfo = await fetchCompanyPlan(user.companyId, true);
       setCompanyPlan(planInfo);
       
       // Also refresh seller limit info
       if (planInfo) {
-        const limitInfo = await fetchSellerLimitInfo(user.companyId, planInfo.sellerLimit);
+        memoryCache.invalidate(CACHE_KEYS.sellerLimit(user.companyId));
+        const limitInfo = await fetchSellerLimitInfo(user.companyId, planInfo.sellerLimit, true);
         setSellerLimitInfo(limitInfo);
       }
     }
@@ -227,7 +276,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const refreshSellerLimit = async () => {
     console.log("refreshSellerLimit called", { companyId: user?.companyId, sellerLimit: companyPlan?.sellerLimit });
     if (user?.companyId && companyPlan) {
-      const limitInfo = await fetchSellerLimitInfo(user.companyId, companyPlan.sellerLimit);
+      // Skip cache to force refresh
+      memoryCache.invalidate(CACHE_KEYS.sellerLimit(user.companyId));
+      const limitInfo = await fetchSellerLimitInfo(user.companyId, companyPlan.sellerLimit, true);
       console.log("New seller limit info:", limitInfo);
       setSellerLimitInfo(limitInfo);
     }
@@ -403,6 +454,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (error) {
       throw new Error(error.message);
     }
+    // Clear all cache on logout
+    memoryCache.clear();
     setUser(null);
     setSession(null);
     setCompanyPlan(null);
