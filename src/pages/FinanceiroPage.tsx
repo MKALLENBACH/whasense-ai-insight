@@ -48,9 +48,21 @@ interface Plan {
 
 // Helper to parse features from JSON
 const parseFeatures = (features: unknown): string[] => {
+  if (!features) return [];
+  
+  // If features is an object with featuresList array
+  if (typeof features === "object" && features !== null && "featuresList" in features) {
+    const list = (features as { featuresList: unknown }).featuresList;
+    if (Array.isArray(list)) {
+      return list.filter((f): f is string => typeof f === "string");
+    }
+  }
+  
+  // Fallback: if features is directly an array
   if (Array.isArray(features)) {
     return features.filter((f): f is string => typeof f === "string");
   }
+  
   return [];
 };
 
