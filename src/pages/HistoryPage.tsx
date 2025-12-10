@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import LeadTemperatureBadge from "@/components/LeadTemperatureBadge";
+import { CycleSelectionModal } from "@/components/history/CycleSelectionModal";
 import { 
   Search, 
   History, 
@@ -95,6 +96,8 @@ const HistoryPage = () => {
   const [conversations, setConversations] = useState<ConversationHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null);
+  const [cycleModalOpen, setCycleModalOpen] = useState(false);
 
   const fetchHistory = async () => {
     if (!session?.access_token) return;
@@ -258,7 +261,10 @@ const HistoryPage = () => {
                       <TableRow 
                         key={conversation.id} 
                         className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => navigate(`/chat/${conversation.id}`)}
+                        onClick={() => {
+                          setSelectedCustomer({ id: conversation.customer.id, name: conversation.customer.name });
+                          setCycleModalOpen(true);
+                        }}
                       >
                         <TableCell>
                           <div className="flex items-center gap-3">
@@ -320,12 +326,13 @@ const HistoryPage = () => {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/chat/${conversation.id}`);
+                              setSelectedCustomer({ id: conversation.customer.id, name: conversation.customer.name });
+                              setCycleModalOpen(true);
                             }}
                             className="gap-1"
                           >
                             <ExternalLink className="h-4 w-4" />
-                            Abrir
+                            Ver Ciclos
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -346,6 +353,16 @@ const HistoryPage = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Cycle Selection Modal */}
+        {selectedCustomer && (
+          <CycleSelectionModal
+            open={cycleModalOpen}
+            onOpenChange={setCycleModalOpen}
+            customerId={selectedCustomer.id}
+            customerName={selectedCustomer.name}
+          />
+        )}
       </div>
     </AppLayout>
   );
