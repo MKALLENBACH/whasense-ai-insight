@@ -3,6 +3,9 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { UserRole } from "@/types";
 
+// ID do plano "Inativo" no banco
+const INACTIVE_PLAN_ID = "fadfe68e-1f50-4e59-8815-40fc9d590fa8";
+
 interface AuthUser {
   id: string;
   name: string;
@@ -11,16 +14,27 @@ interface AuthUser {
   companyId: string | null;
 }
 
+interface CompanyPlanInfo {
+  planId: string | null;
+  planName: string | null;
+  isActive: boolean;
+  hasValidPlan: boolean; // true se tem plano e não é "Inativo"
+}
+
 interface AuthContextType {
   user: AuthUser | null;
   session: Session | null;
+  companyPlan: CompanyPlanInfo | null;
   login: (email: string, password: string) => Promise<{ role: UserRole }>;
   signup: (email: string, password: string, name: string, role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
+  refreshCompanyPlan: () => Promise<void>;
   isAuthenticated: boolean;
   isLoading: boolean;
   isManager: boolean;
   isSeller: boolean;
+  isAdmin: boolean;
+  hasRestrictedAccess: boolean; // true se empresa está com plano inativo/sem plano
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,6 +42,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [companyPlan, setCompanyPlan] = useState<CompanyPlanInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const mapDbRoleToAppRole = (dbRole: string): UserRole => {
@@ -66,11 +81,51 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return data ? { name: data.name, email: data.email, companyId: data.company_id } : null;
   };
 
+  const fetchCompanyPlan = async (companyId: string | null): Promise<CompanyPlanInfo | null> => {
+    if (!companyId) {
+      return null;
+    }
+
+    const { data: company, error } = await supabase
+      .from("companies")
+      .select("id, plan_id, is_active, plans:plan_id(id, name)")
+      .eq("id", companyId)
+      .maybeSingle();
+
+    if (error || !company) {
+      console.error("Error fetching company plan:", error);
+      return null;
+    }
+
+    const planData = company.plans as { id: string; name: string } | null;
+    const hasValidPlan = company.is_active && 
+                         company.plan_id !== null && 
+                         company.plan_id !== INACTIVE_PLAN_ID;
+
+    return {
+      planId: company.plan_id,
+      planName: planData?.name || null,
+      isActive: company.is_active,
+      hasValidPlan,
+    };
+  };
+
+  const refreshCompanyPlan = async () => {
+    if (user?.companyId) {
+      const planInfo = await fetchCompanyPlan(user.companyId);
+      setCompanyPlan(planInfo);
+    }
+  };
+
   const updateAuthUser = async (supabaseUser: User) => {
     const [role, profile] = await Promise.all([
       fetchUserRole(supabaseUser.id),
       fetchUserProfile(supabaseUser.id),
     ]);
+
+    // Fetch company plan info
+    const planInfo = await fetchCompanyPlan(profile?.companyId || null);
+    setCompanyPlan(planInfo);
 
     setUser({
       id: supabaseUser.id,
@@ -92,6 +147,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }, 0);
         } else {
           setUser(null);
+          setCompanyPlan(null);
         }
         setIsLoading(false);
       }
@@ -138,13 +194,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (profile?.company_id) {
         const { data: company } = await supabase
           .from("companies")
-          .select("is_active")
+          .select("is_active, plan_id")
           .eq("id", profile.company_id)
           .maybeSingle();
 
-        if (company && !company.is_active) {
-          await supabase.auth.signOut();
-          throw new Error("Sua empresa está inativa. Entre em contato com o suporte.");
+        // Vendedores não podem acessar se empresa inativa ou plano Inativo
+        if (role === "vendedor") {
+          const isInactivePlan = !company?.plan_id || company.plan_id === INACTIVE_PLAN_ID;
+          if (!company?.is_active || isInactivePlan) {
+            await supabase.auth.signOut();
+            throw new Error("Sua empresa está com o plano inativo. Entre em contato com seu gestor.");
+          }
+        }
+
+        // Gestores podem acessar mesmo com plano inativo (verão apenas /financeiro)
+        // Mas se is_active = false (bloqueado pelo admin), não podem acessar
+        if (role === "gestor" && company && !company.is_active) {
+          // Verificar se é bloqueio por admin ou por plano
+          const isInactivePlan = !company.plan_id || company.plan_id === INACTIVE_PLAN_ID;
+          if (!isInactivePlan) {
+            // Bloqueado pelo admin, não pelo plano
+            await supabase.auth.signOut();
+            throw new Error("Sua empresa está inativa. Entre em contato com o suporte.");
+          }
+          // Se for plano inativo, permite login mas com acesso restrito
         }
       }
     }
@@ -199,20 +272,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     setUser(null);
     setSession(null);
+    setCompanyPlan(null);
   };
+
+  // Determina se o acesso é restrito (plano inativo ou sem plano)
+  const hasRestrictedAccess = (() => {
+    // Admin nunca tem restrição
+    if (user?.role === "admin") return false;
+    // Se não tem empresa, não restringe
+    if (!user?.companyId) return false;
+    // Se tem empresa mas plano é inválido
+    return companyPlan ? !companyPlan.hasValidPlan : true;
+  })();
 
   return (
     <AuthContext.Provider
       value={{
         user,
         session,
+        companyPlan,
         login,
         signup,
         logout,
+        refreshCompanyPlan,
         isAuthenticated: !!session,
         isLoading,
         isManager: user?.role === "gestor",
         isSeller: user?.role === "vendedor",
+        isAdmin: user?.role === "admin",
+        hasRestrictedAccess,
       }}
     >
       {children}

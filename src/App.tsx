@@ -178,7 +178,7 @@ const App = () => (
             <Route 
               path="/financeiro" 
               element={
-                <ProtectedRoute requiredRole="gestor">
+                <ProtectedRoute requiredRole="gestor" allowRestrictedAccess={true}>
                   <FinanceiroPage />
                 </ProtectedRoute>
               } 
