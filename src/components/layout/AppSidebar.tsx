@@ -1,4 +1,4 @@
-import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone, Users, Bot, Target, Trophy, Building2, CreditCard, AlertTriangle } from "lucide-react";
+import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone, Users, Bot, Target, Trophy, Building2, CreditCard, AlertTriangle, Settings } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -63,7 +63,7 @@ const AppSidebar = () => {
     { to: "/clientes", icon: Building2, label: "Clientes 360°", featureKey: 'canAccess360' },
     { to: "/vendedor/performance", icon: Trophy, label: "Performance", featureKey: 'canUseGamification' },
     { to: "/alertas", icon: Bell, label: "Alertas", badge: alertCount },
-    { to: "/whatsapp-connect", icon: Smartphone, label: "WhatsApp" },
+    { to: "/vendedor/whatsapp", icon: Smartphone, label: "WhatsApp" },
   ];
 
   // Links para gestor - filtrados por features
@@ -75,7 +75,7 @@ const AppSidebar = () => {
     { to: "/gestor/followups", icon: Bot, label: "Follow-ups", featureKey: 'canUseFollowups' },
     { to: "/financeiro", icon: CreditCard, label: "Financeiro" },
     { to: "/historico", icon: History, label: "Histórico" },
-    { to: "/dashboard/whatsapp-status", icon: Smartphone, label: "Status WhatsApp" },
+    { to: "/gestor/whatsapp-status", icon: Smartphone, label: "Status WhatsApp" },
   ];
 
   // Se gestor com acesso restrito por plano inativo, mostra apenas Financeiro
