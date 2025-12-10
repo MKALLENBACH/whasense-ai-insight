@@ -25,17 +25,15 @@ const TrialPage = () => {
 
         if (data?.url) {
           setCheckoutUrl(data.url);
-          setIsLoading(false);
-          // Try automatic redirect
-          window.location.href = data.url;
         } else {
           throw new Error("URL do checkout não retornada");
         }
       } catch (err) {
         console.error("Error creating trial checkout:", err);
         setError(err instanceof Error ? err.message : "Erro ao criar checkout");
-        setIsLoading(false);
         toast.error("Erro ao iniciar período de teste");
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -90,7 +88,7 @@ const TrialPage = () => {
           <div className="flex items-center justify-center gap-2 mb-6">
             <Sparkles className="h-6 w-6 text-primary" />
             <h2 className="text-xl font-bold text-card-foreground">
-              {isLoading ? "Preparando seu período de teste" : "Checkout pronto!"}
+              Inicie seu período de teste
             </h2>
           </div>
 
@@ -119,19 +117,14 @@ const TrialPage = () => {
               <p className="text-muted-foreground">Preparando checkout seguro...</p>
             </div>
           ) : checkoutUrl ? (
-            <div className="space-y-4">
-              <p className="text-muted-foreground text-sm">
-                Se o checkout não abriu automaticamente, clique no botão abaixo:
-              </p>
-              <Button 
-                onClick={handleOpenCheckout}
-                className="w-full gap-2"
-                size="lg"
-              >
-                <ExternalLink className="h-5 w-5" />
-                Abrir checkout seguro
-              </Button>
-            </div>
+            <Button 
+              onClick={handleOpenCheckout}
+              className="w-full gap-2"
+              size="lg"
+            >
+              <ExternalLink className="h-5 w-5" />
+              Iniciar teste grátis
+            </Button>
           ) : null}
 
           <p className="text-xs text-muted-foreground/60 mt-6">
