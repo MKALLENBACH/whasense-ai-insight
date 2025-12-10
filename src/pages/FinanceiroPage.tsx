@@ -505,12 +505,23 @@ export default function FinanceiroPage() {
                     {/* Features list */}
                     {parseFeatures(plan.features).length > 0 && (
                       <ul className="mt-3 space-y-1.5 border-t pt-3">
-                        {parseFeatures(plan.features).slice(0, 5).map((feature, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-xs">
-                            <Check className={`h-3.5 w-3.5 mt-0.5 flex-shrink-0 ${isPopular ? "text-amber-500" : "text-green-500"}`} />
-                            <span className="text-muted-foreground">{feature}</span>
-                          </li>
-                        ))}
+                        {parseFeatures(plan.features).slice(0, 7).map((feature, idx) => {
+                          const isPremiumFeature = feature.startsWith("⭐");
+                          const displayFeature = isPremiumFeature ? feature.replace("⭐ ", "") : feature;
+                          
+                          return (
+                            <li key={idx} className={`flex items-start gap-2 text-xs ${isPremiumFeature ? "bg-gradient-to-r from-amber-100/80 to-orange-100/80 dark:from-amber-900/30 dark:to-orange-900/30 -mx-2 px-2 py-1.5 rounded-md" : ""}`}>
+                              {isPremiumFeature ? (
+                                <Crown className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-amber-500" />
+                              ) : (
+                                <Check className={`h-3.5 w-3.5 mt-0.5 flex-shrink-0 ${isPopular ? "text-amber-500" : "text-green-500"}`} />
+                              )}
+                              <span className={isPremiumFeature ? "font-medium text-amber-700 dark:text-amber-300" : "text-muted-foreground"}>
+                                {displayFeature}
+                              </span>
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                     
