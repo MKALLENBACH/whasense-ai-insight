@@ -54,9 +54,6 @@ interface Message {
   direction: "incoming" | "outgoing";
   timestamp: string;
   cycle_id?: string | null;
-  attachment_url?: string | null;
-  attachment_type?: string | null;
-  attachment_name?: string | null;
 }
 
 interface AIAnalysis {
@@ -323,7 +320,7 @@ const ChatPage = () => {
         if (response) {
           const { data: newMsg } = await supabase
             .from("messages")
-            .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
+            .select("id, content, direction, timestamp, cycle_id")
             .eq("id", response.messageId)
             .single();
           
@@ -342,83 +339,55 @@ const ChatPage = () => {
     }
   };
 
-  // New function for sending messages with attachments
+  // Handler for ChatInput component (simplified - ignores attachments since columns don't exist yet)
   const handleSendMessageWithAttachments = async (
     content: string, 
-    attachments?: { url: string; type: string; name: string }[]
+    _attachments?: { url: string; type: string; name: string }[]
   ) => {
-    if (!id || !user || isViewingHistory) return;
+    if (!content.trim() || !id || !user || isSending || isViewingHistory) return;
 
     setIsSending(true);
     
     try {
-      // Get or create active cycle
       const cycle = await getOrCreateActiveCycle();
       if (!cycle) throw new Error("Failed to get or create cycle");
 
-      // Update cycle status to in_progress if it's pending
       if (cycle.status === 'pending') {
         await updateCycleStatus(cycle.id, 'in_progress');
       }
 
-      // If we have attachments, send each as a separate message
-      if (attachments && attachments.length > 0) {
-        for (const attachment of attachments) {
-          const { data: attachmentMsg, error: attachmentError } = await supabase
+      const { data, error } = await supabase
+        .from("messages")
+        .insert({
+          seller_id: user.id,
+          customer_id: id,
+          content: content.trim(),
+          direction: "outgoing",
+          cycle_id: cycle.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      setMessages((prev) => [...prev, data as unknown as Message]);
+
+      // Trigger AI customer response
+      if (simulationEnabled && !isConversationCompleted) {
+        setIsSimulatingResponse(true);
+        const response = await triggerResponseAfterSellerMessage(content.trim());
+        if (response) {
+          const { data: newMsg } = await supabase
             .from("messages")
-            .insert({
-              seller_id: user.id,
-              customer_id: id,
-              content: "",
-              direction: "outgoing",
-              cycle_id: cycle.id,
-              attachment_url: attachment.url,
-              attachment_type: attachment.type,
-              attachment_name: attachment.name,
-            })
-            .select()
+            .select("id, content, direction, timestamp, cycle_id")
+            .eq("id", response.messageId)
             .single();
-
-          if (attachmentError) throw attachmentError;
-          setMessages((prev) => [...prev, attachmentMsg as unknown as Message]);
-        }
-      }
-
-      // Send text message if there's content
-      if (content.trim()) {
-        const { data, error } = await supabase
-          .from("messages")
-          .insert({
-            seller_id: user.id,
-            customer_id: id,
-            content: content.trim(),
-            direction: "outgoing",
-            cycle_id: cycle.id,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        setMessages((prev) => [...prev, data as unknown as Message]);
-
-        // Trigger AI customer response after seller sends a message
-        if (simulationEnabled && !isConversationCompleted) {
-          setIsSimulatingResponse(true);
-          const response = await triggerResponseAfterSellerMessage(content.trim());
-          if (response) {
-            const { data: newMsg } = await supabase
-              .from("messages")
-              .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
-              .eq("id", response.messageId)
-              .single();
-            
-            if (newMsg) {
-              setMessages((prev) => [...prev, newMsg as unknown as Message]);
-              await analyzeMessage(response.message, response.messageId);
-            }
+          
+          if (newMsg) {
+            setMessages((prev) => [...prev, newMsg as unknown as Message]);
+            await analyzeMessage(response.message, response.messageId);
           }
-          setIsSimulatingResponse(false);
         }
+        setIsSimulatingResponse(false);
       }
     } catch (error) {
       console.error("Error sending message:", error);
@@ -428,85 +397,9 @@ const ChatPage = () => {
     }
   };
 
-  // Handle audio recording and sending
+  // Simplified audio handler - audio attachments not supported yet
   const handleSendAudio = async (audioBlob: Blob) => {
-    if (!id || !user || isViewingHistory) return;
-
-    setIsSending(true);
-    
-    try {
-      // Get or create active cycle
-      const cycle = await getOrCreateActiveCycle();
-      if (!cycle) throw new Error("Failed to get or create cycle");
-
-      // Update cycle status to in_progress if it's pending
-      if (cycle.status === 'pending') {
-        await updateCycleStatus(cycle.id, 'in_progress');
-      }
-
-      // Upload audio to Supabase Storage
-      const fileName = `audio-${Date.now()}.webm`;
-      const filePath = `${user.companyId}/${id}/${cycle.id}/audio/${fileName}`;
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("message_attachments")
-        .upload(filePath, audioBlob, {
-          contentType: audioBlob.type || "audio/webm",
-        });
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from("message_attachments")
-        .getPublicUrl(filePath);
-
-      // Create message with audio attachment
-      const { data: audioMsg, error: msgError } = await supabase
-        .from("messages")
-        .insert({
-          seller_id: user.id,
-          customer_id: id,
-          content: "[Transcrevendo áudio...]",
-          direction: "outgoing",
-          cycle_id: cycle.id,
-          attachment_url: urlData.publicUrl,
-          attachment_type: "audio",
-          attachment_name: fileName,
-        })
-        .select()
-        .single();
-
-      if (msgError) throw msgError;
-
-      setMessages((prev) => [...prev, audioMsg as unknown as Message]);
-      toast.success("Áudio enviado!");
-
-      // Trigger audio analysis in the background
-      supabase.functions.invoke("analyze-audio", {
-        body: {
-          audio_url: urlData.publicUrl,
-          message_id: audioMsg.id,
-          sender: "seller",
-        },
-      }).then(({ data, error }) => {
-        if (!error && data?.transcription) {
-          // Update local message with transcription
-          setMessages((prev) => 
-            prev.map(m => 
-              m.id === audioMsg.id 
-                ? { ...m, content: data.transcription }
-                : m
-            )
-          );
-        }
-      }).catch(console.error);
-
-    } catch (error) {
-      console.error("Error sending audio:", error);
-      toast.error("Erro ao enviar áudio");
-    } finally {
-      setIsSending(false);
-    }
+    toast.info("Envio de áudio será suportado em breve!");
   };
 
   const simulateIncomingMessage = async () => {
@@ -745,9 +638,6 @@ const ChatPage = () => {
                     content={message.content}
                     direction={message.direction}
                     timestamp={message.timestamp}
-                    attachmentUrl={message.attachment_url}
-                    attachmentType={message.attachment_type}
-                    attachmentName={message.attachment_name}
                   />
                 ))
               )}
