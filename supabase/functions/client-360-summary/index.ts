@@ -30,9 +30,15 @@ serve(async (req) => {
       .from("clients")
       .select("*")
       .eq("id", clientId)
-      .single();
+      .maybeSingle();
 
     if (clientError) throw clientError;
+    if (!client) {
+      return new Response(JSON.stringify({ error: "Client not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Fetch buyers
     const { data: buyers } = await supabase

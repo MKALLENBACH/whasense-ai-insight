@@ -407,7 +407,7 @@ const ChatPage = () => {
             .from("messages")
             .select("id, content, direction, timestamp, cycle_id")
             .eq("id", response.messageId)
-            .single();
+            .maybeSingle();
           
           if (newMsg) {
             setMessages((prev) => [...prev, newMsg as unknown as Message]);
@@ -505,7 +505,7 @@ const ChatPage = () => {
             .from("messages")
             .select("id, content, direction, timestamp, cycle_id, attachment_url, attachment_type, attachment_name")
             .eq("id", response.messageId)
-            .single();
+            .maybeSingle();
           
           if (newMsg) {
             setMessages((prev) => [...prev, newMsg as unknown as Message]);
@@ -689,7 +689,7 @@ const ChatPage = () => {
           .from("messages")
           .select("id, content, direction, timestamp, cycle_id")
           .eq("id", data.messageId)
-          .single();
+          .maybeSingle();
         
         if (newMsg) {
           setMessages((prev) => [...prev, newMsg]);

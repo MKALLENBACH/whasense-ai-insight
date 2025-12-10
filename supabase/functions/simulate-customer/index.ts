@@ -162,7 +162,7 @@ serve(async (req) => {
       .from('profiles')
       .select('company_id')
       .eq('user_id', sellerId)
-      .single();
+      .maybeSingle();
 
     const companyId = sellerProfile?.company_id || 'default';
 
