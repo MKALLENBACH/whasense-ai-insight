@@ -11,7 +11,8 @@ import {
   ChevronRight, 
   MessageSquare,
   Calendar,
-  Info
+  Info,
+  HeadphonesIcon
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -22,7 +23,7 @@ export interface SaleCycle {
   id: string;
   customer_id: string;
   seller_id: string;
-  status: "pending" | "in_progress" | "won" | "lost";
+  status: "pending" | "in_progress" | "won" | "lost" | "closed";
   created_at: string;
   closed_at: string | null;
   lost_reason: string | null;
@@ -31,6 +32,7 @@ export interface SaleCycle {
   start_message_id?: string | null;
   start_message_timestamp?: string | null;
   messageCount?: number;
+  cycle_type?: "pre_sale" | "post_sale";
 }
 
 interface SaleCycleHistoryProps {
@@ -45,6 +47,7 @@ const statusConfig: Record<string, { label: string; icon: typeof Clock; color: s
   in_progress: { label: "Em andamento", icon: MessageSquare, color: "text-primary bg-primary/10" },
   won: { label: "Ganhou", icon: Trophy, color: "text-success bg-success/10" },
   lost: { label: "Perdido", icon: XCircle, color: "text-destructive bg-destructive/10" },
+  closed: { label: "Pós-venda concluído", icon: HeadphonesIcon, color: "text-blue-500 bg-blue-500/10" },
 };
 
 const lossReasonLabels: Record<string, string> = {
