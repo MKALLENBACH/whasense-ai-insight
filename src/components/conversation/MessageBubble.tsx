@@ -100,7 +100,7 @@ const MessageBubble = ({
 
       case "audio":
         const isClientAudio = !isOutgoing;
-        const isTranscribing = content === "[Transcrevendo áudio...]" || content === "[Áudio - transcrição não disponível]";
+        const isTranscribing = content === "[Transcrevendo áudio...]" || content === "[Áudio - transcrição não disponível]" || content === "[Áudio - processando transcrição...]";
         const hasRealAudio = attachmentUrl && !attachmentUrl.startsWith("simulated://");
         
         return (
@@ -119,7 +119,7 @@ const MessageBubble = ({
               </div>
             )}
             
-            {/* Audio player */}
+            {/* Audio player - single player only */}
             <div className="flex items-center gap-3 p-3">
               {hasRealAudio ? (
                 <>
@@ -129,39 +129,13 @@ const MessageBubble = ({
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     onEnded={() => setIsPlaying(false)}
-                    className="hidden"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      "h-10 w-10 rounded-full shrink-0",
-                      isOutgoing 
-                        ? "bg-primary-foreground/20 hover:bg-primary-foreground/30" 
-                        : "bg-primary/10 hover:bg-primary/20"
-                    )}
-                    onClick={() => {
-                      const audio = document.getElementById(`audio-${attachmentUrl}`) as HTMLAudioElement;
-                      if (audio) handleAudioToggle(audio);
+                    controls
+                    className="w-full max-w-[250px] h-10"
+                    style={{ 
+                      filter: isOutgoing ? "invert(1) hue-rotate(180deg)" : "none",
+                      opacity: 0.9
                     }}
-                  >
-                    {isPlaying ? (
-                      <Pause className={cn("h-5 w-5", isOutgoing ? "text-primary-foreground" : "text-primary")} />
-                    ) : (
-                      <Play className={cn("h-5 w-5", isOutgoing ? "text-primary-foreground" : "text-primary")} />
-                    )}
-                  </Button>
-                  <div className="flex-1 min-w-0">
-                    <audio
-                      src={attachmentUrl}
-                      controls
-                      className="w-full max-w-[200px] h-8"
-                      style={{ 
-                        filter: isOutgoing ? "invert(1) hue-rotate(180deg)" : "none",
-                        opacity: 0.9
-                      }}
-                    />
-                  </div>
+                  />
                   {/* Download button for client audios */}
                   {isClientAudio && (
                     <a
@@ -209,7 +183,7 @@ const MessageBubble = ({
                 <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" />
                 Transcrevendo áudio...
               </div>
-            ) : content && content !== "[Áudio - transcrição não disponível]" ? (
+            ) : content && !content.startsWith("[Áudio") ? (
               <div className={cn(
                 "px-3 pb-2 text-sm",
                 isOutgoing ? "text-primary-foreground/90" : "text-foreground"
