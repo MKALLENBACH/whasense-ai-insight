@@ -68,3 +68,12 @@ verify_jwt = false
 
 [functions.analyze-image]
 verify_jwt = false
+
+[functions.queue-processor]
+verify_jwt = false
+
+[functions.aggregate-analytics]
+verify_jwt = false
+
+[functions.enqueue-analysis]
+verify_jwt = false

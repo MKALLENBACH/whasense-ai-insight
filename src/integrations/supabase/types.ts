@@ -154,6 +154,160 @@ export type Database = {
           },
         ]
       }
+      analytics_daily_company: {
+        Row: {
+          ai_audio_analyses: number
+          ai_image_analyses: number
+          ai_text_analyses: number
+          avg_response_time_seconds: number | null
+          cold_leads: number
+          company_id: string
+          created_at: string
+          date: string
+          hot_leads: number
+          id: string
+          incoming_messages: number
+          new_leads: number
+          outgoing_messages: number
+          total_in_progress: number
+          total_leads: number
+          total_lost: number
+          total_messages: number
+          total_pending: number
+          total_won: number
+          updated_at: string
+          warm_leads: number
+        }
+        Insert: {
+          ai_audio_analyses?: number
+          ai_image_analyses?: number
+          ai_text_analyses?: number
+          avg_response_time_seconds?: number | null
+          cold_leads?: number
+          company_id: string
+          created_at?: string
+          date: string
+          hot_leads?: number
+          id?: string
+          incoming_messages?: number
+          new_leads?: number
+          outgoing_messages?: number
+          total_in_progress?: number
+          total_leads?: number
+          total_lost?: number
+          total_messages?: number
+          total_pending?: number
+          total_won?: number
+          updated_at?: string
+          warm_leads?: number
+        }
+        Update: {
+          ai_audio_analyses?: number
+          ai_image_analyses?: number
+          ai_text_analyses?: number
+          avg_response_time_seconds?: number | null
+          cold_leads?: number
+          company_id?: string
+          created_at?: string
+          date?: string
+          hot_leads?: number
+          id?: string
+          incoming_messages?: number
+          new_leads?: number
+          outgoing_messages?: number
+          total_in_progress?: number
+          total_leads?: number
+          total_lost?: number
+          total_messages?: number
+          total_pending?: number
+          total_won?: number
+          updated_at?: string
+          warm_leads?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_daily_company_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analytics_daily_seller: {
+        Row: {
+          avg_response_time_seconds: number | null
+          cold_leads: number
+          company_id: string
+          created_at: string
+          date: string
+          hot_leads: number
+          id: string
+          incoming_messages: number
+          leads_in_progress: number
+          leads_lost: number
+          leads_pending: number
+          leads_won: number
+          new_leads: number
+          outgoing_messages: number
+          seller_id: string
+          total_leads: number
+          total_messages: number
+          updated_at: string
+          warm_leads: number
+        }
+        Insert: {
+          avg_response_time_seconds?: number | null
+          cold_leads?: number
+          company_id: string
+          created_at?: string
+          date: string
+          hot_leads?: number
+          id?: string
+          incoming_messages?: number
+          leads_in_progress?: number
+          leads_lost?: number
+          leads_pending?: number
+          leads_won?: number
+          new_leads?: number
+          outgoing_messages?: number
+          seller_id: string
+          total_leads?: number
+          total_messages?: number
+          updated_at?: string
+          warm_leads?: number
+        }
+        Update: {
+          avg_response_time_seconds?: number | null
+          cold_leads?: number
+          company_id?: string
+          created_at?: string
+          date?: string
+          hot_leads?: number
+          id?: string
+          incoming_messages?: number
+          leads_in_progress?: number
+          leads_lost?: number
+          leads_pending?: number
+          leads_won?: number
+          new_leads?: number
+          outgoing_messages?: number
+          seller_id?: string
+          total_leads?: number
+          total_messages?: number
+          updated_at?: string
+          warm_leads?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_daily_seller_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       buyers: {
         Row: {
           client_id: string
@@ -292,6 +446,53 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_limits: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          is_throttled: boolean
+          max_ai_ops_per_minute: number
+          max_messages_per_day: number
+          max_requests_per_second: number
+          priority_level: string
+          throttle_reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          is_throttled?: boolean
+          max_ai_ops_per_minute?: number
+          max_messages_per_day?: number
+          max_requests_per_second?: number
+          priority_level?: string
+          throttle_reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_throttled?: boolean
+          max_ai_ops_per_minute?: number
+          max_messages_per_day?: number
+          max_requests_per_second?: number
+          priority_level?: string
+          throttle_reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_limits_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -780,6 +981,62 @@ export type Database = {
         }
         Relationships: []
       }
+      processing_queue: {
+        Row: {
+          attempts: number
+          company_id: string
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          max_attempts: number
+          payload: Json
+          priority: number
+          started_at: string | null
+          status: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          company_id: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number
+          payload?: Json
+          priority?: number
+          started_at?: string | null
+          status?: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          company_id?: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number
+          payload?: Json
+          priority?: number
+          started_at?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processing_queue_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           company_id: string | null
@@ -814,6 +1071,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      queue_usage_hourly: {
+        Row: {
+          ai_ops_count: number
+          avg_processing_time_ms: number | null
+          company_id: string
+          created_at: string
+          hour: string
+          id: string
+          messages_count: number
+          queue_size_peak: number
+          requests_count: number
+        }
+        Insert: {
+          ai_ops_count?: number
+          avg_processing_time_ms?: number | null
+          company_id: string
+          created_at?: string
+          hour: string
+          id?: string
+          messages_count?: number
+          queue_size_peak?: number
+          requests_count?: number
+        }
+        Update: {
+          ai_ops_count?: number
+          avg_processing_time_ms?: number | null
+          company_id?: string
+          created_at?: string
+          hour?: string
+          id?: string
+          messages_count?: number
+          queue_size_peak?: number
+          requests_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "queue_usage_hourly_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
