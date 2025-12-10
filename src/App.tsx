@@ -14,6 +14,8 @@ import SellerDashboardPage from "./pages/SellerDashboardPage";
 import HistoryPage from "./pages/HistoryPage";
 import WhatsAppConnectPage from "./pages/WhatsAppConnectPage";
 import WhatsAppStatusPage from "./pages/WhatsAppStatusPage";
+import SellerWhatsAppSettingsPage from "./pages/SellerWhatsAppSettingsPage";
+import ManagerWhatsAppStatusPage from "./pages/ManagerWhatsAppStatusPage";
 import SellersPage from "./pages/SellersPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -108,6 +110,14 @@ const App = () => (
                 </ProtectedRoute>
               } 
             />
+            <Route 
+              path="/vendedor/whatsapp" 
+              element={
+                <ProtectedRoute requiredRole="vendedor">
+                  <SellerWhatsAppSettingsPage />
+                </ProtectedRoute>
+              } 
+            />
             
             {/* Seller dashboard */}
             <Route 
@@ -148,6 +158,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="gestor">
                   <WhatsAppStatusPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/gestor/whatsapp-status" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <ManagerWhatsAppStatusPage />
                 </ProtectedRoute>
               } 
             />

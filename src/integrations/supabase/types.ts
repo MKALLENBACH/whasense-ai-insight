@@ -1399,6 +1399,62 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_seller_integrations: {
+        Row: {
+          access_token: string
+          company_id: string
+          created_at: string
+          display_phone_number: string | null
+          id: string
+          last_error: string | null
+          last_webhook_at: string | null
+          phone_number_id: string
+          seller_id: string
+          status: string
+          updated_at: string
+          verification_token: string
+          whatsapp_business_account_id: string
+        }
+        Insert: {
+          access_token: string
+          company_id: string
+          created_at?: string
+          display_phone_number?: string | null
+          id?: string
+          last_error?: string | null
+          last_webhook_at?: string | null
+          phone_number_id: string
+          seller_id: string
+          status?: string
+          updated_at?: string
+          verification_token: string
+          whatsapp_business_account_id: string
+        }
+        Update: {
+          access_token?: string
+          company_id?: string
+          created_at?: string
+          display_phone_number?: string | null
+          id?: string
+          last_error?: string | null
+          last_webhook_at?: string | null
+          phone_number_id?: string
+          seller_id?: string
+          status?: string
+          updated_at?: string
+          verification_token?: string
+          whatsapp_business_account_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_seller_integrations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_sessions: {
         Row: {
           created_at: string
