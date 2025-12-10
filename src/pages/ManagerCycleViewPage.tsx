@@ -356,7 +356,7 @@ export default function ManagerCycleViewPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => navigate(-1)}
+                  onClick={() => navigate("/historico")}
                   className="h-8 w-8 flex-shrink-0"
                 >
                   <ArrowLeft className="h-4 w-4" />
