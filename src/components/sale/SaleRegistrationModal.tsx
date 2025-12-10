@@ -40,6 +40,7 @@ interface SaleRegistrationModalProps {
   existingSaleId?: string;
   existingStatus?: "won" | "lost";
   existingReason?: string;
+  initialTab?: "won" | "lost";
 }
 
 const lossReasons = [
@@ -70,6 +71,7 @@ const SaleRegistrationModal = ({
   existingSaleId,
   existingStatus,
   existingReason,
+  initialTab = "won",
 }: SaleRegistrationModalProps) => {
   const [activeTab, setActiveTab] = useState<"won" | "lost">("won");
   const [selectedReason, setSelectedReason] = useState<string>("");
@@ -95,7 +97,7 @@ const SaleRegistrationModal = ({
         setActiveTab(existingStatus);
         setSelectedReason(existingReason || "");
       } else {
-        setActiveTab("won");
+        setActiveTab(initialTab);
         setSelectedReason("");
       }
       setDescription("");

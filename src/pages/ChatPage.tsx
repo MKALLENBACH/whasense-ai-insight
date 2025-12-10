@@ -144,6 +144,7 @@ const ChatPage = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [showSaleModal, setShowSaleModal] = useState(false);
+  const [saleModalInitialTab, setSaleModalInitialTab] = useState<"won" | "lost">("won");
   const [simulationEnabled, setSimulationEnabled] = useState(true);
   const [isSimulatingResponse, setIsSimulatingResponse] = useState(false);
   const [showLeadModal, setShowLeadModal] = useState(false);
@@ -850,7 +851,10 @@ const ChatPage = () => {
                     <Button
                       variant="default"
                       size="sm"
-                      onClick={() => setShowSaleModal(true)}
+                      onClick={() => {
+                        setSaleModalInitialTab("won");
+                        setShowSaleModal(true);
+                      }}
                       className="gap-2 bg-success hover:bg-success/90"
                     >
                       <Trophy className="h-4 w-4" />
@@ -859,7 +863,10 @@ const ChatPage = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setShowSaleModal(true)}
+                      onClick={() => {
+                        setSaleModalInitialTab("lost");
+                        setShowSaleModal(true);
+                      }}
                       className="gap-2"
                     >
                       <XCircle className="h-4 w-4" />
@@ -1215,6 +1222,7 @@ const ChatPage = () => {
           sellerId={user.id}
           customerName={customer.name}
           cycleId={activeCycle.id}
+          initialTab={saleModalInitialTab}
           onSuccess={async (status, reason, summary) => {
             await closeCycle(activeCycle.id, status, reason, summary);
             fetchConversation();
