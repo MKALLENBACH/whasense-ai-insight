@@ -20,6 +20,7 @@ import {
   MessageSquare,
   ArrowRight,
   Loader2,
+  HeadphonesIcon,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -143,6 +144,13 @@ export const CycleSelectionModal = ({
           <Badge variant="secondary">
             <Clock className="h-3 w-3 mr-1" />
             Em Andamento
+          </Badge>
+        );
+      case "closed":
+        return (
+          <Badge className="bg-blue-600 hover:bg-blue-700">
+            <HeadphonesIcon className="h-3 w-3 mr-1" />
+            Pós-venda Concluído
           </Badge>
         );
       default:
