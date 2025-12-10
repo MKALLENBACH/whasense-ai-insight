@@ -2,16 +2,17 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, TrendingUp, User, Calendar } from "lucide-react";
+import { DollarSign, TrendingUp, Calendar } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface Client360FinancialProps {
   clientId: string;
+  sellerId?: string; // If provided, filter by this seller only
 }
 
-const Client360Financial = ({ clientId }: Client360FinancialProps) => {
+const Client360Financial = ({ clientId, sellerId }: Client360FinancialProps) => {
   const [stats, setStats] = useState({
     totalSales: 0,
     totalRevenue: 0,
@@ -22,17 +23,23 @@ const Client360Financial = ({ clientId }: Client360FinancialProps) => {
 
   useEffect(() => {
     fetchFinancialData();
-  }, [clientId]);
+  }, [clientId, sellerId]);
 
   const fetchFinancialData = async () => {
     setIsLoading(true);
     try {
-      // Get won cycles
-      const { data: wonCycles } = await supabase
+      // Get won cycles (filtered by seller if needed)
+      let cyclesQuery = supabase
         .from("sale_cycles")
         .select("id, closed_at")
         .eq("client_id", clientId)
         .eq("status", "won");
+      
+      if (sellerId) {
+        cyclesQuery = cyclesQuery.eq("seller_id", sellerId);
+      }
+
+      const { data: wonCycles } = await cyclesQuery;
 
       const totalSales = wonCycles?.length || 0;
 

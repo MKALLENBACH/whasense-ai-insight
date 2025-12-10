@@ -9,6 +9,7 @@ import { ptBR } from "date-fns/locale";
 
 interface Client360EmotionsProps {
   clientId: string;
+  sellerId?: string; // If provided, filter by this seller only
 }
 
 const temperatureToNumber = (temp: string): number => {
@@ -29,23 +30,29 @@ const sentimentToNumber = (sentiment: string): number => {
   }
 };
 
-const Client360Emotions = ({ clientId }: Client360EmotionsProps) => {
+const Client360Emotions = ({ clientId, sellerId }: Client360EmotionsProps) => {
   const [data, setData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchEmotions();
-  }, [clientId]);
+  }, [clientId, sellerId]);
 
   const fetchEmotions = async () => {
     setIsLoading(true);
     try {
-      // Get all message IDs for this client
-      const { data: messages } = await supabase
+      // Get all message IDs for this client (filtered by seller if needed)
+      let messagesQuery = supabase
         .from("messages")
         .select("id, timestamp")
         .eq("client_id", clientId)
         .order("timestamp", { ascending: true });
+      
+      if (sellerId) {
+        messagesQuery = messagesQuery.eq("seller_id", sellerId);
+      }
+
+      const { data: messages } = await messagesQuery;
 
       if (!messages || messages.length === 0) {
         setData([]);

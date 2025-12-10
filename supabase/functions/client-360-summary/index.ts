@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { clientId } = await req.json();
+    const { clientId, sellerId } = await req.json();
     
     if (!clientId) {
       throw new Error("clientId is required");
@@ -23,7 +23,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log(`Generating 360° summary for client: ${clientId}`);
+    console.log(`Generating 360° summary for client: ${clientId}${sellerId ? `, filtered by seller: ${sellerId}` : ''}`);
 
     // Fetch client data
     const { data: client, error: clientError } = await supabase
@@ -40,19 +40,31 @@ serve(async (req) => {
       .select("*")
       .eq("client_id", clientId);
 
-    // Fetch cycles
-    const { data: cycles } = await supabase
+    // Fetch cycles (filtered by seller if provided)
+    let cyclesQuery = supabase
       .from("sale_cycles")
       .select("*")
       .eq("client_id", clientId);
+    
+    if (sellerId) {
+      cyclesQuery = cyclesQuery.eq("seller_id", sellerId);
+    }
+    
+    const { data: cycles } = await cyclesQuery;
 
-    // Fetch messages
-    const { data: messages } = await supabase
+    // Fetch messages (filtered by seller if provided)
+    let messagesQuery = supabase
       .from("messages")
       .select("id, content, direction, timestamp")
       .eq("client_id", clientId)
       .order("timestamp", { ascending: false })
       .limit(50);
+    
+    if (sellerId) {
+      messagesQuery = messagesQuery.eq("seller_id", sellerId);
+    }
+    
+    const { data: messages } = await messagesQuery;
 
     // Fetch insights
     const messageIds = messages?.map(m => m.id) || [];

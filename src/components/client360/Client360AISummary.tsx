@@ -30,9 +30,10 @@ interface AISummary {
 interface Client360AISummaryProps {
   clientId: string;
   client: Client;
+  sellerId?: string; // If provided, filter data by this seller only
 }
 
-const Client360AISummary = ({ clientId, client }: Client360AISummaryProps) => {
+const Client360AISummary = ({ clientId, client, sellerId }: Client360AISummaryProps) => {
   const [summary, setSummary] = useState<AISummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -40,7 +41,7 @@ const Client360AISummary = ({ clientId, client }: Client360AISummaryProps) => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("client-360-summary", {
-        body: { clientId },
+        body: { clientId, sellerId },
       });
 
       if (error) throw error;
@@ -74,6 +75,9 @@ const Client360AISummary = ({ clientId, client }: Client360AISummaryProps) => {
           <CardTitle className="flex items-center gap-2">
             <Brain className="h-5 w-5" />
             Resumo Inteligente 360°
+            {sellerId && (
+              <Badge variant="secondary" className="text-xs">Seus dados</Badge>
+            )}
           </CardTitle>
           <Button onClick={generateSummary} disabled={isLoading}>
             {isLoading ? (
@@ -98,6 +102,7 @@ const Client360AISummary = ({ clientId, client }: Client360AISummaryProps) => {
             <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
               Clique em "Gerar Resumo" para obter uma análise completa deste cliente,
               incluindo perfil, interesse, riscos e próximos passos sugeridos.
+              {sellerId && " A análise será baseada apenas nas suas interações com este cliente."}
             </p>
           </div>
         ) : isLoading ? (

@@ -13,8 +13,6 @@ import {
   Trophy,
   XCircle,
   Thermometer,
-  Bell,
-  Filter,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -32,6 +30,7 @@ interface TimelineEvent {
 
 interface Client360TimelineProps {
   clientId: string;
+  sellerId?: string; // If provided, filter by this seller only
 }
 
 const eventTypeConfig: Record<string, { icon: typeof MessageSquare; color: string; label: string }> = {
@@ -45,27 +44,33 @@ const eventTypeConfig: Record<string, { icon: typeof MessageSquare; color: strin
   temperature_change: { icon: Thermometer, color: "text-destructive bg-destructive/10", label: "Temperatura" },
 };
 
-const Client360Timeline = ({ clientId }: Client360TimelineProps) => {
+const Client360Timeline = ({ clientId, sellerId }: Client360TimelineProps) => {
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTimeline();
-  }, [clientId]);
+  }, [clientId, sellerId]);
 
   const fetchTimeline = async () => {
     setIsLoading(true);
     try {
       const timelineEvents: TimelineEvent[] = [];
 
-      // Fetch messages
-      const { data: messages } = await supabase
+      // Fetch messages (filtered by seller if needed)
+      let messagesQuery = supabase
         .from("messages")
         .select("id, content, timestamp, direction, buyer_id")
         .eq("client_id", clientId)
         .order("timestamp", { ascending: false })
         .limit(100);
+      
+      if (sellerId) {
+        messagesQuery = messagesQuery.eq("seller_id", sellerId);
+      }
+
+      const { data: messages } = await messagesQuery;
 
       if (messages) {
         messages.forEach((msg: any) => {
@@ -80,12 +85,18 @@ const Client360Timeline = ({ clientId }: Client360TimelineProps) => {
         });
       }
 
-      // Fetch cycles
-      const { data: cycles } = await supabase
+      // Fetch cycles (filtered by seller if needed)
+      let cyclesQuery = supabase
         .from("sale_cycles")
         .select("id, status, created_at, closed_at, lost_reason, won_summary, buyer_id")
         .eq("client_id", clientId)
         .order("created_at", { ascending: false });
+      
+      if (sellerId) {
+        cyclesQuery = cyclesQuery.eq("seller_id", sellerId);
+      }
+
+      const { data: cycles } = await cyclesQuery;
 
       if (cycles) {
         cycles.forEach((cycle: any) => {
