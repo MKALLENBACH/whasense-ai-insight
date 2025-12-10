@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import CreateSellerModal from "@/components/seller/CreateSellerModal";
 import EditSellerModal from "@/components/seller/EditSellerModal";
 import PlanLimitBanner from "@/components/seller/PlanLimitBanner";
-import SellerLimitExceededModal from "@/components/seller/SellerLimitExceededModal";
+
 import AppLayout from "@/components/layout/AppLayout";
 
 interface Seller {
@@ -183,15 +183,6 @@ const SellersPage = () => {
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Seller Limit Exceeded Modal */}
-        {hasSellerLimitExceeded && sellerLimitInfo && (
-          <SellerLimitExceededModal
-            open={hasSellerLimitExceeded}
-            currentActiveCount={sellerLimitInfo.currentActiveCount}
-            allowedLimit={sellerLimitInfo.allowedLimit}
-            planName={companyPlan?.planName || null}
-          />
-        )}
 
         {/* Plan Banner */}
         <PlanLimitBanner
