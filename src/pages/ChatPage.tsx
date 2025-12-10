@@ -255,8 +255,8 @@ const ChatPage = () => {
       const typedMessages = (messagesData as unknown as Message[]) || [];
       setMessages(typedMessages);
 
-      // Get the latest insight if exists (only for non-completed conversations)
-      if (typedMessages && typedMessages.length > 0 && !isConversationCompleted) {
+      // Get the latest insight if exists - always load to show analysis
+      if (typedMessages && typedMessages.length > 0) {
         const lastIncomingMessage = [...typedMessages].reverse().find(m => m.direction === "incoming");
         if (lastIncomingMessage) {
           const { data: insightData } = await supabase
