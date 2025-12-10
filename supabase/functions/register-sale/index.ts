@@ -122,129 +122,39 @@ serve(async (req) => {
       try {
         console.log('Awarding gamification points for sale');
         
-        // Insert gamification points directly
-        await supabase
+        // Check if points already exist for this sale (prevent duplicates)
+        const { data: existingPoints } = await supabase
           .from('gamification_points')
-          .insert({
-            company_id: companyId,
-            vendor_id: seller_id,
-            points: 10,
-            reason: 'Venda concluída',
-            sale_id: sale.id,
-          });
-
-        // Update goal progress for sales-type goals
-        const { data: activeGoals } = await supabase
-          .from('goals')
           .select('id')
-          .eq('company_id', companyId)
-          .eq('goal_type', 'vendas')
-          .lte('start_date', new Date().toISOString().split('T')[0])
-          .gte('end_date', new Date().toISOString().split('T')[0]);
+          .eq('sale_id', sale.id)
+          .maybeSingle();
 
-        if (activeGoals && activeGoals.length > 0) {
-          for (const goal of activeGoals) {
-            // Get current goal_vendor record
-            const { data: gv } = await supabase
-              .from('goal_vendors')
-              .select('*')
-              .eq('goal_id', goal.id)
-              .eq('vendor_id', seller_id)
-              .single();
-
-            if (gv) {
-              const newCurrentValue = (gv.current_value || 0) + 1;
-              const newProgress = Math.min(100, (newCurrentValue / gv.target_value) * 100);
-              const newStatus = newProgress >= 100 ? 'achieved' : newProgress >= 70 ? 'on_track' : 'behind';
-
-              await supabase
-                .from('goal_vendors')
-                .update({
-                  current_value: newCurrentValue,
-                  progress: newProgress,
-                  status: newStatus,
-                })
-                .eq('id', gv.id);
-
-              // Award bonus points if goal is achieved
-              if (newProgress >= 100 && gv.progress < 100) {
-                await supabase
-                  .from('gamification_points')
-                  .insert({
-                    company_id: companyId,
-                    vendor_id: seller_id,
-                    points: 20,
-                    reason: 'Meta atingida',
-                  });
-
-                // Award achievement badge
-                const { data: existingBadge } = await supabase
-                  .from('achievements')
-                  .select('id')
-                  .eq('vendor_id', seller_id)
-                  .eq('badge_type', 'meta_batida')
-                  .single();
-
-                if (!existingBadge) {
-                  await supabase
-                    .from('achievements')
-                    .insert({
-                      vendor_id: seller_id,
-                      badge_type: 'meta_batida',
-                    });
-                }
-              }
-            }
-          }
+        if (!existingPoints) {
+          // Insert gamification points
+          await supabase
+            .from('gamification_points')
+            .insert({
+              company_id: companyId,
+              vendor_id: seller_id,
+              points: 10,
+              reason: 'Venda concluída',
+              sale_id: sale.id,
+            });
+          console.log('Gamification points awarded');
+        } else {
+          console.log('Points already exist for this sale, skipping');
         }
 
-        // Check for Closer Master badge (10 sales in 7 days)
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-        const { count: recentSalesCount } = await supabase
-          .from('sales')
-          .select('*', { count: 'exact', head: true })
-          .eq('seller_id', seller_id)
-          .eq('status', 'won')
-          .gte('created_at', sevenDaysAgo.toISOString());
-
-        if (recentSalesCount && recentSalesCount >= 10) {
-          const { data: existingCloserBadge } = await supabase
-            .from('achievements')
-            .select('id')
-            .eq('vendor_id', seller_id)
-            .eq('badge_type', 'closer_master')
-            .single();
-
-          if (!existingCloserBadge) {
-            await supabase
-              .from('achievements')
-              .insert({
-                vendor_id: seller_id,
-                badge_type: 'closer_master',
-              });
-
-            console.log('Awarded Closer Master badge');
-          }
-        }
-
-        console.log('Gamification updated successfully');
-      } catch (gamError) {
-        console.error('Error updating gamification:', gamError);
-        // Don't fail the sale registration if gamification fails
-      }
-
-      // Trigger full gamification recalculation (leaderboards, etc.)
-      try {
+        // Trigger full gamification recalculation (goals, leaderboards, badges)
+        // This will recalculate goal progress based on actual sales count
         console.log('Triggering calculate-gamification for full recalculation');
         await supabase.functions.invoke('calculate-gamification', {
           body: { company_id: companyId }
         });
         console.log('Calculate-gamification triggered successfully');
-      } catch (calcError) {
-        console.error('Error triggering calculate-gamification:', calcError);
-        // Don't fail the sale registration
+      } catch (gamError) {
+        console.error('Error updating gamification:', gamError);
+        // Don't fail the sale registration if gamification fails
       }
     }
 
