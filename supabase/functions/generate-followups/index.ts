@@ -153,11 +153,30 @@ Deno.serve(async (req) => {
       // 2. There was at least one customer message before (client_request)
       // 3. There was at least one seller message before (seller_replied)
       // 4. Last message is older than delay hours
+      // 5. NEW: No consecutive seller messages (meaning we already followed up)
 
       const lastMessage = messages[0];
       const hasCustomerMessage = messages.some((m) => m.direction === "incoming");
       const hasSellerMessage = messages.some((m) => m.direction === "outgoing");
       const lastMessageTime = new Date(lastMessage.timestamp);
+
+      // Count consecutive seller messages at the end of conversation
+      // If there are 2+ consecutive seller messages, a follow-up was already sent
+      let consecutiveSellerMessages = 0;
+      for (const msg of messages) {
+        if (msg.direction === "outgoing") {
+          consecutiveSellerMessages++;
+        } else {
+          break; // Stop counting when we hit a customer message
+        }
+      }
+
+      // Skip if seller already sent 2+ messages without customer response
+      // This means a follow-up was already sent
+      if (consecutiveSellerMessages >= 2) {
+        console.log(`Skipping cycle ${cycle.id} - already has ${consecutiveSellerMessages} consecutive seller messages (follow-up already sent)`);
+        continue;
+      }
 
       if (
         lastMessage.direction === "outgoing" &&
@@ -165,17 +184,6 @@ Deno.serve(async (req) => {
         hasSellerMessage &&
         lastMessageTime < cutoffTime
       ) {
-        // Check if we already sent a message recently (within delay period)
-        // This prevents sending multiple follow-ups in a row
-        const recentFollowupCutoff = new Date();
-        recentFollowupCutoff.setHours(recentFollowupCutoff.getHours() - delayHours);
-
-        // If last message from seller is recent (within delay), skip
-        // This means the seller already followed up manually or auto
-        if (lastMessageTime > recentFollowupCutoff) {
-          console.log(`Skipping cycle ${cycle.id} - seller message is recent`);
-          continue;
-        }
 
         // Generate a light follow-up message
         const followupMessages = [
