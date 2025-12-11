@@ -4,7 +4,6 @@ import AppLayout from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -12,19 +11,15 @@ import {
   Loader2, 
   RefreshCw, 
   Search,
-  ArrowRight,
-  Clock,
-  Phone,
-  MessageSquare,
   ChevronLeft,
   ChevronRight,
+  Users,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LeadDistributionDashboard } from "@/components/dashboard/LeadDistributionDashboard";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import InboxPaiCard from "@/components/conversation/InboxPaiCard";
 
 interface InboxPaiLead {
@@ -50,6 +45,13 @@ interface Pagination {
   hasMore: boolean;
 }
 
+interface LeadLimitInfo {
+  currentLeads: number;
+  maxLeads: number;
+  hasLimit: boolean;
+  hasReachedLimit: boolean;
+}
+
 const ITEMS_PER_PAGE = 5;
 
 const InboxPaiPage = () => {
@@ -60,6 +62,12 @@ const InboxPaiPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isPulling, setIsPulling] = useState<string | null>(null);
   const [hasActiveSellers, setHasActiveSellers] = useState(false);
+  const [leadLimitInfo, setLeadLimitInfo] = useState<LeadLimitInfo>({
+    currentLeads: 0,
+    maxLeads: 0,
+    hasLimit: false,
+    hasReachedLimit: false,
+  });
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
     limit: ITEMS_PER_PAGE,
@@ -68,10 +76,10 @@ const InboxPaiPage = () => {
     hasMore: false,
   });
 
-  // Check if company has active sellers
+  // Check if company has active sellers and fetch lead limit info
   useEffect(() => {
-    const checkActiveSellers = async () => {
-      if (!user?.companyId) return;
+    const fetchSellerInfo = async () => {
+      if (!user?.companyId || !user?.id) return;
       
       // First get seller user_ids
       const { data: sellerRoles } = await supabase
@@ -86,21 +94,54 @@ const InboxPaiPage = () => {
       
       const sellerUserIds = sellerRoles.map(r => r.user_id);
       
-      // Then count active sellers in company
-      const { count, error } = await supabase
+      // Count active sellers in company
+      const { count: sellersCount } = await supabase
         .from("profiles")
         .select("id", { count: "exact", head: true })
         .eq("company_id", user.companyId)
         .eq("is_active", true)
         .in("user_id", sellerUserIds);
       
-      if (!error) {
-        setHasActiveSellers((count ?? 0) > 0);
+      setHasActiveSellers((sellersCount ?? 0) > 0);
+      
+      // Only fetch lead limit for sellers
+      if (isManager) return;
+      
+      // Get operation settings for max leads limit
+      const { data: settings } = await supabase
+        .from("manager_operation_settings")
+        .select("max_active_leads_per_seller")
+        .eq("company_id", user.companyId)
+        .maybeSingle();
+      
+      const maxLeads = settings?.max_active_leads_per_seller || 0;
+      
+      if (maxLeads > 0) {
+        // Count current active leads for this seller
+        const { count: currentLeads } = await supabase
+          .from("customers")
+          .select("id", { count: "exact", head: true })
+          .eq("assigned_to", user.id)
+          .in("lead_status", ["pending", "in_progress"]);
+        
+        setLeadLimitInfo({
+          currentLeads: currentLeads || 0,
+          maxLeads,
+          hasLimit: true,
+          hasReachedLimit: (currentLeads || 0) >= maxLeads,
+        });
+      } else {
+        setLeadLimitInfo({
+          currentLeads: 0,
+          maxLeads: 0,
+          hasLimit: false,
+          hasReachedLimit: false,
+        });
       }
     };
     
-    checkActiveSellers();
-  }, [user?.companyId]);
+    fetchSellerInfo();
+  }, [user?.companyId, user?.id, isManager]);
 
   const fetchInboxPai = useCallback(async (page = 1) => {
     if (!session?.access_token) return;
@@ -139,14 +180,42 @@ const InboxPaiPage = () => {
     }
   }, [session?.access_token]);
 
+  // Refresh lead limit info
+  const refreshLeadLimitInfo = useCallback(async () => {
+    if (isManager || !user?.companyId || !user?.id) return;
+    
+    const { data: settings } = await supabase
+      .from("manager_operation_settings")
+      .select("max_active_leads_per_seller")
+      .eq("company_id", user.companyId)
+      .maybeSingle();
+    
+    const maxLeads = settings?.max_active_leads_per_seller || 0;
+    
+    if (maxLeads > 0) {
+      const { count: currentLeads } = await supabase
+        .from("customers")
+        .select("id", { count: "exact", head: true })
+        .eq("assigned_to", user.id)
+        .in("lead_status", ["pending", "in_progress"]);
+      
+      setLeadLimitInfo({
+        currentLeads: currentLeads || 0,
+        maxLeads,
+        hasLimit: true,
+        hasReachedLimit: (currentLeads || 0) >= maxLeads,
+      });
+    }
+  }, [isManager, user?.companyId, user?.id]);
+
   useEffect(() => {
     fetchInboxPai(1);
   }, [fetchInboxPai]);
 
-  // Realtime subscription for new leads and assignments
+  // Realtime subscription for new leads, assignments, and cycle closures
   useEffect(() => {
-    const channel = supabase
-      .channel('inbox-pai-realtime')
+    const customersChannel = supabase
+      .channel('inbox-pai-customers')
       .on(
         'postgres_changes',
         {
@@ -155,19 +224,17 @@ const InboxPaiPage = () => {
           table: 'customers',
         },
         (payload) => {
-          // Refresh when:
-          // - New customer created (INSERT)
-          // - Customer assigned_to changed (UPDATE)
           if (payload.eventType === 'INSERT') {
-            // New lead arrived - refresh current page
             fetchInboxPai(pagination.page);
           } else if (payload.eventType === 'UPDATE') {
-            const newRecord = payload.new as { assigned_to: string | null };
-            const oldRecord = payload.old as { assigned_to: string | null };
+            const newRecord = payload.new as { assigned_to: string | null; lead_status: string };
+            const oldRecord = payload.old as { assigned_to: string | null; lead_status: string };
             
-            // assigned_to changed - either pulled or returned to inbox
-            if (newRecord.assigned_to !== oldRecord.assigned_to) {
+            // Refresh on assignment changes or lead_status changes (cycle closures)
+            if (newRecord.assigned_to !== oldRecord.assigned_to || 
+                newRecord.lead_status !== oldRecord.lead_status) {
               fetchInboxPai(pagination.page);
+              refreshLeadLimitInfo();
             }
           }
         }
@@ -175,9 +242,9 @@ const InboxPaiPage = () => {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(customersChannel);
     };
-  }, [fetchInboxPai, pagination.page]);
+  }, [fetchInboxPai, pagination.page, refreshLeadLimitInfo]);
 
   const handlePullLead = async (customerId: string) => {
     if (!session?.access_token) return;
@@ -195,12 +262,24 @@ const InboxPaiPage = () => {
       
       toast.success('Lead atribuído com sucesso!');
       
+      // Refresh lead limit info
+      await refreshLeadLimitInfo();
+      
       // Navigate to the chat
       navigate(`/chat/${customerId}`);
     } catch (error: any) {
       console.error('Error pulling lead:', error);
-      toast.error(error.message || 'Erro ao puxar lead');
-      fetchInboxPai(pagination.page); // Refresh list on error
+      
+      // Better error messages
+      const errorMessage = error.message || 'Erro ao puxar lead';
+      if (errorMessage.includes('maximum') || errorMessage.includes('limite')) {
+        toast.error('Você atingiu o limite de leads ativos. Finalize alguns leads antes de puxar novos.');
+        refreshLeadLimitInfo();
+      } else {
+        toast.error(errorMessage);
+      }
+      
+      fetchInboxPai(pagination.page);
     } finally {
       setIsPulling(null);
     }
@@ -221,6 +300,9 @@ const InboxPaiPage = () => {
       lead.lastMessage.toLowerCase().includes(query)
     );
   });
+
+  // Determine if seller can pull leads
+  const canPullLeads = !isManager && hasActiveSellers && !leadLimitInfo.hasReachedLimit;
 
   return (
     <AppLayout>
@@ -252,6 +334,37 @@ const InboxPaiPage = () => {
 
         {/* Dashboard - Only for managers */}
         {isManager && <LeadDistributionDashboard />}
+
+        {/* Lead Limit Warning - Only for sellers with limit */}
+        {!isManager && leadLimitInfo.hasLimit && (
+          <Card className={cn(
+            "border",
+            leadLimitInfo.hasReachedLimit 
+              ? "border-destructive/50 bg-destructive/5" 
+              : "border-primary/30 bg-primary/5"
+          )}>
+            <CardContent className="py-3 px-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className={cn(
+                    "h-5 w-5",
+                    leadLimitInfo.hasReachedLimit ? "text-destructive" : "text-primary"
+                  )} />
+                  <span className="font-medium">Seus leads ativos:</span>
+                  <Badge variant={leadLimitInfo.hasReachedLimit ? "destructive" : "secondary"}>
+                    {leadLimitInfo.currentLeads} / {leadLimitInfo.maxLeads}
+                  </Badge>
+                </div>
+                {leadLimitInfo.hasReachedLimit && (
+                  <div className="flex items-center gap-2 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Limite atingido. Finalize leads para puxar novos.</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Lead List */}
         <Card>
@@ -296,7 +409,7 @@ const InboxPaiPage = () => {
                       lead={lead}
                       onPullLead={handlePullLead}
                       isPulling={isPulling !== null}
-                      canPull={!isManager && hasActiveSellers}
+                      canPull={canPullLeads}
                     />
                   ))}
                 </div>
