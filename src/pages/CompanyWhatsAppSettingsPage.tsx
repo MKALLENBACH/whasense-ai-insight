@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, MessageSquare, CheckCircle2, AlertCircle, XCircle, Eye, EyeOff, ExternalLink, RefreshCw, Shield, Building2, Users, Inbox } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
+
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface CompanyWhatsAppSettings {
@@ -276,7 +276,7 @@ export default function CompanyWhatsAppSettingsPage() {
     }
   };
 
-  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-cloud-webhook`;
+  
 
   if (loading) {
     return (
@@ -490,57 +490,6 @@ export default function CompanyWhatsAppSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Webhook Configuration */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Configuração do Webhook</CardTitle>
-            <CardDescription>
-              Configure este webhook no painel da Meta para receber mensagens de TODAS as empresas
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>URL do Webhook (Global)</Label>
-              <div className="flex gap-2">
-                <Input
-                  readOnly
-                  value={webhookUrl}
-                  className="font-mono text-xs"
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    navigator.clipboard.writeText(webhookUrl);
-                    toast.success('URL copiada!');
-                  }}
-                >
-                  Copiar
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Este é o webhook global do Whasense. Todas as empresas usam a mesma URL.
-              </p>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <Label>Campos para Subscrever</Label>
-              <div className="bg-muted p-3 rounded-md font-mono text-xs">
-                messages, message_deliveries, message_reads
-              </div>
-            </div>
-
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Importante</AlertTitle>
-              <AlertDescription>
-                Ao configurar o webhook na Meta, use o <strong>Verification Token</strong> definido acima.
-                O webhook deve estar configurado no App oficial do Whasense no Business Manager.
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
       </div>
     </AppLayout>
   );
