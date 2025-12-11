@@ -59,7 +59,8 @@ const AppSidebar = () => {
   // Links para vendedor - filtrados por features
   const getAllVendedorLinks = (): NavLinkItem[] => [
     { to: "/dashboard-vendedor", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/conversas", icon: Inbox, label: "Conversas" },
+    { to: "/inbox", icon: Inbox, label: "Inbox Pai" },
+    { to: "/conversas", icon: MessageSquare, label: "Meus Leads" },
     { to: "/clientes", icon: Building2, label: "Clientes 360°", featureKey: 'canAccess360' },
     { to: "/vendedor/performance", icon: Trophy, label: "Performance", featureKey: 'canUseGamification' },
     { to: "/alertas", icon: Bell, label: "Alertas", badge: alertCount },
@@ -69,7 +70,8 @@ const AppSidebar = () => {
   // Links para gestor - filtrados por features
   const getAllGestorLinks = (): NavLinkItem[] => [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/conversas", icon: Inbox, label: "Inbox Pai" },
+    { to: "/inbox", icon: Inbox, label: "Inbox Pai" },
+    { to: "/conversas", icon: MessageSquare, label: "Conversas" },
     { to: "/clientes", icon: Building2, label: "Clientes 360°", featureKey: 'canAccess360' },
     { to: "/gestor/vendedores", icon: Users, label: "Vendedores" },
     { to: "/gestor/metas", icon: Target, label: "Metas", featureKey: 'canUseGamification' },

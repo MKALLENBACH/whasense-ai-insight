@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Loader2, Save, Settings, Users, Brain, SortAsc, Eye } from "lucide-react";
+import { Loader2, Save, Settings, Users, SortAsc } from "lucide-react";
 
 interface OperationSettings {
   distribution_method: string;
@@ -19,7 +19,6 @@ interface OperationSettings {
   manager_can_reassign: boolean;
   manager_can_move_leads: boolean;
   notify_on_lead_loss: boolean;
-  ai_after_assignment_only: boolean;
   inbox_ordering: string;
 }
 
@@ -31,7 +30,6 @@ const defaultSettings: OperationSettings = {
   manager_can_reassign: true,
   manager_can_move_leads: true,
   notify_on_lead_loss: true,
-  ai_after_assignment_only: true,
   inbox_ordering: 'last_message',
 };
 
@@ -66,7 +64,6 @@ const ManagerOperationSettingsPage = () => {
           manager_can_reassign: data.manager_can_reassign,
           manager_can_move_leads: data.manager_can_move_leads,
           notify_on_lead_loss: data.notify_on_lead_loss,
-          ai_after_assignment_only: data.ai_after_assignment_only,
           inbox_ordering: data.inbox_ordering,
         });
       }
@@ -88,6 +85,7 @@ const ManagerOperationSettingsPage = () => {
         .upsert({
           company_id: user.companyId,
           ...settings,
+          ai_after_assignment_only: true, // Always true - AI only runs after assignment
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'company_id',
@@ -340,51 +338,6 @@ const ManagerOperationSettingsPage = () => {
           </CardContent>
         </Card>
 
-        {/* AI Rules */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Brain className="h-5 w-5" />
-              Regras de IA
-            </CardTitle>
-            <CardDescription>
-              Configure quando a análise de IA deve ser executada
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RadioGroup
-              value={settings.ai_after_assignment_only ? 'after' : 'inbox'}
-              onValueChange={(value) => 
-                setSettings({ ...settings, ai_after_assignment_only: value === 'after' })
-              }
-              className="space-y-3"
-            >
-              <div className="flex items-start space-x-3 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
-                <RadioGroupItem value="after" id="ai_after" className="mt-1" />
-                <div className="flex-1">
-                  <Label htmlFor="ai_after" className="font-medium cursor-pointer">
-                    IA roda somente após atribuição ao vendedor
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Recomendado: Economiza recursos e executa análise apenas quando necessário
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
-                <RadioGroupItem value="inbox" id="ai_inbox" className="mt-1" />
-                <div className="flex-1">
-                  <Label htmlFor="ai_inbox" className="font-medium cursor-pointer">
-                    IA roda no Inbox Pai
-                  </Label>
-                  <p className="text-sm text-muted-foreground text-yellow-600">
-                    Não recomendado: Consome mais recursos e pode atrasar o processamento
-                  </p>
-                </div>
-              </div>
-            </RadioGroup>
-          </CardContent>
-        </Card>
-
         {/* Inbox Ordering */}
         <Card>
           <CardHeader>
@@ -436,33 +389,6 @@ const ManagerOperationSettingsPage = () => {
                 </div>
               </div>
             </RadioGroup>
-          </CardContent>
-        </Card>
-
-        {/* Visibility Rules */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Eye className="h-5 w-5" />
-              Regras de Visibilidade
-            </CardTitle>
-            <CardDescription>
-              Informações sobre quem pode ver o quê
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="p-3 rounded-lg bg-muted/50">
-              <p className="text-sm font-medium">Vendedor</p>
-              <p className="text-sm text-muted-foreground">
-                Vê somente seus leads atribuídos + Inbox Pai (para puxar novos leads)
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-muted/50">
-              <p className="text-sm font-medium">Gestor</p>
-              <p className="text-sm text-muted-foreground">
-                Vê todos os leads: Inbox Pai, leads de todos os vendedores, e pode reatribuir
-              </p>
-            </div>
           </CardContent>
         </Card>
       </div>
