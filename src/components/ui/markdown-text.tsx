@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import DOMPurify from "dompurify";
 
 interface MarkdownTextProps {
   content: string;
@@ -19,10 +20,16 @@ const MarkdownText = ({ content, className }: MarkdownTextProps) => {
       .replace(/\n/g, '<br />');
   };
 
+  // Sanitize the HTML to prevent XSS attacks
+  const sanitizedHtml = DOMPurify.sanitize(formatMarkdown(content), {
+    ALLOWED_TAGS: ['strong', 'em', 'br'],
+    ALLOWED_ATTR: [],
+  });
+
   return (
     <div
       className={cn("prose prose-sm dark:prose-invert max-w-none", className)}
-      dangerouslySetInnerHTML={{ __html: formatMarkdown(content) }}
+      dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
     />
   );
 };
