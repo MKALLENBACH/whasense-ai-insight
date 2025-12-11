@@ -6,6 +6,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/**
+ * WhatsApp Cloud API Connection Manager
+ * 
+ * Handles:
+ * - Connect: Validate credentials and save to company_whatsapp_settings
+ * - Test: Verify existing connection is still valid
+ * - Disconnect: Remove WhatsApp settings
+ * 
+ * Only managers can access this endpoint.
+ */
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -16,7 +27,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    // Get user from auth header
+    // Validate JWT
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -38,7 +49,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get user's company
+    // Get user's company and role
     const { data: profile } = await supabase
       .from('profiles')
       .select('company_id')
@@ -46,8 +57,22 @@ serve(async (req) => {
       .single();
 
     if (!profile?.company_id) {
-      return new Response(JSON.stringify({ error: 'Company not found' }), {
+      return new Response(JSON.stringify({ error: 'Empresa não encontrada' }), {
         status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Check if user is manager
+    const { data: userRole } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (userRole?.role !== 'manager' && userRole?.role !== 'admin') {
+      return new Response(JSON.stringify({ error: 'Apenas gestores podem configurar o WhatsApp' }), {
+        status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -55,92 +80,97 @@ serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
-    console.log(`[WHATSAPP-CLOUD-CONNECT] Action: ${action}, User: ${user.id}`);
+    console.log(`[WHATSAPP-CONNECT] Action: ${action}, User: ${user.id}, Company: ${profile.company_id}`);
 
+    // ========================================
+    // ACTION: CONNECT
+    // ========================================
     if (action === 'connect') {
-      const { phone_number_id, whatsapp_business_account_id, access_token, verification_token } = body;
+      const { phone_number_id, waba_id, permanent_token, verification_token } = body;
 
-      if (!phone_number_id || !whatsapp_business_account_id || !access_token || !verification_token) {
-        return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+      if (!phone_number_id || !waba_id || !permanent_token || !verification_token) {
+        return new Response(JSON.stringify({ error: 'Todos os campos são obrigatórios' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      // Validate the access token by fetching phone number info
-      console.log('[WHATSAPP-CLOUD-CONNECT] Validating access token...');
+      // Validate the access token by fetching phone number info (v19.0 as per spec)
+      console.log('[WHATSAPP-CONNECT] Validating access token with Meta API v19.0...');
       
       try {
         const phoneInfoResponse = await fetch(
-          `https://graph.facebook.com/v17.0/${phone_number_id}?fields=display_phone_number,verified_name`,
+          `https://graph.facebook.com/v19.0/${phone_number_id}?fields=display_phone_number,verified_name`,
           {
             headers: {
-              'Authorization': `Bearer ${access_token}`,
+              'Authorization': `Bearer ${permanent_token}`,
             },
           }
         );
 
         if (!phoneInfoResponse.ok) {
           const errorData = await phoneInfoResponse.json();
-          console.error('[WHATSAPP-CLOUD-CONNECT] Token validation failed:', errorData);
+          console.error('[WHATSAPP-CONNECT] Token validation failed:', errorData);
           return new Response(JSON.stringify({ 
             success: false, 
-            error: 'Token inválido ou Phone Number ID incorreto' 
+            error: errorData.error?.message || 'Token inválido ou Phone Number ID incorreto' 
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
 
         const phoneInfo = await phoneInfoResponse.json();
-        console.log('[WHATSAPP-CLOUD-CONNECT] Phone info:', phoneInfo);
+        console.log('[WHATSAPP-CONNECT] Phone info:', phoneInfo);
 
-        // Subscribe to webhooks
-        console.log('[WHATSAPP-CLOUD-CONNECT] Subscribing to webhooks...');
+        // Subscribe app to WABA webhooks
+        console.log('[WHATSAPP-CONNECT] Subscribing to webhooks...');
         const subscribeResponse = await fetch(
-          `https://graph.facebook.com/v17.0/${whatsapp_business_account_id}/subscribed_apps`,
+          `https://graph.facebook.com/v19.0/${waba_id}/subscribed_apps`,
           {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${access_token}`,
+              'Authorization': `Bearer ${permanent_token}`,
             },
           }
         );
 
         if (!subscribeResponse.ok) {
           const errorData = await subscribeResponse.json();
-          console.error('[WHATSAPP-CLOUD-CONNECT] Webhook subscription failed:', errorData);
-          // Continue anyway - might already be subscribed
+          console.warn('[WHATSAPP-CONNECT] Webhook subscription warning:', errorData);
+          // Continue - might already be subscribed via Whasense app
+        } else {
+          console.log('[WHATSAPP-CONNECT] Webhook subscription successful');
         }
 
-        // Upsert the integration
+        // Upsert company WhatsApp settings
         const { data, error: upsertError } = await supabase
-          .from('whatsapp_seller_integrations')
+          .from('company_whatsapp_settings')
           .upsert({
-            seller_id: user.id,
             company_id: profile.company_id,
+            waba_id,
             phone_number_id,
-            whatsapp_business_account_id,
-            access_token,
+            permanent_token,
             verification_token,
             display_phone_number: phoneInfo.display_phone_number || null,
             status: 'connected',
+            last_check: new Date().toISOString(),
             last_error: null,
           }, {
-            onConflict: 'seller_id',
+            onConflict: 'company_id',
           })
           .select()
           .single();
 
         if (upsertError) {
-          console.error('[WHATSAPP-CLOUD-CONNECT] Upsert error:', upsertError);
+          console.error('[WHATSAPP-CONNECT] Upsert error:', upsertError);
           throw upsertError;
         }
 
-        console.log('[WHATSAPP-CLOUD-CONNECT] Integration saved successfully');
+        console.log('[WHATSAPP-CONNECT] Connection saved successfully');
 
         return new Response(JSON.stringify({ 
           success: true, 
-          integration: {
+          settings: {
             id: data.id,
             status: data.status,
             display_phone_number: data.display_phone_number,
@@ -150,7 +180,7 @@ serve(async (req) => {
         });
 
       } catch (fetchError) {
-        console.error('[WHATSAPP-CLOUD-CONNECT] Fetch error:', fetchError);
+        console.error('[WHATSAPP-CONNECT] Fetch error:', fetchError);
         return new Response(JSON.stringify({ 
           success: false, 
           error: 'Erro ao validar credenciais com a Meta' 
@@ -160,18 +190,20 @@ serve(async (req) => {
       }
     }
 
+    // ========================================
+    // ACTION: TEST
+    // ========================================
     if (action === 'test') {
-      // Get existing integration
-      const { data: integration } = await supabase
-        .from('whatsapp_seller_integrations')
+      const { data: settings } = await supabase
+        .from('company_whatsapp_settings')
         .select('*')
-        .eq('seller_id', user.id)
+        .eq('company_id', profile.company_id)
         .single();
 
-      if (!integration) {
+      if (!settings) {
         return new Response(JSON.stringify({ 
           success: false, 
-          error: 'Integração não encontrada' 
+          error: 'WhatsApp não configurado' 
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -179,19 +211,23 @@ serve(async (req) => {
 
       try {
         const testResponse = await fetch(
-          `https://graph.facebook.com/v17.0/${integration.phone_number_id}?fields=display_phone_number`,
+          `https://graph.facebook.com/v19.0/${settings.phone_number_id}?fields=display_phone_number`,
           {
             headers: {
-              'Authorization': `Bearer ${integration.access_token}`,
+              'Authorization': `Bearer ${settings.permanent_token}`,
             },
           }
         );
 
         if (!testResponse.ok) {
           await supabase
-            .from('whatsapp_seller_integrations')
-            .update({ status: 'error', last_error: 'Token expirado ou inválido' })
-            .eq('id', integration.id);
+            .from('company_whatsapp_settings')
+            .update({ 
+              status: 'error', 
+              last_error: 'Token expirado ou inválido',
+              last_check: new Date().toISOString()
+            })
+            .eq('id', settings.id);
 
           return new Response(JSON.stringify({ 
             success: false, 
@@ -202,16 +238,20 @@ serve(async (req) => {
         }
 
         await supabase
-          .from('whatsapp_seller_integrations')
-          .update({ status: 'connected', last_error: null })
-          .eq('id', integration.id);
+          .from('company_whatsapp_settings')
+          .update({ 
+            status: 'connected', 
+            last_error: null,
+            last_check: new Date().toISOString()
+          })
+          .eq('id', settings.id);
 
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
 
       } catch (error) {
-        console.error('[WHATSAPP-CLOUD-CONNECT] Test error:', error);
+        console.error('[WHATSAPP-CONNECT] Test error:', error);
         return new Response(JSON.stringify({ 
           success: false, 
           error: 'Erro ao testar conexão' 
@@ -221,13 +261,37 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ error: 'Invalid action' }), {
+    // ========================================
+    // ACTION: DISCONNECT
+    // ========================================
+    if (action === 'disconnect') {
+      const { error: deleteError } = await supabase
+        .from('company_whatsapp_settings')
+        .delete()
+        .eq('company_id', profile.company_id);
+
+      if (deleteError) {
+        console.error('[WHATSAPP-CONNECT] Disconnect error:', deleteError);
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: 'Erro ao desconectar' 
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: 'Ação inválida' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error: unknown) {
-    console.error('[WHATSAPP-CLOUD-CONNECT] Error:', error);
+    console.error('[WHATSAPP-CONNECT] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,

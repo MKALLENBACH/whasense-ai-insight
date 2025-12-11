@@ -8,8 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, MessageSquare, CheckCircle2, AlertCircle, XCircle, Eye, EyeOff, ExternalLink, RefreshCw, Shield, Building2 } from "lucide-react";
+import { Loader2, MessageSquare, CheckCircle2, AlertCircle, XCircle, Eye, EyeOff, ExternalLink, RefreshCw, Shield, Building2, Users, Inbox } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface CompanyWhatsAppSettings {
   id: string;
@@ -34,6 +36,7 @@ export default function CompanyWhatsAppSettingsPage() {
   const [testing, setTesting] = useState(false);
   const [settings, setSettings] = useState<CompanyWhatsAppSettings | null>(null);
   const [showToken, setShowToken] = useState(false);
+  const [distributionMode, setDistributionMode] = useState<string>('manual');
   
   const [formData, setFormData] = useState({
     phone_number_id: '',
@@ -55,6 +58,7 @@ export default function CompanyWhatsAppSettingsPage() {
       if (profile?.company_id) {
         setCompanyId(profile.company_id);
         await fetchSettings(profile.company_id);
+        await fetchOperationSettings(profile.company_id);
       }
       setLoading(false);
     };
@@ -86,6 +90,22 @@ export default function CompanyWhatsAppSettingsPage() {
     }
   };
 
+  const fetchOperationSettings = async (compId: string) => {
+    try {
+      const { data } = await supabase
+        .from('manager_operation_settings')
+        .select('distribution_method')
+        .eq('company_id', compId)
+        .maybeSingle();
+      
+      if (data) {
+        setDistributionMode(data.distribution_method);
+      }
+    } catch (error) {
+      console.error('Error fetching operation settings:', error);
+    }
+  };
+
   const handleSave = async () => {
     if (!companyId) {
       toast.error('Empresa não encontrada');
@@ -100,9 +120,9 @@ export default function CompanyWhatsAppSettingsPage() {
 
     setSaving(true);
     try {
-      // Validate the access token by fetching phone number info
+      // Validate the access token by fetching phone number info (v19.0)
       const phoneInfoResponse = await fetch(
-        `https://graph.facebook.com/v17.0/${formData.phone_number_id}?fields=display_phone_number,verified_name`,
+        `https://graph.facebook.com/v19.0/${formData.phone_number_id}?fields=display_phone_number,verified_name`,
         {
           headers: {
             'Authorization': `Bearer ${formData.permanent_token}`,
@@ -118,7 +138,7 @@ export default function CompanyWhatsAppSettingsPage() {
         
         // Subscribe to webhooks
         await fetch(
-          `https://graph.facebook.com/v17.0/${formData.waba_id}/subscribed_apps`,
+          `https://graph.facebook.com/v19.0/${formData.waba_id}/subscribed_apps`,
           {
             method: 'POST',
             headers: {
@@ -129,7 +149,7 @@ export default function CompanyWhatsAppSettingsPage() {
       } else {
         const errorData = await phoneInfoResponse.json();
         console.error('Token validation failed:', errorData);
-        toast.error('Token inválido ou Phone Number ID incorreto');
+        toast.error(errorData.error?.message || 'Token inválido ou Phone Number ID incorreto');
         setSaving(false);
         return;
       }
@@ -169,7 +189,7 @@ export default function CompanyWhatsAppSettingsPage() {
     setTesting(true);
     try {
       const testResponse = await fetch(
-        `https://graph.facebook.com/v17.0/${settings.phone_number_id}?fields=display_phone_number`,
+        `https://graph.facebook.com/v19.0/${settings.phone_number_id}?fields=display_phone_number`,
         {
           headers: {
             'Authorization': `Bearer ${settings.permanent_token}`,
@@ -284,9 +304,10 @@ export default function CompanyWhatsAppSettingsPage() {
         {/* Security Notice */}
         <Alert>
           <Shield className="h-4 w-4" />
-          <AlertTitle>Acesso Restrito</AlertTitle>
+          <AlertTitle>Integração via WhatsApp Cloud API</AlertTitle>
           <AlertDescription>
-            Apenas gestores podem configurar o WhatsApp da empresa. Os vendedores utilizam automaticamente o número configurado aqui para receber e responder leads.
+            Esta é a integração oficial da Meta. Apenas gestores podem configurar as credenciais. 
+            Os vendedores utilizam automaticamente o número configurado para receber e responder leads via <strong>Inbox Pai</strong>.
           </AlertDescription>
         </Alert>
 
@@ -334,6 +355,46 @@ export default function CompanyWhatsAppSettingsPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Lead Distribution Mode */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Inbox className="h-5 w-5" />
+              Distribuição de Leads
+            </CardTitle>
+            <CardDescription>
+              Como os leads que chegam pelo WhatsApp serão distribuídos para os vendedores
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RadioGroup value={distributionMode} onValueChange={setDistributionMode} className="space-y-3">
+              <div className="flex items-start space-x-3 p-3 rounded-lg border">
+                <RadioGroupItem value="manual" id="manual" className="mt-1" />
+                <div className="space-y-1">
+                  <Label htmlFor="manual" className="font-medium flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Inbox Pai (Manual)
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Leads entram em uma lista de espera. Vendedores visualizam os leads disponíveis e clicam em "Puxar lead" para assumir o atendimento.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3 p-3 rounded-lg border opacity-50">
+                <RadioGroupItem value="round_robin" id="round_robin" disabled className="mt-1" />
+                <div className="space-y-1">
+                  <Label htmlFor="round_robin" className="font-medium text-muted-foreground">
+                    Round Robin (Em breve)
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Leads são automaticamente distribuídos entre os vendedores de forma equilibrada.
+                  </p>
+                </div>
+              </div>
+            </RadioGroup>
+          </CardContent>
+        </Card>
 
         {/* Configuration Form */}
         <Card>
@@ -410,7 +471,7 @@ export default function CompanyWhatsAppSettingsPage() {
                 onChange={(e) => setFormData({ ...formData, verification_token: e.target.value })}
               />
               <p className="text-xs text-muted-foreground">
-                Crie um token único para validar os webhooks da Meta
+                Crie um token único para validar os webhooks da Meta (ex: whasense_webhook_2024)
               </p>
             </div>
 
@@ -418,12 +479,12 @@ export default function CompanyWhatsAppSettingsPage() {
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Salvando...
+                  Validando e salvando...
                 </>
               ) : settings ? (
                 'Atualizar Configurações'
               ) : (
-                'Salvar e Conectar'
+                'Conectar WhatsApp'
               )}
             </Button>
           </CardContent>
@@ -434,12 +495,12 @@ export default function CompanyWhatsAppSettingsPage() {
           <CardHeader>
             <CardTitle>Configuração do Webhook</CardTitle>
             <CardDescription>
-              Configure este webhook no painel da Meta para receber mensagens
+              Configure este webhook no painel da Meta para receber mensagens de TODAS as empresas
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>URL do Webhook</Label>
+              <Label>URL do Webhook (Global)</Label>
               <div className="flex gap-2">
                 <Input
                   readOnly
@@ -456,7 +517,12 @@ export default function CompanyWhatsAppSettingsPage() {
                   Copiar
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Este é o webhook global do Whasense. Todas as empresas usam a mesma URL.
+              </p>
             </div>
+
+            <Separator />
 
             <div className="space-y-2">
               <Label>Campos para Subscrever</Label>
@@ -469,7 +535,8 @@ export default function CompanyWhatsAppSettingsPage() {
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Importante</AlertTitle>
               <AlertDescription>
-                Ao configurar o webhook na Meta, use o mesmo Verification Token definido acima.
+                Ao configurar o webhook na Meta, use o <strong>Verification Token</strong> definido acima.
+                O webhook deve estar configurado no App oficial do Whasense no Business Manager.
               </AlertDescription>
             </Alert>
           </CardContent>

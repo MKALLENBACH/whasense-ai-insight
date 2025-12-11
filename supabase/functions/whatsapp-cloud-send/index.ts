@@ -6,6 +6,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/**
+ * WhatsApp Cloud API - Send Messages
+ * 
+ * Sends messages via WhatsApp Cloud API using company-level settings.
+ * Supports:
+ * - Text messages
+ * - Template messages
+ * - Media messages (future)
+ * - Button messages (future)
+ * 
+ * Both managers and sellers can send messages.
+ */
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -16,7 +29,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    // Get user from auth header
+    // Validate JWT
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -52,7 +65,7 @@ serve(async (req) => {
       });
     }
 
-    // Get company WhatsApp settings (NOT seller-level)
+    // Get company WhatsApp settings
     const { data: whatsappSettings, error: settingsError } = await supabase
       .from('company_whatsapp_settings')
       .select('*')
@@ -60,7 +73,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (settingsError || !whatsappSettings) {
-      console.log('[WHATSAPP-CLOUD-SEND] No company WhatsApp settings for:', profile.company_id);
+      console.log('[WHATSAPP-SEND] No company WhatsApp settings for:', profile.company_id);
       return new Response(JSON.stringify({ 
         error: 'WhatsApp não configurado. Peça ao gestor para configurar o WhatsApp da empresa.' 
       }), {
@@ -79,36 +92,78 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { to, message, customer_id, cycle_id, template_name, template_language, template_components } = body;
+    const { 
+      to, 
+      message, 
+      customer_id, 
+      cycle_id, 
+      template_name, 
+      template_language, 
+      template_components,
+      media_type,
+      media_url,
+      media_caption
+    } = body;
 
-    console.log('[WHATSAPP-CLOUD-SEND] Request:', { to, customer_id, hasMessage: !!message, company: profile.company_id });
+    if (!to) {
+      return new Response(JSON.stringify({ error: 'Destinatário obrigatório' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('[WHATSAPP-SEND] Request:', { 
+      to, 
+      customer_id, 
+      hasMessage: !!message, 
+      hasTemplate: !!template_name,
+      company: profile.company_id 
+    });
 
     // Build the message payload
-    let messagePayload: any = {
+    const phoneNumber = to.replace(/\D/g, ''); // Remove non-digits
+    let messagePayload: Record<string, unknown> = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
-      to: to.replace(/\D/g, ''), // Remove non-digits
+      to: phoneNumber,
     };
 
+    let contentForDb = '';
+
     if (template_name) {
-      // Send template message
+      // Template message
       messagePayload.type = 'template';
       messagePayload.template = {
         name: template_name,
         language: { code: template_language || 'pt_BR' },
         components: template_components || [],
       };
-    } else {
-      // Send text message
+      contentForDb = `[Template: ${template_name}]`;
+    } else if (media_type && media_url) {
+      // Media message
+      messagePayload.type = media_type;
+      messagePayload[media_type] = {
+        link: media_url,
+        caption: media_caption || undefined,
+      };
+      contentForDb = media_caption || `[${media_type}]`;
+    } else if (message) {
+      // Text message
       messagePayload.type = 'text';
       messagePayload.text = { body: message };
+      contentForDb = message;
+    } else {
+      return new Response(JSON.stringify({ error: 'Mensagem, template ou mídia obrigatório' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    console.log('[WHATSAPP-CLOUD-SEND] Sending to Meta API');
+    console.log('[WHATSAPP-SEND] Sending to Meta API v19.0');
 
-    // Send via WhatsApp Cloud API using company settings
+    // Send via WhatsApp Cloud API (v19.0 as per spec)
     const sendResponse = await fetch(
-      `https://graph.facebook.com/v17.0/${whatsappSettings.phone_number_id}/messages`,
+      `https://graph.facebook.com/v19.0/${whatsappSettings.phone_number_id}/messages`,
       {
         method: 'POST',
         headers: {
@@ -120,14 +175,18 @@ serve(async (req) => {
     );
 
     const sendResult = await sendResponse.json();
-    console.log('[WHATSAPP-CLOUD-SEND] Meta API response:', sendResult);
+    console.log('[WHATSAPP-SEND] Meta API response:', sendResult);
 
     if (!sendResponse.ok) {
       // Check if token expired
       if (sendResult.error?.code === 190) {
         await supabase
           .from('company_whatsapp_settings')
-          .update({ status: 'error', last_error: 'Token expirado' })
+          .update({ 
+            status: 'error', 
+            last_error: 'Token expirado',
+            last_check: new Date().toISOString()
+          })
           .eq('id', whatsappSettings.id);
       }
 
@@ -145,16 +204,26 @@ serve(async (req) => {
       .insert({
         customer_id,
         seller_id: user.id,
-        content: message || `[Template: ${template_name}]`,
+        content: contentForDb,
         direction: 'outgoing',
         timestamp: new Date().toISOString(),
         cycle_id,
+        attachment_type: media_type || null,
+        attachment_url: media_url || null,
       })
       .select('id')
       .single();
 
     if (messageError) {
-      console.error('[WHATSAPP-CLOUD-SEND] Message save error:', messageError);
+      console.error('[WHATSAPP-SEND] Message save error:', messageError);
+    }
+
+    // Update cycle last activity
+    if (cycle_id) {
+      await supabase
+        .from('sale_cycles')
+        .update({ last_activity_at: new Date().toISOString() })
+        .eq('id', cycle_id);
     }
 
     return new Response(JSON.stringify({ 
@@ -166,7 +235,7 @@ serve(async (req) => {
     });
 
   } catch (error: unknown) {
-    console.error('[WHATSAPP-CLOUD-SEND] Error:', error);
+    console.error('[WHATSAPP-SEND] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
