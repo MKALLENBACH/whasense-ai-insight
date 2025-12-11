@@ -162,12 +162,16 @@ export function useSellerDashboard() {
           }
         });
 
-      // Calculate KPIs
-      const activeCustomers = customers.filter(
-        (c) => c.lead_status === "pending" || c.lead_status === "in_progress"
+      // Calculate KPIs - only count customers with active PRE-SALE cycles
+      // Post-sale cycles (closed) should not count towards pending/in_progress
+      const activeCyclesPreSale = cycles.filter(
+        (c) => (c.status === "pending" || c.status === "in_progress") && c.cycle_type !== "post_sale"
       );
-      const pendingLeads = customers.filter((c) => c.lead_status === "pending").length;
-      const inProgressLeads = customers.filter((c) => c.lead_status === "in_progress").length;
+      const customersWithActivePreSale = new Set(activeCyclesPreSale.map((c) => c.customer_id));
+      
+      const activeCustomers = customers.filter((c) => customersWithActivePreSale.has(c.id));
+      const pendingLeads = activeCyclesPreSale.filter((c) => c.status === "pending").length;
+      const inProgressLeads = activeCyclesPreSale.filter((c) => c.status === "in_progress").length;
       const wonSales = sales.filter((s) => s.status === "won").length;
       const hotLeads = activeCustomers.filter(
         (c) => customerTemperatures.get(c.id) === "hot"
@@ -200,7 +204,8 @@ export function useSellerDashboard() {
 
       // Count risk cycles
       let riskCyclesCount = 0;
-      const activeCycles = cycles.filter((c) => c.status === "pending" || c.status === "in_progress");
+      // Use only active pre-sale cycles for priorities
+      const activeCycles = activeCyclesPreSale;
       const priorityList: Priority[] = [];
 
       for (const cycle of activeCycles) {
