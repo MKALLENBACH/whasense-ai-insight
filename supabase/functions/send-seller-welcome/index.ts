@@ -48,7 +48,7 @@ const handler = async (req: Request): Promise<Response> => {
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: "Whasense <onboarding@resend.dev>",
+        from: "Whasense <noreply@whasense.com.br>",
         to: [email],
         subject: `Bem-vindo à equipe ${companyName || 'Whasense'} - Suas credenciais de acesso`,
         html: `
