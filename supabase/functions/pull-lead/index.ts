@@ -84,9 +84,13 @@ serve(async (req) => {
         .in('lead_status', ['pending', 'in_progress']);
 
       if (activeLeadsCount && activeLeadsCount >= settings.max_active_leads_per_seller) {
+        console.log('[PULL-LEAD] Seller reached lead limit:', { activeLeadsCount, max: settings.max_active_leads_per_seller });
         return new Response(
           JSON.stringify({ 
-            error: `You have reached the maximum of ${settings.max_active_leads_per_seller} active leads. Close some leads before pulling new ones.` 
+            error: `Você atingiu o limite de ${settings.max_active_leads_per_seller} leads ativos. Finalize alguns leads antes de puxar novos.`,
+            code: 'LEAD_LIMIT_REACHED',
+            currentLeads: activeLeadsCount,
+            maxLeads: settings.max_active_leads_per_seller
           }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
