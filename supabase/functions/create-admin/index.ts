@@ -5,9 +5,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Secret key for admin creation (simple security)
-const ADMIN_SECRET = "whasense-admin-setup-2024";
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -16,8 +13,19 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     
-    // Simple secret check
-    if (body.secret !== ADMIN_SECRET) {
+    // Get secret from environment variable - must be configured in Supabase secrets
+    const ADMIN_SECRET = Deno.env.get("ADMIN_CREATION_SECRET");
+    
+    if (!ADMIN_SECRET) {
+      console.error("ADMIN_CREATION_SECRET not configured");
+      return new Response(
+        JSON.stringify({ error: "Serviço não configurado" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Validate secret from request
+    if (!body.secret || body.secret !== ADMIN_SECRET) {
       return new Response(
         JSON.stringify({ error: "Acesso negado" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
