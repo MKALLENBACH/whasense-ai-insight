@@ -59,6 +59,13 @@ export const useConversations = ({ accessToken, sellerId }: UseConversationsProp
     fetchConversations();
   }, [fetchConversations]);
 
+  // Reset loading state when sellerId changes
+  useEffect(() => {
+    if (sellerId !== undefined) {
+      setIsLoading(true);
+    }
+  }, [sellerId]);
+
   // Initial fetch
   useEffect(() => {
     if (accessToken) {
