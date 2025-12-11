@@ -12,6 +12,8 @@ import {
   AlertCircle,
   User,
   Building2,
+  UserPlus,
+  Inbox,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -74,6 +76,8 @@ interface ConversationCardProps {
   isManager: boolean;
   onClick: () => void;
   onLinkClient: (customerId: string, customerName: string) => void;
+  onReassign?: (customerId: string, customerName: string) => void;
+  onReturnToInbox?: (customerId: string) => void;
 }
 
 const getInitials = (name: string) => {
@@ -134,7 +138,9 @@ const ConversationCard = ({
   alerts, 
   isManager, 
   onClick, 
-  onLinkClient 
+  onLinkClient,
+  onReassign,
+  onReturnToInbox,
 }: ConversationCardProps) => {
   const temperature = conv.insight?.temperature || 'cold';
   const TempIcon = temperatureConfig[temperature as keyof typeof temperatureConfig]?.icon || Snowflake;
@@ -143,11 +149,19 @@ const ConversationCard = ({
   const status = conv.cycleStatus || conv.leadStatus;
   const isCompleted = status === 'won' || status === 'lost';
 
+  const handleCardClick = () => {
+    // Managers don't navigate to chat, only use action buttons
+    if (!isManager) {
+      onClick();
+    }
+  };
+
   return (
     <div
-      onClick={onClick}
+      onClick={handleCardClick}
       className={cn(
-        "p-4 border-b border-border hover:bg-muted/50 cursor-pointer transition-colors",
+        "p-4 border-b border-border transition-colors",
+        !isManager && "hover:bg-muted/50 cursor-pointer",
         convAlerts.length > 0 && !isCompleted && "border-l-4 border-l-warning",
         conv.isIncomplete && "border-l-4 border-l-orange-500 bg-orange-500/5"
       )}
@@ -269,6 +283,36 @@ const ConversationCard = ({
                   Motivo: {conv.cycleLostReason || conv.saleReason}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Manager action buttons */}
+          {isManager && onReassign && onReturnToInbox && (
+            <div className="flex gap-2 mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReassign(conv.customer.id, conv.customer.name);
+                }}
+              >
+                <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+                Realocar Vendedor
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReturnToInbox(conv.customer.id);
+                }}
+              >
+                <Inbox className="h-3.5 w-3.5 mr-1.5" />
+                Retornar Inbox
+              </Button>
             </div>
           )}
         </div>

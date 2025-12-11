@@ -20,9 +20,11 @@ import {
 import { cn } from "@/lib/utils";
 import NewLeadModal from "@/components/lead/NewLeadModal";
 import LinkClientModal from "@/components/conversation/LinkClientModal";
+import ReassignLeadModal from "@/components/chat/ReassignLeadModal";
 import ConversationCard, { ConversationData } from "@/components/conversation/ConversationCard";
 import { useConversations } from "@/hooks/useConversations";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface Seller {
   user_id: string;
@@ -46,6 +48,10 @@ const ConversationsPage = () => {
   // Modal state for linking client
   const [showLinkClientModal, setShowLinkClientModal] = useState(false);
   const [selectedLinkConv, setSelectedLinkConv] = useState<{id: string; name: string} | null>(null);
+
+  // Modal state for reassigning lead (manager)
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [selectedReassignConv, setSelectedReassignConv] = useState<ConversationData | null>(null);
 
   // Fetch sellers for manager
   useEffect(() => {
@@ -129,6 +135,33 @@ const ConversationsPage = () => {
   const handleLinkClient = (customerId: string, customerName: string) => {
     setSelectedLinkConv({ id: customerId, name: customerName });
     setShowLinkClientModal(true);
+  };
+
+  // Manager: Open reassign modal
+  const handleReassign = (customerId: string) => {
+    const conv = currentConversations.find(c => c.customer.id === customerId);
+    if (conv) {
+      setSelectedReassignConv(conv);
+      setShowReassignModal(true);
+    }
+  };
+
+  // Manager: Return lead to inbox
+  const handleReturnToInbox = async (customerId: string) => {
+    try {
+      const { error } = await supabase
+        .from("customers")
+        .update({ assigned_to: null, seller_id: null })
+        .eq("id", customerId);
+
+      if (error) throw error;
+
+      toast.success("Lead devolvido ao Inbox Pai");
+      fetchConversations();
+    } catch (error) {
+      console.error("Error returning to inbox:", error);
+      toast.error("Erro ao devolver lead ao inbox");
+    }
   };
 
   // Loading state for sellers (full page) or managers with seller selected
@@ -286,6 +319,8 @@ const ConversationsPage = () => {
                     isManager={isManager}
                     onClick={() => handleConversationClick(conv)}
                     onLinkClient={handleLinkClient}
+                    onReassign={isManager ? () => handleReassign(conv.customer.id) : undefined}
+                    onReturnToInbox={isManager ? () => handleReturnToInbox(conv.customer.id) : undefined}
                   />
                 ))}
               </div>
@@ -346,6 +381,21 @@ const ConversationsPage = () => {
           onOpenChange={setShowLinkClientModal}
           customerId={selectedLinkConv.id}
           customerName={selectedLinkConv.name}
+          onSuccess={fetchConversations}
+        />
+      )}
+
+      {/* Reassign Lead Modal (manager only) */}
+      {selectedReassignConv && user?.companyId && (
+        <ReassignLeadModal
+          open={showReassignModal}
+          onOpenChange={(open) => {
+            setShowReassignModal(open);
+            if (!open) setSelectedReassignConv(null);
+          }}
+          customerId={selectedReassignConv.customer.id}
+          currentAssignedTo={selectedReassignConv.sellerId || null}
+          companyId={user.companyId}
           onSuccess={fetchConversations}
         />
       )}
