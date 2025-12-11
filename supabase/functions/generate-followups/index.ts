@@ -165,19 +165,15 @@ Deno.serve(async (req) => {
         hasSellerMessage &&
         lastMessageTime < cutoffTime
       ) {
-        // Check if we already sent a follow-up recently (within delay period)
+        // Check if we already sent a message recently (within delay period)
+        // This prevents sending multiple follow-ups in a row
         const recentFollowupCutoff = new Date();
         recentFollowupCutoff.setHours(recentFollowupCutoff.getHours() - delayHours);
 
-        const recentFollowup = messages.find(
-          (m) =>
-            m.direction === "outgoing" &&
-            m.content?.includes("[Follow-up automático]") &&
-            new Date(m.timestamp) > recentFollowupCutoff
-        );
-
-        if (recentFollowup) {
-          console.log(`Skipping cycle ${cycle.id} - recent follow-up exists`);
+        // If last message from seller is recent (within delay), skip
+        // This means the seller already followed up manually or auto
+        if (lastMessageTime > recentFollowupCutoff) {
+          console.log(`Skipping cycle ${cycle.id} - seller message is recent`);
           continue;
         }
 
@@ -199,7 +195,7 @@ Deno.serve(async (req) => {
           seller_id: cycle.seller_id,
           cycle_id: cycle.id,
           direction: "outgoing",
-          content: `[Follow-up automático] ${followupContent}`,
+          content: followupContent,
         });
 
         if (insertError) {
