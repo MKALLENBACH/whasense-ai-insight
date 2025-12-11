@@ -289,19 +289,17 @@ const InboxPaiPage = () => {
               </div>
             ) : filteredLeads.length > 0 ? (
               <>
-                <ScrollArea className="max-h-[600px]">
-                  <div className="divide-y divide-border">
-                    {filteredLeads.map((lead) => (
-                      <InboxPaiCard
-                        key={lead.id}
-                        lead={lead}
-                        onPullLead={handlePullLead}
-                        isPulling={isPulling !== null}
-                        canPull={!isManager && hasActiveSellers}
-                      />
-                    ))}
-                  </div>
-                </ScrollArea>
+                <div className="divide-y divide-border">
+                  {filteredLeads.map((lead) => (
+                    <InboxPaiCard
+                      key={lead.id}
+                      lead={lead}
+                      onPullLead={handlePullLead}
+                      isPulling={isPulling !== null}
+                      canPull={!isManager && hasActiveSellers}
+                    />
+                  ))}
+                </div>
                 
                 {/* Pagination Controls */}
                 {pagination.totalPages > 1 && (
