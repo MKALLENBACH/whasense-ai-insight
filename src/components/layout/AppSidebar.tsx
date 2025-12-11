@@ -1,4 +1,4 @@
-import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone, Users, Bot, Target, Trophy, Building2, CreditCard, AlertTriangle, Settings } from "lucide-react";
+import { MessageSquare, LayoutDashboard, History, Bell, LogOut, Zap, Smartphone, Users, Bot, Target, Trophy, Building2, CreditCard, AlertTriangle, Settings, Inbox } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -59,7 +59,7 @@ const AppSidebar = () => {
   // Links para vendedor - filtrados por features
   const getAllVendedorLinks = (): NavLinkItem[] => [
     { to: "/dashboard-vendedor", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/conversas", icon: MessageSquare, label: "Conversas" },
+    { to: "/conversas", icon: Inbox, label: "Conversas" },
     { to: "/clientes", icon: Building2, label: "Clientes 360°", featureKey: 'canAccess360' },
     { to: "/vendedor/performance", icon: Trophy, label: "Performance", featureKey: 'canUseGamification' },
     { to: "/alertas", icon: Bell, label: "Alertas", badge: alertCount },
@@ -69,15 +69,16 @@ const AppSidebar = () => {
   // Links para gestor - filtrados por features
   const getAllGestorLinks = (): NavLinkItem[] => [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    { to: "/conversas", icon: Inbox, label: "Inbox Pai" },
     { to: "/clientes", icon: Building2, label: "Clientes 360°", featureKey: 'canAccess360' },
     { to: "/gestor/vendedores", icon: Users, label: "Vendedores" },
     { to: "/gestor/metas", icon: Target, label: "Metas", featureKey: 'canUseGamification' },
     { to: "/gestor/followups", icon: Bot, label: "Follow-ups", featureKey: 'canUseFollowups' },
+    { to: "/gestor/configuracoes", icon: Settings, label: "Configurações" },
     { to: "/financeiro", icon: CreditCard, label: "Financeiro" },
     { to: "/historico", icon: History, label: "Histórico" },
     { to: "/gestor/whatsapp-status", icon: Smartphone, label: "Status WhatsApp" },
   ];
-
   // Se gestor com acesso restrito por plano inativo, mostra apenas Financeiro
   const gestorRestrictedLinks: NavLinkItem[] = [
     { to: "/financeiro", icon: CreditCard, label: "Financeiro" },

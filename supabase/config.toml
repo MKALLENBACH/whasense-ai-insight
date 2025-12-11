@@ -119,3 +119,9 @@ verify_jwt = false
 
 [functions.whatsapp-cloud-send]
 verify_jwt = false
+
+[functions.pull-lead]
+verify_jwt = false
+
+[functions.list-inbox-pai]
+verify_jwt = false

@@ -144,13 +144,14 @@ serve(async (req) => {
             if (existingCustomer) {
               customerId = existingCustomer.id;
             } else {
-              // Create new customer
+              // Create new customer WITHOUT seller assignment (goes to Inbox Pai)
               const { data: newCustomer, error: customerError } = await supabase
                 .from('customers')
                 .insert({
                   name: `Cliente ${contactPhone.slice(-4)}`,
                   phone: contactPhone,
-                  seller_id: sellerId,
+                  seller_id: null, // No seller assigned initially
+                  assigned_to: null, // Goes to Inbox Pai
                   company_id: companyId,
                   is_incomplete: true,
                 })
@@ -218,21 +219,32 @@ serve(async (req) => {
 
             console.log('[WHATSAPP-CLOUD-WEBHOOK] Message saved:', savedMessage.id);
 
-            // Trigger AI analysis asynchronously
-            try {
-              await fetch(`${supabaseUrl}/functions/v1/analyze-message`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${supabaseServiceKey}`,
-                },
-                body: JSON.stringify({
-                  message: content,
-                  message_id: savedMessage.id,
-                }),
-              });
-            } catch (analyzeError) {
-              console.error('[WHATSAPP-CLOUD-WEBHOOK] AI analysis error:', analyzeError);
+            // Check if customer is assigned - only run AI if assigned
+            const { data: customerCheck } = await supabase
+              .from('customers')
+              .select('assigned_to')
+              .eq('id', customerId)
+              .single();
+
+            // Only trigger AI analysis if lead is assigned to a seller
+            if (customerCheck?.assigned_to) {
+              try {
+                await fetch(`${supabaseUrl}/functions/v1/analyze-message`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${supabaseServiceKey}`,
+                  },
+                  body: JSON.stringify({
+                    message: content,
+                    message_id: savedMessage.id,
+                  }),
+                });
+              } catch (analyzeError) {
+                console.error('[WHATSAPP-CLOUD-WEBHOOK] AI analysis error:', analyzeError);
+              }
+            } else {
+              console.log('[WHATSAPP-CLOUD-WEBHOOK] Skipping AI - lead not assigned (Inbox Pai)');
             }
           }
 
