@@ -13,7 +13,8 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, Target, Plus, Trophy, Medal, AlertTriangle, TrendingUp, Crown, Award, Flame, Zap } from "lucide-react";
+import { Loader2, Target, Plus, Trophy, Medal, AlertTriangle, TrendingUp, Crown, Award, Flame, Zap, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -368,9 +369,48 @@ const ManagerGoalsPage = () => {
                             Meta: {goal.target_value} • {format(new Date(goal.start_date + 'T12:00:00'), "dd/MM", { locale: ptBR })} - {format(new Date(goal.end_date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
                           </CardDescription>
                         </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold">{avgProgress.toFixed(0)}%</p>
-                          <p className="text-xs text-muted-foreground">Progresso médio</p>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="text-2xl font-bold">{avgProgress.toFixed(0)}%</p>
+                            <p className="text-xs text-muted-foreground">Progresso médio</p>
+                          </div>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Excluir meta?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta ação não pode ser desfeita. A meta será removida permanentemente e não aparecerá mais na performance dos vendedores.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={async () => {
+                                    try {
+                                      const { error } = await supabase
+                                        .from("goals")
+                                        .delete()
+                                        .eq("id", goal.id);
+                                      if (error) throw error;
+                                      toast.success("Meta excluída com sucesso");
+                                      fetchData();
+                                    } catch (err) {
+                                      console.error("Error deleting goal:", err);
+                                      toast.error("Erro ao excluir meta");
+                                    }
+                                  }}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </div>
                     </CardHeader>
