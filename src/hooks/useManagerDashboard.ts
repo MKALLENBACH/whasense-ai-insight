@@ -423,14 +423,13 @@ export function useManagerDashboard() {
       // Seller performance
       const performance: SellerPerformance[] = sellerProfiles.map((seller) => {
         const sellerSales = sales.filter((s) => s.seller_id === seller.user_id);
-        const sellerCustomers = customers.filter((c) => c.seller_id === seller.user_id);
+        // CORREÇÃO: Usar ciclos ativos de pré-venda, não lead_status do customer
+        const sellerActiveCycles = activeCycles.filter((c) => c.seller_id === seller.user_id);
+        const sellerActiveCustomerIds = sellerActiveCycles.map((c) => c.customer_id);
         const sellerWon = sellerSales.filter((s) => s.status === "won").length;
         const sellerLost = sellerSales.filter((s) => s.status === "lost").length;
         const sellerTotal = sellerWon + sellerLost;
-        const sellerActiveIds = sellerCustomers
-          .filter((c) => c.lead_status === "pending" || c.lead_status === "in_progress")
-          .map((c) => c.id);
-        const sellerHot = sellerActiveIds.filter(
+        const sellerHot = sellerActiveCustomerIds.filter(
           (id) => customerTemperatures.get(id) === "hot"
         ).length;
 
@@ -461,7 +460,7 @@ export function useManagerDashboard() {
         return {
           id: seller.user_id,
           name: seller.name,
-          totalLeads: sellerCustomers.length,
+          totalLeads: sellerActiveCycles.length,
           wonSales: sellerWon,
           lostSales: sellerLost,
           conversionRate: sellerTotal > 0 ? Math.round((sellerWon / sellerTotal) * 100) : 0,
@@ -473,7 +472,7 @@ export function useManagerDashboard() {
         };
       });
 
-      setSellerPerformance(performance.filter((p) => p.totalLeads > 0));
+      setSellerPerformance(performance.filter((p) => p.totalLeads > 0 || p.wonSales > 0 || p.lostSales > 0));
 
       // Sales timeline (last 30 days)
       const timelineBaseDate = new Date();
