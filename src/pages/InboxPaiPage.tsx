@@ -206,7 +206,10 @@ const InboxPaiPage = () => {
               Inbox Pai
             </h1>
             <p className="text-muted-foreground">
-              Leads aguardando atribuição • Puxe para começar a atender
+              {isManager 
+                ? "Leads aguardando atribuição • Acompanhe a distribuição da equipe"
+                : "Leads aguardando atribuição • Puxe para começar a atender"
+              }
             </p>
           </div>
           <Button 
