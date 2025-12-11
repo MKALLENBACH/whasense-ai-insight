@@ -131,3 +131,6 @@ verify_jwt = false
 
 [functions.seed-inbox-pai]
 verify_jwt = false
+
+[functions.auto-close-cycles]
+verify_jwt = false
