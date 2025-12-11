@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Loader2, AlertCircle, Bot, Clock, Users } from "lucide-react";
+import { Loader2, AlertCircle, Bot, Clock, Users, XCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Seller {
@@ -25,6 +25,7 @@ interface CompanySettings {
   company_id: string;
   followups_enabled: boolean;
   followup_delay_hours: number;
+  auto_close_delay_hours: number;
 }
 
 const FollowupsSettingsPage = () => {
@@ -35,6 +36,7 @@ const FollowupsSettingsPage = () => {
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [delayHours, setDelayHours] = useState(24);
+  const [autoCloseDelayHours, setAutoCloseDelayHours] = useState(24);
 
   useEffect(() => {
     if (user?.companyId) {
@@ -69,6 +71,7 @@ const FollowupsSettingsPage = () => {
       if (settingsData) {
         setSettings(settingsData as CompanySettings);
         setDelayHours(settingsData.followup_delay_hours);
+        setAutoCloseDelayHours(settingsData.auto_close_delay_hours ?? 24);
       } else {
         // Create default settings if not exists
         const { data: newSettings, error: createError } = await supabase
@@ -77,6 +80,7 @@ const FollowupsSettingsPage = () => {
             company_id: user.companyId,
             followups_enabled: true,
             followup_delay_hours: 24,
+            auto_close_delay_hours: 24,
           })
           .select()
           .single();
@@ -84,6 +88,7 @@ const FollowupsSettingsPage = () => {
         if (createError) throw createError;
         setSettings(newSettings as CompanySettings);
         setDelayHours(24);
+        setAutoCloseDelayHours(24);
       }
 
       // Fetch sellers
@@ -155,6 +160,31 @@ const FollowupsSettingsPage = () => {
       toast.success("Tempo de follow-up atualizado");
     } catch (error) {
       console.error("Error updating delay:", error);
+      toast.error("Erro ao atualizar tempo");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateAutoCloseDelay = async () => {
+    if (!settings) return;
+    
+    const hours = Math.max(1, autoCloseDelayHours);
+    setAutoCloseDelayHours(hours);
+    
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from("company_settings")
+        .update({ auto_close_delay_hours: hours })
+        .eq("id", settings.id);
+
+      if (error) throw error;
+
+      setSettings({ ...settings, auto_close_delay_hours: hours });
+      toast.success("Tempo de encerramento automático atualizado");
+    } catch (error) {
+      console.error("Error updating auto-close delay:", error);
       toast.error("Erro ao atualizar tempo");
     } finally {
       setIsSaving(false);
@@ -267,6 +297,51 @@ const FollowupsSettingsPage = () => {
                   <Button 
                     onClick={handleUpdateDelay}
                     disabled={isSaving || !settings?.followups_enabled}
+                  >
+                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Salvar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Auto-Close Configuration */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <XCircle className="h-5 w-5" />
+                  Encerramento Automático
+                </CardTitle>
+                <CardDescription>
+                  {settings?.followups_enabled 
+                    ? "Após o follow-up ser enviado, encerra o ciclo automaticamente se o cliente não responder"
+                    : "Encerra o ciclo automaticamente se o cliente não responder após a última mensagem do vendedor"
+                  }
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-end gap-4">
+                  <div className="space-y-2 flex-1 max-w-xs">
+                    <Label htmlFor="auto-close-hours">
+                      {settings?.followups_enabled 
+                        ? "Horas após o follow-up sem resposta"
+                        : "Horas sem resposta do cliente"
+                      }
+                    </Label>
+                    <Input
+                      id="auto-close-hours"
+                      type="number"
+                      min={1}
+                      value={autoCloseDelayHours}
+                      onChange={(e) => setAutoCloseDelayHours(parseInt(e.target.value) || 24)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Mínimo: 1 hora • O ciclo será encerrado como "perdido" com motivo: falta de resposta
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={handleUpdateAutoCloseDelay}
+                    disabled={isSaving}
                   >
                     {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                     Salvar
