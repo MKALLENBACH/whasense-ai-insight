@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction, fetchWithAuth } from "@/lib/supabaseApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, MessageSquare } from "lucide-react";
@@ -252,7 +253,7 @@ const ChatPage = () => {
     try {
       const cycleMessages = buildCycleMessages();
       
-      const { data, error } = await supabase.functions.invoke("analyze-message", {
+      const { data, error } = await invokeFunction<AIAnalysis>("analyze-message", {
         body: { 
           message: messageContent, 
           message_id: messageId,
@@ -317,27 +318,20 @@ const ChatPage = () => {
 
       // Trigger Vision AI analysis for image attachments
       if (isImageAttachment && attachment?.url && data?.id) {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (currentSession) {
-          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-image`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${currentSession.access_token}`,
-            },
-            body: JSON.stringify({
-              message_id: data.id,
-              image_url: attachment.url,
-              sender: "seller",
-            }),
-          }).then(async (response) => {
-            if (response.ok) {
-              toast.success("Imagem analisada pela Vision AI");
-            }
-          }).catch(err => {
-            console.error("Error calling analyze-image:", err);
-          });
-        }
+        fetchWithAuth(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-image`, {
+          method: "POST",
+          body: JSON.stringify({
+            message_id: data.id,
+            image_url: attachment.url,
+            sender: "seller",
+          }),
+        }).then(({ error: analysisError }) => {
+          if (!analysisError) {
+            toast.success("Imagem analisada pela Vision AI");
+          }
+        }).catch(err => {
+          console.error("Error calling analyze-image:", err);
+        });
       }
 
       // Trigger AI customer response
@@ -358,23 +352,16 @@ const ChatPage = () => {
               ['jpg', 'jpeg', 'png', 'webp', 'gif'].some(ext => newMsg.attachment_name?.toLowerCase().endsWith(`.${ext}`));
             
             if (incomingIsImage && newMsg.attachment_url) {
-              const { data: { session: currentSession } } = await supabase.auth.getSession();
-              if (currentSession) {
-                fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-image`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${currentSession.access_token}`,
-                  },
-                  body: JSON.stringify({
-                    message_id: newMsg.id,
-                    image_url: newMsg.attachment_url,
-                    sender: "client",
-                  }),
-                }).catch(err => {
-                  console.error("Error calling analyze-image for incoming:", err);
-                });
-              }
+              fetchWithAuth(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-image`, {
+                method: "POST",
+                body: JSON.stringify({
+                  message_id: newMsg.id,
+                  image_url: newMsg.attachment_url,
+                  sender: "client",
+                }),
+              }).catch(err => {
+                console.error("Error calling analyze-image for incoming:", err);
+              });
             }
             
             await analyzeMessage(response.message, response.messageId);
@@ -449,33 +436,20 @@ const ChatPage = () => {
 
       setMessages(prev => [...prev, msgData]);
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        toast.error("Sessão expirada");
-        return;
-      }
-
-      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-audio`, {
+      fetchWithAuth<{ transcription: string }>(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-audio`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
-        },
         body: JSON.stringify({
           audio_url: audioUrl,
           message_id: msgData.id,
           sender: "seller",
         }),
-      }).then(async (response) => {
-        if (response.ok) {
-          const result = await response.json();
-          if (result.transcription) {
-            setMessages(prev => prev.map(m => 
-              m.id === msgData.id 
-                ? { ...m, content: result.transcription }
-                : m
-            ));
-          }
+      }).then(({ data: result, error: analysisError }) => {
+        if (!analysisError && result?.transcription) {
+          setMessages(prev => prev.map(m => 
+            m.id === msgData.id 
+              ? { ...m, content: result.transcription }
+              : m
+          ));
         }
       }).catch(err => {
         console.error("Error calling analyze-audio:", err);
@@ -495,17 +469,10 @@ const ChatPage = () => {
 
     setIsSimulatingResponse(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const response = await fetch(
+      const { data, error } = await fetchWithAuth<{ success: boolean; message: string; messageId: string }>(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/simulate-customer`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
           body: JSON.stringify({
             customerId: id,
             sellerId: user.id,
@@ -514,9 +481,9 @@ const ChatPage = () => {
         }
       );
 
-      const data = await response.json();
+      if (error) throw error;
       
-      if (data.success) {
+      if (data?.success) {
         const { data: newMsg } = await supabase
           .from("messages")
           .select("id, content, direction, timestamp, cycle_id")

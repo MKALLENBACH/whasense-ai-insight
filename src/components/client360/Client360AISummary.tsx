@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/supabaseApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +40,7 @@ const Client360AISummary = ({ clientId, client, sellerId }: Client360AISummaryPr
   const generateSummary = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("client-360-summary", {
+      const { data, error } = await invokeFunction<AISummary>("client-360-summary", {
         body: { clientId, sellerId },
       });
 

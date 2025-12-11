@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchWithAuth } from "@/lib/supabaseApi";
 import { toast } from "sonner";
 import type { ConversationData, AlertData } from "@/components/conversation/ConversationCard";
 
@@ -27,19 +28,16 @@ export const useConversations = ({ accessToken, sellerId }: UseConversationsProp
         url += `?seller_id=${sellerId}`;
       }
 
-      const [conversationsResponse, alertsResponse] = await Promise.all([
-        fetch(url, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }).then(res => res.json()),
+      const [conversationsResult, alertsResponse] = await Promise.all([
+        fetchWithAuth<{ conversations: ConversationData[] }>(url),
         supabase
           .from('alerts')
           .select('id, customer_id, alert_type, severity, message')
       ]);
 
-      setConversations(conversationsResponse?.conversations || []);
+      if (conversationsResult.error) throw conversationsResult.error;
+      
+      setConversations(conversationsResult.data?.conversations || []);
       setAlerts(alertsResponse.data || []);
     } catch (error: any) {
       if (error?.message?.includes('401') || error?.message?.includes('token') || error?.message?.includes('auth')) {

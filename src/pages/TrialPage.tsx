@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/supabaseApi";
 import { Loader2, Zap, Sparkles, Check, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ const TrialPage = () => {
       try {
         const origin = window.location.origin;
         
-        const { data, error: fnError } = await supabase.functions.invoke("create-trial-checkout", {
+        const { data, error: fnError } = await invokeFunction<{ url: string }>("create-trial-checkout", {
           body: {
             successUrl: `${origin}/trial-success`,
             cancelUrl: `${origin}/login`,

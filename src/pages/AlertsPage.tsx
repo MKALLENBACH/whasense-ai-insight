@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/supabaseApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -168,7 +169,7 @@ const AlertsPage = () => {
   const triggerAlertCalculation = async () => {
     setIsCalculating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('calculate-alerts', {
+      const { data, error } = await invokeFunction<{ alertsCreated: number }>('calculate-alerts', {
         body: { internal: true }
       });
       if (error) throw error;
