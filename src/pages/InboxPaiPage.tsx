@@ -305,7 +305,7 @@ const InboxPaiPage = () => {
                         lead={lead}
                         onPullLead={handlePullLead}
                         isPulling={isPulling !== null}
-                        canPull={hasActiveSellers}
+                        canPull={!isManager && hasActiveSellers}
                       />
                     ))}
                   </div>
