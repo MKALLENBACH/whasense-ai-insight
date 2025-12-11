@@ -121,7 +121,7 @@ const InboxPaiPage = () => {
         const { count: currentLeads } = await supabase
           .from("customers")
           .select("id", { count: "exact", head: true })
-          .eq("assigned_to", user.id)
+          .eq("seller_id", user.id)
           .in("lead_status", ["pending", "in_progress"]);
         
         setLeadLimitInfo({
@@ -196,7 +196,7 @@ const InboxPaiPage = () => {
       const { count: currentLeads } = await supabase
         .from("customers")
         .select("id", { count: "exact", head: true })
-        .eq("assigned_to", user.id)
+        .eq("seller_id", user.id)
         .in("lead_status", ["pending", "in_progress"]);
       
       setLeadLimitInfo({
