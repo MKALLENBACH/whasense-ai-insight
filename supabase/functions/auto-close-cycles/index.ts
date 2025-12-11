@@ -181,6 +181,30 @@ serve(async (req) => {
             console.error(`Error updating customer ${cycle.customer_id}:`, customerError);
           }
 
+          // Get customer's company_id
+          const { data: customer } = await supabase
+            .from("customers")
+            .select("company_id")
+            .eq("id", cycle.customer_id)
+            .single();
+
+          // Create a sale record for this lost cycle (for metrics/performance tracking)
+          const { error: saleError } = await supabase
+            .from("sales")
+            .insert({
+              customer_id: cycle.customer_id,
+              seller_id: cycle.seller_id,
+              company_id: customer?.company_id || company.id,
+              status: "lost",
+              reason: "Encerramento automático - cliente não respondeu",
+            });
+
+          if (saleError) {
+            console.error(`Error creating sale record for cycle ${cycle.id}:`, saleError);
+          } else {
+            console.log(`Created sale record for auto-closed cycle ${cycle.id}`);
+          }
+
           // Delete any alerts for this cycle
           const { error: alertsError } = await supabase
             .from("alerts")
