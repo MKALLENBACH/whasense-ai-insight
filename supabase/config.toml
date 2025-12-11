@@ -128,3 +128,6 @@ verify_jwt = false
 
 [functions.update-admin-credentials]
 verify_jwt = false
+
+[functions.seed-inbox-pai]
+verify_jwt = false
