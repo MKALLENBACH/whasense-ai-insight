@@ -648,6 +648,23 @@ serve(async (req) => {
         // Continue anyway - we still return the analysis
       } else {
         console.log('Insight saved to database');
+        
+        // Trigger alert recalculation after saving insight
+        try {
+          const alertsResponse = await fetch(`${supabaseUrl}/functions/v1/calculate-alerts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ internal: true }),
+          });
+          
+          if (!alertsResponse.ok) {
+            console.warn('Alert calculation returned non-OK status:', alertsResponse.status);
+          } else {
+            console.log('Alerts recalculated successfully');
+          }
+        } catch (alertErr) {
+          console.error('Error triggering alert calculation:', alertErr);
+        }
       }
     }
 
