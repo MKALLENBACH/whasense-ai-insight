@@ -1672,7 +1672,13 @@ export type Database = {
     }
     Enums: {
       app_role: "seller" | "manager" | "admin"
-      lead_status: "pending" | "in_progress" | "won" | "lost" | "closed"
+      lead_status:
+        | "pending"
+        | "in_progress"
+        | "won"
+        | "lost"
+        | "closed"
+        | "relocated"
       lead_temperature: "hot" | "warm" | "cold"
       message_direction: "incoming" | "outgoing"
       sale_status: "won" | "lost"
@@ -1809,7 +1815,14 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["seller", "manager", "admin"],
-      lead_status: ["pending", "in_progress", "won", "lost", "closed"],
+      lead_status: [
+        "pending",
+        "in_progress",
+        "won",
+        "lost",
+        "closed",
+        "relocated",
+      ],
       lead_temperature: ["hot", "warm", "cold"],
       message_direction: ["incoming", "outgoing"],
       sale_status: ["won", "lost"],
