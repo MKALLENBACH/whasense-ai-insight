@@ -8,10 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, MessageSquare, CheckCircle2, AlertCircle, XCircle, Eye, EyeOff, ExternalLink, RefreshCw, Shield, Building2, Users, Inbox } from "lucide-react";
+import { Loader2, MessageSquare, CheckCircle2, AlertCircle, XCircle, Eye, EyeOff, ExternalLink, RefreshCw, Shield, Building2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface CompanyWhatsAppSettings {
   id: string;
@@ -36,7 +34,6 @@ export default function CompanyWhatsAppSettingsPage() {
   const [testing, setTesting] = useState(false);
   const [settings, setSettings] = useState<CompanyWhatsAppSettings | null>(null);
   const [showToken, setShowToken] = useState(false);
-  const [distributionMode, setDistributionMode] = useState<string>('manual');
   
   const [formData, setFormData] = useState({
     phone_number_id: '',
@@ -58,7 +55,6 @@ export default function CompanyWhatsAppSettingsPage() {
       if (profile?.company_id) {
         setCompanyId(profile.company_id);
         await fetchSettings(profile.company_id);
-        await fetchOperationSettings(profile.company_id);
       }
       setLoading(false);
     };
@@ -87,22 +83,6 @@ export default function CompanyWhatsAppSettingsPage() {
       }
     } catch (error) {
       console.error('Error fetching settings:', error);
-    }
-  };
-
-  const fetchOperationSettings = async (compId: string) => {
-    try {
-      const { data } = await supabase
-        .from('manager_operation_settings')
-        .select('distribution_method')
-        .eq('company_id', compId)
-        .maybeSingle();
-      
-      if (data) {
-        setDistributionMode(data.distribution_method);
-      }
-    } catch (error) {
-      console.error('Error fetching operation settings:', error);
     }
   };
 
@@ -355,46 +335,6 @@ export default function CompanyWhatsAppSettingsPage() {
             </CardContent>
           </Card>
         )}
-
-        {/* Lead Distribution Mode */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Inbox className="h-5 w-5" />
-              Distribuição de Leads
-            </CardTitle>
-            <CardDescription>
-              Como os leads que chegam pelo WhatsApp serão distribuídos para os vendedores
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RadioGroup value={distributionMode} onValueChange={setDistributionMode} className="space-y-3">
-              <div className="flex items-start space-x-3 p-3 rounded-lg border">
-                <RadioGroupItem value="manual" id="manual" className="mt-1" />
-                <div className="space-y-1">
-                  <Label htmlFor="manual" className="font-medium flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Inbox Pai (Manual)
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Leads entram em uma lista de espera. Vendedores visualizam os leads disponíveis e clicam em "Puxar lead" para assumir o atendimento.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3 p-3 rounded-lg border opacity-50">
-                <RadioGroupItem value="round_robin" id="round_robin" disabled className="mt-1" />
-                <div className="space-y-1">
-                  <Label htmlFor="round_robin" className="font-medium text-muted-foreground">
-                    Round Robin (Em breve)
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Leads são automaticamente distribuídos entre os vendedores de forma equilibrada.
-                  </p>
-                </div>
-              </div>
-            </RadioGroup>
-          </CardContent>
-        </Card>
 
         {/* Configuration Form */}
         <Card>

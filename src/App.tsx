@@ -34,6 +34,7 @@ import AdminPlansPage from "./pages/admin/AdminPlansPage";
 import AdminMonitorPage from "./pages/admin/AdminMonitorPage";
 import AdminSystemHealthPage from "./pages/admin/AdminSystemHealthPage";
 import AdminPaymentsPage from "./pages/admin/AdminPaymentsPage";
+import AdminWebhookPage from "./pages/admin/AdminWebhookPage";
 
 // Manager pages
 import FinanceiroPage from "./pages/FinanceiroPage";
@@ -75,6 +76,7 @@ const App = () => (
             <Route path="/admin/monitor" element={<AdminMonitorPage />} />
             <Route path="/admin/system-health" element={<AdminSystemHealthPage />} />
             <Route path="/admin/payments" element={<AdminPaymentsPage />} />
+            <Route path="/admin/webhook" element={<AdminWebhookPage />} />
             
             {/* Seller routes */}
             <Route 
