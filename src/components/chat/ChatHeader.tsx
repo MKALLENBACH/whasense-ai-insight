@@ -7,6 +7,7 @@ import {
   XCircle, 
   CheckCircle2,
   AlertCircle,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import LeadTemperatureBadge from "@/components/LeadTemperatureBadge";
@@ -30,6 +31,7 @@ interface ChatHeaderProps {
   showTemperature?: boolean;
   // Actions
   isSeller?: boolean;
+  isManager?: boolean;
   isConversationCompleted?: boolean;
   isPostSaleCycle?: boolean;
   isSimulatingResponse?: boolean;
@@ -38,6 +40,10 @@ interface ChatHeaderProps {
   onRegisterLost?: () => void;
   onMarkPostSale?: () => void;
   onClosePostSale?: () => void;
+  // Manager actions
+  isLeadAssigned?: boolean;
+  onReturnToInbox?: () => void;
+  isReturningToInbox?: boolean;
 }
 
 const getInitials = (name: string) => {
@@ -64,6 +70,7 @@ const ChatHeader = ({
   temperature,
   showTemperature = false,
   isSeller = false,
+  isManager = false,
   isConversationCompleted = false,
   isPostSaleCycle = false,
   isSimulatingResponse = false,
@@ -72,6 +79,9 @@ const ChatHeader = ({
   onRegisterLost,
   onMarkPostSale,
   onClosePostSale,
+  isLeadAssigned = false,
+  onReturnToInbox,
+  isReturningToInbox = false,
 }: ChatHeaderProps) => {
   return (
     <div className="p-4 border-b border-border flex items-center gap-3">
@@ -210,6 +220,20 @@ const ChatHeader = ({
             </Button>
           )}
         </>
+      )}
+
+      {/* Manager: Return to Inbox Pai - Only for assigned leads */}
+      {isManager && isLeadAssigned && !isViewingHistory && onReturnToInbox && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onReturnToInbox}
+          disabled={isReturningToInbox}
+          className="gap-2 border-warning text-warning hover:bg-warning/10"
+        >
+          <Inbox className={cn("h-4 w-4", isReturningToInbox && "animate-spin")} />
+          Devolver ao Inbox
+        </Button>
       )}
     </div>
   );

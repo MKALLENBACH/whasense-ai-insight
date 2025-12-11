@@ -39,6 +39,7 @@ interface Customer {
   phone: string | null;
   email: string | null;
   seller_id: string | null;
+  assigned_to: string | null;
   lead_status: string;
   is_incomplete: boolean;
   company_id: string | null;
@@ -66,7 +67,7 @@ const ChatPage = () => {
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [isViewingHistory, setIsViewingHistory] = useState(false);
   const [imageInsights, setImageInsights] = useState<Array<{ imageUrl: string; data: any }>>([]);
-
+  const [isReturningToInbox, setIsReturningToInbox] = useState(false);
   // Sale cycles hook
   const {
     cycles,
@@ -560,6 +561,29 @@ const ChatPage = () => {
     setIsViewingHistory(false);
   };
 
+  // Manager: Return lead to Inbox Pai
+  const handleReturnToInbox = async () => {
+    if (!id || !isManager || !customer?.assigned_to) return;
+    
+    setIsReturningToInbox(true);
+    try {
+      const { error } = await supabase
+        .from("customers")
+        .update({ assigned_to: null })
+        .eq("id", id);
+      
+      if (error) throw error;
+      
+      toast.success("Lead devolvido ao Inbox Pai");
+      navigate("/inbox");
+    } catch (error) {
+      console.error("Error returning to inbox:", error);
+      toast.error("Erro ao devolver lead");
+    } finally {
+      setIsReturningToInbox(false);
+    }
+  };
+
   if (isLoading || isCyclesLoading) {
     return (
       <AppLayout>
@@ -593,6 +617,7 @@ const ChatPage = () => {
             temperature={aiAnalysis?.temperature as any}
             showTemperature={!isConversationCompleted && !isViewingHistory && !!aiAnalysis}
             isSeller={isSeller}
+            isManager={isManager}
             isConversationCompleted={isConversationCompleted}
             isPostSaleCycle={isPostSaleCycle}
             isSimulatingResponse={isSimulatingResponse}
@@ -627,6 +652,9 @@ const ChatPage = () => {
                 }
               }
             }}
+            isLeadAssigned={!!customer?.assigned_to}
+            onReturnToInbox={handleReturnToInbox}
+            isReturningToInbox={isReturningToInbox}
           />
 
           {/* Alerts Banner */}
