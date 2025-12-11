@@ -21,6 +21,7 @@ import { CycleDivider } from "@/components/conversation/CycleDivider";
 import ChatHeader from "@/components/chat/ChatHeader";
 import SellerAIInsightsPanel, { AIAnalysis } from "@/components/chat/SellerAIInsightsPanel";
 import CompletedCyclePanel from "@/components/chat/CompletedCyclePanel";
+import ReassignLeadModal from "@/components/chat/ReassignLeadModal";
 
 interface Message {
   id: string;
@@ -68,6 +69,7 @@ const ChatPage = () => {
   const [isViewingHistory, setIsViewingHistory] = useState(false);
   const [imageInsights, setImageInsights] = useState<Array<{ imageUrl: string; data: any }>>([]);
   const [isReturningToInbox, setIsReturningToInbox] = useState(false);
+  const [showReassignModal, setShowReassignModal] = useState(false);
   // Sale cycles hook
   const {
     cycles,
@@ -655,6 +657,7 @@ const ChatPage = () => {
             isLeadAssigned={!!customer?.assigned_to}
             onReturnToInbox={handleReturnToInbox}
             isReturningToInbox={isReturningToInbox}
+            onReassign={() => setShowReassignModal(true)}
           />
 
           {/* Alerts Banner */}
@@ -812,6 +815,21 @@ const ChatPage = () => {
           }}
           onSuccess={() => {
             fetchConversation();
+          }}
+        />
+      )}
+
+      {/* Reassign Lead Modal for managers */}
+      {customer && user?.companyId && (
+        <ReassignLeadModal
+          open={showReassignModal}
+          onOpenChange={setShowReassignModal}
+          customerId={customer.id}
+          currentAssignedTo={customer.assigned_to}
+          companyId={user.companyId}
+          onSuccess={() => {
+            fetchConversation();
+            toast.success("Lead realocado com sucesso");
           }}
         />
       )}

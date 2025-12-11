@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Inbox,
+  UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import LeadTemperatureBadge from "@/components/LeadTemperatureBadge";
@@ -44,6 +45,7 @@ interface ChatHeaderProps {
   isLeadAssigned?: boolean;
   onReturnToInbox?: () => void;
   isReturningToInbox?: boolean;
+  onReassign?: () => void;
 }
 
 const getInitials = (name: string) => {
@@ -82,6 +84,7 @@ const ChatHeader = ({
   isLeadAssigned = false,
   onReturnToInbox,
   isReturningToInbox = false,
+  onReassign,
 }: ChatHeaderProps) => {
   return (
     <div className="p-4 border-b border-border flex items-center gap-3">
@@ -222,18 +225,33 @@ const ChatHeader = ({
         </>
       )}
 
-      {/* Manager: Return to Inbox Pai - Only for assigned leads */}
-      {isManager && isLeadAssigned && !isViewingHistory && onReturnToInbox && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onReturnToInbox}
-          disabled={isReturningToInbox}
-          className="gap-2 border-warning text-warning hover:bg-warning/10"
-        >
-          <Inbox className={cn("h-4 w-4", isReturningToInbox && "animate-spin")} />
-          Devolver ao Inbox
-        </Button>
+      {/* Manager actions: Return to Inbox and Reassign - Only for assigned leads */}
+      {isManager && isLeadAssigned && !isViewingHistory && (
+        <div className="flex items-center gap-2">
+          {onReassign && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onReassign}
+              className="gap-2"
+            >
+              <UserCog className="h-4 w-4" />
+              Realocar
+            </Button>
+          )}
+          {onReturnToInbox && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onReturnToInbox}
+              disabled={isReturningToInbox}
+              className="gap-2 border-warning text-warning hover:bg-warning/10"
+            >
+              <Inbox className={cn("h-4 w-4", isReturningToInbox && "animate-spin")} />
+              Devolver ao Inbox
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );
