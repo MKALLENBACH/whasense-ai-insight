@@ -168,7 +168,7 @@ export function useManagerDashboard() {
               .from("sale_cycles")
               .select("*")
               .in("customer_id", customerIds)
-              .in("status", ["pending", "in_progress", "won", "lost"])
+              .in("status", ["pending", "in_progress", "won", "lost", "closed"])
               .order("created_at", { ascending: false })
               .limit(500)
           : Promise.resolve({ data: [] }),
