@@ -117,12 +117,12 @@ const InboxPaiPage = () => {
       const maxLeads = settings?.max_active_leads_per_seller || 0;
       
       if (maxLeads > 0) {
-        // Count current active leads for this seller
+        // Count current active leads for this seller using sale_cycles (RLS allows sellers to see their cycles)
         const { count: currentLeads } = await supabase
-          .from("customers")
+          .from("sale_cycles")
           .select("id", { count: "exact", head: true })
           .eq("seller_id", user.id)
-          .in("lead_status", ["pending", "in_progress"]);
+          .in("status", ["pending", "in_progress"]);
         
         setLeadLimitInfo({
           currentLeads: currentLeads || 0,
@@ -193,11 +193,12 @@ const InboxPaiPage = () => {
     const maxLeads = settings?.max_active_leads_per_seller || 0;
     
     if (maxLeads > 0) {
+      // Count current active leads using sale_cycles (RLS allows sellers to see their cycles)
       const { count: currentLeads } = await supabase
-        .from("customers")
+        .from("sale_cycles")
         .select("id", { count: "exact", head: true })
         .eq("seller_id", user.id)
-        .in("lead_status", ["pending", "in_progress"]);
+        .in("status", ["pending", "in_progress"]);
       
       setLeadLimitInfo({
         currentLeads: currentLeads || 0,
