@@ -1641,6 +1641,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_customer: { Args: { _customer_id: string }; Returns: boolean }
       close_sale_cycle: {
         Args: {
           _cycle_id: string
