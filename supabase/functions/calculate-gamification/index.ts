@@ -11,17 +11,32 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Authorization: Require internal cron secret for background jobs
+    // Authorization: Allow internal calls from other edge functions or cron with secret
     const cronSecret = Deno.env.get('INTERNAL_CRON_SECRET');
-    const { secret } = await req.json().catch(() => ({}));
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const authHeader = req.headers.get('Authorization');
     
-    if (cronSecret && secret !== cronSecret) {
+    let requestBody: { secret?: string; company_id?: string } = {};
+    try {
+      requestBody = await req.json();
+    } catch {
+      requestBody = {};
+    }
+    
+    // Check if request comes from service role (internal edge function call)
+    const isServiceRoleCall = authHeader?.includes(serviceRoleKey || '');
+    // Check if request has valid cron secret
+    const hasCronSecret = cronSecret && requestBody.secret === cronSecret;
+    
+    if (!isServiceRoleCall && !hasCronSecret) {
       console.warn('Unauthorized calculate-gamification attempt');
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    
+    console.log('Authorization passed - isServiceRole:', isServiceRoleCall, 'hasCronSecret:', hasCronSecret);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
