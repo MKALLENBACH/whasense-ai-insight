@@ -23,6 +23,10 @@ serve(async (req) => {
       );
     }
 
+    // Parse query params for seller filter (manager use)
+    const url = new URL(req.url);
+    const filterSellerId = url.searchParams.get('seller_id');
+
     const token = authHeader.replace('Bearer ', '');
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
@@ -36,7 +40,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Fetching conversations for user:', user.id);
+    console.log('Fetching conversations for user:', user.id, 'filterSellerId:', filterSellerId);
 
     // Get user role and company in parallel
     const [roleResult, profileResult] = await Promise.all([
@@ -62,17 +66,27 @@ serve(async (req) => {
       );
     }
 
-    // CORREÇÃO: Para vendedor, buscar apenas customers onde assigned_to = user.id
-    // Para gestor, buscar todos os customers da empresa com assigned_to != null
+    // Build query based on role
     let customersQuery = supabase
       .from('customers')
       .select('id, name, phone, email, lead_status, seller_id, assigned_to, is_incomplete, company_id, client_id')
       .eq('company_id', companyId)
-      .not('assigned_to', 'is', null) // CRÍTICO: Só mostra leads atribuídos
+      .not('assigned_to', 'is', null) // Only assigned leads
       .limit(500);
 
-    if (!isManager) {
-      // Vendedor vê apenas seus leads atribuídos
+    if (isManager) {
+      // Manager must filter by seller_id
+      if (filterSellerId) {
+        customersQuery = customersQuery.eq('assigned_to', filterSellerId);
+      } else {
+        // No seller selected, return empty
+        return new Response(
+          JSON.stringify({ conversations: [] }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else {
+      // Seller sees only their assigned leads
       customersQuery = customersQuery.eq('assigned_to', user.id);
     }
 

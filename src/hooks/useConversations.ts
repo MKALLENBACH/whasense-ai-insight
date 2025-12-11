@@ -5,9 +5,10 @@ import type { ConversationData, AlertData } from "@/components/conversation/Conv
 
 interface UseConversationsProps {
   accessToken: string | undefined;
+  sellerId?: string | null; // For manager filtering
 }
 
-export const useConversations = ({ accessToken }: UseConversationsProps) => {
+export const useConversations = ({ accessToken, sellerId }: UseConversationsProps) => {
   const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [alerts, setAlerts] = useState<AlertData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -20,20 +21,25 @@ export const useConversations = ({ accessToken }: UseConversationsProps) => {
     }
 
     try {
+      // Build URL with seller_id filter if provided
+      let url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/list-conversations`;
+      if (sellerId) {
+        url += `?seller_id=${sellerId}`;
+      }
+
       const [conversationsResponse, alertsResponse] = await Promise.all([
-        supabase.functions.invoke('list-conversations', {
+        fetch(url, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
           },
-        }),
+        }).then(res => res.json()),
         supabase
           .from('alerts')
           .select('id, customer_id, alert_type, severity, message')
       ]);
 
-      if (conversationsResponse.error) throw conversationsResponse.error;
-
-      setConversations(conversationsResponse.data?.conversations || []);
+      setConversations(conversationsResponse?.conversations || []);
       setAlerts(alertsResponse.data || []);
     } catch (error: any) {
       if (error?.message?.includes('401') || error?.message?.includes('token') || error?.message?.includes('auth')) {
@@ -46,7 +52,7 @@ export const useConversations = ({ accessToken }: UseConversationsProps) => {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [accessToken]);
+  }, [accessToken, sellerId]);
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -60,7 +66,7 @@ export const useConversations = ({ accessToken }: UseConversationsProps) => {
     } else {
       setIsLoading(false);
     }
-  }, [accessToken, fetchConversations]);
+  }, [accessToken, sellerId, fetchConversations]);
 
   // Realtime subscriptions with debounce
   useEffect(() => {
@@ -91,6 +97,12 @@ export const useConversations = ({ accessToken }: UseConversationsProps) => {
   // Filter helpers
   const getStatus = (c: ConversationData) => c.cycleStatus || c.leadStatus || 'pending';
   const getCycleType = (c: ConversationData) => c.cycleType || 'pre_sale';
+
+  // Active conversations (pending/in_progress for both pre_sale and post_sale)
+  const activeConversations = conversations.filter(c => {
+    const status = getStatus(c);
+    return status === 'pending' || status === 'in_progress';
+  });
 
   const pendingConversations = conversations.filter(c => {
     const status = getStatus(c);
@@ -127,6 +139,7 @@ export const useConversations = ({ accessToken }: UseConversationsProps) => {
     isRefreshing,
     handleRefresh,
     fetchConversations,
+    activeConversations,
     pendingConversations,
     completedConversations,
     postSaleConversations,
