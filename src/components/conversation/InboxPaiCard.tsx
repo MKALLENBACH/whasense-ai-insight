@@ -23,9 +23,10 @@ interface InboxPaiCardProps {
   lead: InboxPaiLead;
   onPullLead: (customerId: string) => Promise<void>;
   isPulling?: boolean;
+  canPull?: boolean;
 }
 
-const InboxPaiCard = ({ lead, onPullLead, isPulling }: InboxPaiCardProps) => {
+const InboxPaiCard = ({ lead, onPullLead, isPulling, canPull = true }: InboxPaiCardProps) => {
   const [isLoading, setIsLoading] = useState(false);
 
   const handlePull = async () => {
@@ -72,19 +73,21 @@ const InboxPaiCard = ({ lead, onPullLead, isPulling }: InboxPaiCardProps) => {
         </div>
       </div>
 
-      <Button
-        size="sm"
-        onClick={handlePull}
-        disabled={isLoading || isPulling}
-        className="ml-4 shrink-0"
-      >
-        {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-        ) : (
-          <UserPlus className="h-4 w-4 mr-2" />
-        )}
-        Puxar Lead
-      </Button>
+      {canPull && (
+        <Button
+          size="sm"
+          onClick={handlePull}
+          disabled={isLoading || isPulling}
+          className="ml-4 shrink-0"
+        >
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          ) : (
+            <UserPlus className="h-4 w-4 mr-2" />
+          )}
+          Puxar Lead
+        </Button>
+      )}
     </div>
   );
 };

@@ -53,12 +53,13 @@ interface Pagination {
 const ITEMS_PER_PAGE = 50;
 
 const InboxPaiPage = () => {
-  const { session, isManager } = useAuth();
+  const { session, isManager, user } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [inboxLeads, setInboxLeads] = useState<InboxPaiLead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPulling, setIsPulling] = useState<string | null>(null);
+  const [hasActiveSellers, setHasActiveSellers] = useState(false);
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
     limit: ITEMS_PER_PAGE,
@@ -66,6 +67,40 @@ const InboxPaiPage = () => {
     totalPages: 0,
     hasMore: false,
   });
+
+  // Check if company has active sellers
+  useEffect(() => {
+    const checkActiveSellers = async () => {
+      if (!user?.companyId) return;
+      
+      // First get seller user_ids
+      const { data: sellerRoles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "seller");
+      
+      if (!sellerRoles || sellerRoles.length === 0) {
+        setHasActiveSellers(false);
+        return;
+      }
+      
+      const sellerUserIds = sellerRoles.map(r => r.user_id);
+      
+      // Then count active sellers in company
+      const { count, error } = await supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", user.companyId)
+        .eq("is_active", true)
+        .in("user_id", sellerUserIds);
+      
+      if (!error) {
+        setHasActiveSellers((count ?? 0) > 0);
+      }
+    };
+    
+    checkActiveSellers();
+  }, [user?.companyId]);
 
   const fetchInboxPai = useCallback(async (page = 1) => {
     if (!session?.access_token) return;
@@ -270,6 +305,7 @@ const InboxPaiPage = () => {
                         lead={lead}
                         onPullLead={handlePullLead}
                         isPulling={isPulling !== null}
+                        canPull={hasActiveSellers}
                       />
                     ))}
                   </div>
