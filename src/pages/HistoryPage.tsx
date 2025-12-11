@@ -33,7 +33,8 @@ import {
   HelpCircle,
   Sparkles,
   ExternalLink,
-  AlertTriangle
+  AlertTriangle,
+  Inbox
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -56,6 +57,7 @@ interface ConversationHistory {
   lastMessage: string;
   lastMessageTime: string;
   messageCount: number;
+  isInInbox: boolean;
   insight: {
     sentiment: string;
     intention: string;
@@ -156,8 +158,18 @@ const HistoryPage = () => {
       c.clientName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const getStatusBadge = (sale: ConversationHistory['sale']) => {
-    if (!sale) {
+  const getStatusBadge = (conversation: ConversationHistory) => {
+    // If in Inbox Pai (not assigned), show Inbox status
+    if (conversation.isInInbox) {
+      return (
+        <Badge variant="outline" className="bg-muted text-muted-foreground border-muted-foreground/30">
+          <Inbox className="h-3 w-3 mr-1" />
+          Inbox
+        </Badge>
+      );
+    }
+    
+    if (!conversation.sale) {
       return (
         <Badge variant="secondary">
           <Clock className="h-3 w-3 mr-1" />
@@ -166,7 +178,7 @@ const HistoryPage = () => {
       );
     }
     
-    if (sale.status === "won") {
+    if (conversation.sale.status === "won") {
       return (
         <Badge variant="default" className="bg-success hover:bg-success/90">
           <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -281,8 +293,12 @@ const HistoryPage = () => {
                     return (
                       <TableRow 
                         key={conversation.id} 
-                        className="cursor-pointer hover:bg-muted/50"
+                        className={cn(
+                          "hover:bg-muted/50",
+                          conversation.isInInbox ? "cursor-default opacity-70" : "cursor-pointer"
+                        )}
                         onClick={() => {
+                          if (conversation.isInInbox) return; // Don't open modal for Inbox items
                           setSelectedCustomer({ id: conversation.customer.id, name: conversation.customer.name });
                           setCycleModalOpen(true);
                         }}
@@ -336,7 +352,7 @@ const HistoryPage = () => {
                             size="sm"
                           />
                         </TableCell>
-                        <TableCell>{getStatusBadge(conversation.sale)}</TableCell>
+                        <TableCell>{getStatusBadge(conversation)}</TableCell>
                         <TableCell>
                           <div className="max-w-[150px]">
                             <p className="text-sm truncate">{conversation.lastMessage}</p>
@@ -349,19 +365,23 @@ const HistoryPage = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedCustomer({ id: conversation.customer.id, name: conversation.customer.name });
-                              setCycleModalOpen(true);
-                            }}
-                            className="gap-1"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                            Ver Ciclos
-                          </Button>
+                          {conversation.isInInbox ? (
+                            <span className="text-xs text-muted-foreground">Aguardando atribuição</span>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCustomer({ id: conversation.customer.id, name: conversation.customer.name });
+                                setCycleModalOpen(true);
+                              }}
+                              className="gap-1"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                              Ver Ciclos
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     );

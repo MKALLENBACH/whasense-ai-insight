@@ -72,7 +72,7 @@ serve(async (req) => {
     // Get customers based on role
     let customersQuery = supabase
       .from('customers')
-      .select('id, name, phone, email, seller_id, lead_status, client_id')
+      .select('id, name, phone, email, seller_id, lead_status, client_id, assigned_to')
       .eq('company_id', userProfile.company_id)
       .order('updated_at', { ascending: false });
 
@@ -229,6 +229,7 @@ serve(async (req) => {
         lastMessage: latestMessage.content,
         lastMessageTime: latestMessage.timestamp,
         messageCount: customerMessages.length,
+        isInInbox: customer.assigned_to === null,
         insight: latestInsight ? {
           sentiment: latestInsight.sentiment,
           intention: latestInsight.intention,
