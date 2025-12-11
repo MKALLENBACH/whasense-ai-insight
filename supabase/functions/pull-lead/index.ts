@@ -127,12 +127,34 @@ serve(async (req) => {
 
     console.log('[PULL-LEAD] Lead assigned successfully:', updatedCustomer.name);
 
-    // Update sale cycles to use the new seller
-    await supabase
+    // Create a new cycle for the seller (previous cycles were closed with 'relocated' status when returned to inbox)
+    // Check if there's an active cycle first
+    const { data: existingActiveCycle } = await supabase
       .from('sale_cycles')
-      .update({ seller_id: user.id })
+      .select('id')
       .eq('customer_id', customer_id)
-      .in('status', ['pending', 'in_progress']);
+      .in('status', ['pending', 'in_progress'])
+      .maybeSingle();
+
+    if (!existingActiveCycle) {
+      // No active cycle exists, create a new one
+      await supabase
+        .from('sale_cycles')
+        .insert({
+          customer_id,
+          seller_id: user.id,
+          status: 'pending',
+          cycle_type: 'pre_sale'
+        });
+      console.log('[PULL-LEAD] New cycle created for seller');
+    } else {
+      // Update existing active cycle to use the new seller
+      await supabase
+        .from('sale_cycles')
+        .update({ seller_id: user.id })
+        .eq('id', existingActiveCycle.id);
+      console.log('[PULL-LEAD] Existing active cycle updated to new seller');
+    }
 
     // Trigger AI analysis for recent messages
     const { data: recentMessages } = await supabase

@@ -569,9 +569,33 @@ const ChatPage = () => {
     
     setIsReturningToInbox(true);
     try {
+      // 1. Close current active cycles with "relocated" status
+      const { data: activeCycles } = await supabase
+        .from("sale_cycles")
+        .select("id")
+        .eq("customer_id", id)
+        .in("status", ["pending", "in_progress"]);
+
+      if (activeCycles && activeCycles.length > 0) {
+        for (const cycle of activeCycles) {
+          await supabase
+            .from("sale_cycles")
+            .update({ 
+              status: "relocated" as any,
+              closed_at: new Date().toISOString()
+            })
+            .eq("id", cycle.id);
+        }
+      }
+
+      // 2. Update customer - remove assignment and reset status
       const { error } = await supabase
         .from("customers")
-        .update({ assigned_to: null })
+        .update({ 
+          assigned_to: null,
+          seller_id: null,
+          lead_status: "pending"
+        })
         .eq("id", id);
       
       if (error) throw error;

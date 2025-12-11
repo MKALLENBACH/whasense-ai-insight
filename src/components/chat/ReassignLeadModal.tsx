@@ -96,22 +96,46 @@ const ReassignLeadModal = ({
   const handleReassign = async (sellerId: string, sellerUserId: string) => {
     setIsReassigning(sellerId);
     try {
+      // 1. Close current active cycle with "relocated" status
+      const { data: activeCycles } = await supabase
+        .from("sale_cycles")
+        .select("id")
+        .eq("customer_id", customerId)
+        .in("status", ["pending", "in_progress"]);
+
+      if (activeCycles && activeCycles.length > 0) {
+        for (const cycle of activeCycles) {
+          await supabase
+            .from("sale_cycles")
+            .update({ 
+              status: "relocated" as any,
+              closed_at: new Date().toISOString()
+            })
+            .eq("id", cycle.id);
+        }
+      }
+
+      // 2. Update customer assignment
       const { error } = await supabase
         .from("customers")
         .update({ 
           assigned_to: sellerUserId,
-          seller_id: sellerUserId 
+          seller_id: sellerUserId,
+          lead_status: "pending"
         })
         .eq("id", customerId);
 
       if (error) throw error;
 
-      // Update sale_cycles as well
+      // 3. Create new cycle for the new seller
       await supabase
         .from("sale_cycles")
-        .update({ seller_id: sellerUserId })
-        .eq("customer_id", customerId)
-        .in("status", ["pending", "in_progress"]);
+        .insert({
+          customer_id: customerId,
+          seller_id: sellerUserId,
+          status: "pending",
+          cycle_type: "pre_sale"
+        });
 
       toast.success("Lead realocado com sucesso!");
       onOpenChange(false);
