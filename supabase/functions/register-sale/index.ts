@@ -19,13 +19,50 @@ serve(async (req) => {
       );
     }
 
+    // Validate JWT token from Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Missing or invalid authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    // Create a client with the user's token to validate authentication
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } }
+    });
+    
+    // Verify the user is authenticated
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Use service role client for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Use the authenticated user's ID as the seller_id (not from request body)
+    const sellerId = user.id;
+
     const body = await req.json();
-    const { seller_id, customer_id, status, reason, description } = body;
+    const { customer_id, status, reason, description } = body;
 
     // Validate required fields
-    if (!seller_id || !customer_id || !status) {
+    if (!customer_id || !status) {
       return new Response(
-        JSON.stringify({ error: 'seller_id, customer_id, and status are required' }),
+        JSON.stringify({ error: 'customer_id and status are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -46,28 +83,80 @@ serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    console.log('Registering sale:', { seller_id: sellerId, customer_id, status, reason });
 
-    console.log('Registering sale:', { seller_id, customer_id, status, reason });
-
-    // Get seller's company_id
+    // Get seller's company_id and verify seller exists
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('company_id')
-      .eq('user_id', seller_id)
+      .eq('user_id', sellerId)
       .maybeSingle();
 
     if (profileError) {
       console.error('Error fetching profile:', profileError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to verify seller profile' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    const companyId = profile?.company_id || null;
+    if (!profile) {
+      return new Response(
+        JSON.stringify({ error: 'Seller profile not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const companyId = profile.company_id;
     console.log('Seller company_id:', companyId);
 
-    // Note: We allow multiple sales per customer (rebuys are valid)
-    // The gamification points check prevents duplicate points for the same sale
+    // Verify the customer belongs to the same company as the seller
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .select('id, company_id, seller_id')
+      .eq('id', customer_id)
+      .maybeSingle();
+
+    if (customerError) {
+      console.error('Error fetching customer:', customerError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to verify customer' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!customer) {
+      return new Response(
+        JSON.stringify({ error: 'Customer not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify company match
+    if (customer.company_id !== companyId) {
+      console.error('Company mismatch: customer company', customer.company_id, 'seller company', companyId);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - customer belongs to different company' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify seller is assigned to this customer (or is manager)
+    const { data: userRole } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', sellerId)
+      .maybeSingle();
+
+    const isManager = userRole?.role === 'manager';
+    
+    if (!isManager && customer.seller_id !== sellerId) {
+      console.error('Seller not assigned to customer');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - you are not assigned to this customer' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Build the reason string
     let finalReason = null;
@@ -79,7 +168,7 @@ serve(async (req) => {
     const { data: sale, error: insertError } = await supabase
       .from('sales')
       .insert({
-        seller_id,
+        seller_id: sellerId,
         customer_id,
         status,
         reason: finalReason,
@@ -120,7 +209,7 @@ serve(async (req) => {
             .from('gamification_points')
             .insert({
               company_id: companyId,
-              vendor_id: seller_id,
+              vendor_id: sellerId,
               points: 10,
               reason: 'Venda concluída',
               sale_id: sale.id,
@@ -131,7 +220,6 @@ serve(async (req) => {
         }
 
         // Trigger full gamification recalculation (goals, leaderboards, badges)
-        // This will recalculate goal progress based on actual sales count
         console.log('Triggering calculate-gamification for full recalculation');
         await supabase.functions.invoke('calculate-gamification', {
           body: { company_id: companyId }
