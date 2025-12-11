@@ -50,7 +50,7 @@ interface Pagination {
   hasMore: boolean;
 }
 
-const ITEMS_PER_PAGE = 50;
+const ITEMS_PER_PAGE = 5;
 
 const InboxPaiPage = () => {
   const { session, isManager, user } = useAuth();
