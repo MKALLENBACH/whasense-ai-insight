@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,6 +16,8 @@ import {
   CheckCircle2,
   Search,
   Users,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NewLeadModal from "@/components/lead/NewLeadModal";
@@ -25,6 +27,9 @@ import ConversationCard, { ConversationData } from "@/components/conversation/Co
 import { useConversations } from "@/hooks/useConversations";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+
+const MANAGER_ITEMS_PER_PAGE = 4;
+const SELLER_ITEMS_PER_PAGE = 5;
 
 interface Seller {
   user_id: string;
@@ -40,6 +45,7 @@ const ConversationsPage = () => {
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [isLoadingSellers, setIsLoadingSellers] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   
   // Modal state for incomplete leads
   const [showLeadModal, setShowLeadModal] = useState(false);
@@ -52,6 +58,11 @@ const ConversationsPage = () => {
   // Modal state for reassigning lead (manager)
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [selectedReassignConv, setSelectedReassignConv] = useState<ConversationData | null>(null);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery, selectedSellerId]);
 
   // Fetch sellers for manager
   useEffect(() => {
@@ -112,7 +123,7 @@ const ConversationsPage = () => {
 
   // For manager: show only active conversations (no tabs)
   // For seller: show tabs as before
-  const currentConversations = isManager
+  const allFilteredConversations = isManager
     ? filterBySearch(activeConversations, searchQuery)
     : filterBySearch(
         activeTab === "pending" 
@@ -122,6 +133,20 @@ const ConversationsPage = () => {
             : postSaleConversations,
         searchQuery
       );
+
+  // Pagination
+  const itemsPerPage = isManager ? MANAGER_ITEMS_PER_PAGE : SELLER_ITEMS_PER_PAGE;
+  const totalPages = Math.ceil(allFilteredConversations.length / itemsPerPage);
+  const paginatedConversations = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return allFilteredConversations.slice(start, start + itemsPerPage);
+  }, [allFilteredConversations, currentPage, itemsPerPage]);
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
 
   const handleConversationClick = (conv: ConversationData) => {
     if (conv.isIncomplete) {
@@ -139,7 +164,7 @@ const ConversationsPage = () => {
 
   // Manager: Open reassign modal
   const handleReassign = (customerId: string) => {
-    const conv = currentConversations.find(c => c.customer.id === customerId);
+    const conv = allFilteredConversations.find(c => c.customer.id === customerId);
     if (conv) {
       setSelectedReassignConv(conv);
       setShowReassignModal(true);
@@ -309,9 +334,9 @@ const ConversationsPage = () => {
                 <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
                 <p className="text-muted-foreground">Carregando conversas...</p>
               </div>
-            ) : currentConversations.length > 0 ? (
+            ) : allFilteredConversations.length > 0 ? (
               <div>
-                {currentConversations.map((conv) => (
+                {paginatedConversations.map((conv) => (
                   <ConversationCard
                     key={conv.id}
                     conversation={conv}
@@ -323,6 +348,64 @@ const ConversationsPage = () => {
                     onReturnToInbox={isManager ? () => handleReturnToInbox(conv.customer.id) : undefined}
                   />
                 ))}
+                
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between p-4 border-t border-border">
+                    <div className="text-sm text-muted-foreground">
+                      Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, allFilteredConversations.length)} de {allFilteredConversations.length}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage <= 1}
+                      >
+                        <ChevronLeft className="h-4 w-4 mr-1" />
+                        Anterior
+                      </Button>
+                      
+                      {/* Page Numbers */}
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum: number;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={currentPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              className="w-9 px-0"
+                              onClick={() => handlePageChange(pageNum)}
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage >= totalPages}
+                      >
+                        Próxima
+                        <ChevronRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex-1 flex items-center justify-center p-8 h-64">
