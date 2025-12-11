@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Zap, Loader2, Mail, Lock, AlertCircle, Users, Sparkles } from "lucide-react";
+import { Zap, Loader2, Mail, Lock, AlertCircle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -207,16 +207,6 @@ const LoginPage = () => {
                 </Link>
               </div>
 
-              <div className="p-3 bg-muted/50 rounded-lg text-xs">
-                <p className="font-medium flex items-center gap-2 mb-2">
-                  <Users className="h-3 w-3" />
-                  Credenciais de teste:
-                </p>
-                <div className="space-y-1 text-muted-foreground">
-                  <p>📧 vendedor1@exercit.com / 123456</p>
-                  <p>📧 gestor@exercit.com / 123456</p>
-                </div>
-              </div>
             </div>
           </CardFooter>
         </Card>
