@@ -42,6 +42,7 @@ import AdminPaymentsPage from "./pages/admin/AdminPaymentsPage";
 // Manager pages
 import FinanceiroPage from "./pages/FinanceiroPage";
 import ManagerOperationSettingsPage from "./pages/ManagerOperationSettingsPage";
+import InboxPaiPage from "./pages/InboxPaiPage";
 
 // Trial pages
 import TrialPage from "./pages/TrialPage";
@@ -79,6 +80,14 @@ const App = () => (
             <Route path="/admin/payments" element={<AdminPaymentsPage />} />
             
             {/* Seller routes */}
+            <Route 
+              path="/inbox" 
+              element={
+                <ProtectedRoute>
+                  <InboxPaiPage />
+                </ProtectedRoute>
+              } 
+            />
             <Route 
               path="/conversas" 
               element={
