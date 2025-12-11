@@ -232,9 +232,12 @@ const ConversationCard = ({
             </div>
           )}
 
-          <p className="text-sm text-muted-foreground truncate mt-1">
-            {conv.lastMessage}
-          </p>
+          {/* Last message - hide for managers */}
+          {!isManager && (
+            <p className="text-sm text-muted-foreground truncate mt-1">
+              {conv.lastMessage}
+            </p>
+          )}
 
           {/* Alerts for pending */}
           {!isCompleted && convAlerts.length > 0 && (
