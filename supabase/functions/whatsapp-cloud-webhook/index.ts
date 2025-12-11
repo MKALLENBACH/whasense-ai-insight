@@ -22,14 +22,14 @@ serve(async (req) => {
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      // Find integration with this verification token
-      const { data: integration } = await supabase
-        .from('whatsapp_seller_integrations')
+      // Find company with this verification token
+      const { data: settings } = await supabase
+        .from('company_whatsapp_settings')
         .select('id')
         .eq('verification_token', token)
         .maybeSingle();
 
-      if (integration) {
+      if (settings) {
         console.log('[WHATSAPP-CLOUD-WEBHOOK] Verification successful');
         return new Response(challenge, { status: 200 });
       }
@@ -66,25 +66,25 @@ serve(async (req) => {
             continue;
           }
 
-          // Find the seller integration by phone_number_id
-          const { data: integration, error: integrationError } = await supabase
-            .from('whatsapp_seller_integrations')
-            .select('seller_id, company_id, id')
+          // Find company by phone_number_id in company_whatsapp_settings
+          const { data: companySettings, error: settingsError } = await supabase
+            .from('company_whatsapp_settings')
+            .select('company_id, id')
             .eq('phone_number_id', phoneNumberId)
             .maybeSingle();
 
-          if (integrationError || !integration) {
-            console.log('[WHATSAPP-CLOUD-WEBHOOK] No integration found for phone:', phoneNumberId);
+          if (settingsError || !companySettings) {
+            console.log('[WHATSAPP-CLOUD-WEBHOOK] No company settings found for phone:', phoneNumberId);
             continue;
           }
 
-          const companyId = integration.company_id;
+          const companyId = companySettings.company_id;
 
-          // Update last_webhook_at
+          // Update last_check
           await supabase
-            .from('whatsapp_seller_integrations')
-            .update({ last_webhook_at: new Date().toISOString() })
-            .eq('id', integration.id);
+            .from('company_whatsapp_settings')
+            .update({ last_check: new Date().toISOString() })
+            .eq('id', companySettings.id);
 
           // Process messages
           for (const message of value.messages || []) {
@@ -130,7 +130,7 @@ serve(async (req) => {
               content = `[${messageType}]`;
             }
 
-            // CORREÇÃO: Buscar cliente por telefone E company_id (não seller_id)
+            // Find existing customer by phone + company_id
             let customerId: string;
             let assignedSellerId: string | null = null;
             
@@ -151,8 +151,8 @@ serve(async (req) => {
                 .insert({
                   name: `Cliente ${contactPhone.slice(-4)}`,
                   phone: contactPhone,
-                  seller_id: null, // No seller assigned initially
-                  assigned_to: null, // Goes to Inbox Pai
+                  seller_id: null,
+                  assigned_to: null,
                   company_id: companyId,
                   is_incomplete: true,
                   lead_status: 'pending',
@@ -169,7 +169,6 @@ serve(async (req) => {
             }
 
             // Get or create active cycle
-            // CORREÇÃO: Ciclo só tem seller_id se lead estiver atribuído
             let cycleId: string;
             const { data: existingCycle } = await supabase
               .from('sale_cycles')
@@ -180,18 +179,36 @@ serve(async (req) => {
 
             if (existingCycle) {
               cycleId = existingCycle.id;
-              // Use the seller from existing cycle if exists
               if (!assignedSellerId && existingCycle.seller_id) {
                 assignedSellerId = existingCycle.seller_id;
               }
             } else {
-              // CORREÇÃO: Criar ciclo com seller_id correto (do assigned_to ou null)
+              // Create cycle - if no seller assigned, we need a placeholder seller_id
+              // Get any manager from the company as fallback
+              let fallbackSellerId = assignedSellerId;
+              
+              if (!fallbackSellerId) {
+                const { data: anyManager } = await supabase
+                  .from('profiles')
+                  .select('user_id')
+                  .eq('company_id', companyId)
+                  .limit(1)
+                  .maybeSingle();
+                
+                fallbackSellerId = anyManager?.user_id || null;
+              }
+
+              if (!fallbackSellerId) {
+                console.error('[WHATSAPP-CLOUD-WEBHOOK] No user found in company for cycle creation');
+                continue;
+              }
+
               const { data: newCycle, error: cycleError } = await supabase
                 .from('sale_cycles')
                 .insert({
                   customer_id: customerId,
-                  seller_id: assignedSellerId || integration.seller_id, // Usa assigned ou fallback para integração
-                  status: 'in_progress',
+                  seller_id: fallbackSellerId,
+                  status: 'pending',
                   start_message_timestamp: new Date(parseInt(timestamp) * 1000).toISOString(),
                 })
                 .select('id')
@@ -204,13 +221,29 @@ serve(async (req) => {
               cycleId = newCycle.id;
             }
 
-            // Save message
-            // CORREÇÃO: Mensagem usa seller da integração para tracking, mas não para atribuição
+            // Save message - need a seller_id for the messages table
+            let messageSellerId = assignedSellerId;
+            if (!messageSellerId) {
+              // Get any user from company as placeholder
+              const { data: anyUser } = await supabase
+                .from('profiles')
+                .select('user_id')
+                .eq('company_id', companyId)
+                .limit(1)
+                .maybeSingle();
+              messageSellerId = anyUser?.user_id;
+            }
+
+            if (!messageSellerId) {
+              console.error('[WHATSAPP-CLOUD-WEBHOOK] No user found for message seller_id');
+              continue;
+            }
+
             const { data: savedMessage, error: messageError } = await supabase
               .from('messages')
               .insert({
                 customer_id: customerId,
-                seller_id: assignedSellerId || integration.seller_id, // Usa assigned ou integração
+                seller_id: messageSellerId,
                 content,
                 direction: 'incoming',
                 timestamp: new Date(parseInt(timestamp) * 1000).toISOString(),
