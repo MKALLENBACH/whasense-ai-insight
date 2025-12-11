@@ -95,6 +95,25 @@ serve(async (req) => {
   }
 
   try {
+    // Authorization: Require admin secret key
+    const adminSecret = Deno.env.get('ADMIN_CREATION_SECRET');
+    if (!adminSecret) {
+      console.error('ADMIN_CREATION_SECRET not configured');
+      return new Response(JSON.stringify({ error: 'Server configuration error' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { secret } = await req.json();
+    if (secret !== adminSecret) {
+      console.warn('Unauthorized seed-demo-data attempt');
+      return new Response(JSON.stringify({ error: 'Unauthorized - invalid secret key' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -358,17 +377,14 @@ serve(async (req) => {
       success: true,
       results,
       customerCount,
-      credentials: {
-        gestor: { email: "gestor@exercit.com", password: DEMO_PASSWORD },
-        vendedor1: { email: "vendedor1@exercit.com", password: DEMO_PASSWORD },
-        vendedor2: { email: "vendedor2@exercit.com", password: DEMO_PASSWORD },
-      },
+      demoUsers: DEMO_USERS.map(u => ({ email: u.email, role: u.role })),
       instructions: [
         "1. Faça login como vendedor para ver as conversas",
         "2. Clique em 'Simular Cliente' para gerar respostas automáticas",
         "3. A IA analisará cada mensagem e sugerirá respostas",
         "4. Os clientes têm perfis variados (iniciante, técnico, quente, econômico...)",
-        "5. Teste registrar vendas ganhas ou perdidas para ver os ciclos"
+        "5. Teste registrar vendas ganhas ou perdidas para ver os ciclos",
+        "Nota: Use a senha padrão configurada no ambiente"
       ]
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
