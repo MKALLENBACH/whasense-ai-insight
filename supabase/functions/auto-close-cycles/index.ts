@@ -46,7 +46,8 @@ serve(async (req) => {
         allow_followups,
         company_settings (
           followups_enabled,
-          followup_delay_hours
+          followup_delay_hours,
+          auto_close_delay_hours
         )
       `)
       .eq("is_active", true);
@@ -60,14 +61,15 @@ serve(async (req) => {
 
     let totalClosed = 0;
     const closedCycles: string[] = [];
-    const AUTO_CLOSE_DELAY_HOURS = 24;
 
     for (const company of companies || []) {
       // Check if follow-ups are enabled for this company
       const settings = company.company_settings?.[0];
       const followupsEnabled = company.allow_followups && settings?.followups_enabled;
+      // Use company-specific auto-close delay, default to 24 hours
+      const autoCloseDelayHours = settings?.auto_close_delay_hours ?? 24;
 
-      console.log(`Processing company ${company.name} (${company.id}) - followups_enabled: ${followupsEnabled}`);
+      console.log(`Processing company ${company.name} (${company.id}) - followups_enabled: ${followupsEnabled}, auto_close_delay: ${autoCloseDelayHours}h`);
 
       // Fetch customers first then filter cycles
       const { data: customers, error: customersError } = await supabase
@@ -154,17 +156,17 @@ serve(async (req) => {
         if (followupsEnabled) {
           // Company has follow-up enabled:
           // Close if there are 2+ consecutive seller messages (follow-up was sent)
-          // AND 24 hours have passed since the last message
-          if (consecutiveSellerMessages >= 2 && hoursSinceLastMessage >= AUTO_CLOSE_DELAY_HOURS) {
-            console.log(`Cycle ${cycle.id}: Follow-up was sent ${consecutiveSellerMessages} seller messages ago, ${hoursSinceLastMessage.toFixed(1)}h since last message - will close`);
+          // AND auto_close_delay_hours have passed since the last message
+          if (consecutiveSellerMessages >= 2 && hoursSinceLastMessage >= autoCloseDelayHours) {
+            console.log(`Cycle ${cycle.id}: Follow-up was sent ${consecutiveSellerMessages} seller messages ago, ${hoursSinceLastMessage.toFixed(1)}h since last message (threshold: ${autoCloseDelayHours}h) - will close`);
             shouldClose = true;
           }
         } else {
           // Company does NOT have follow-up enabled:
           // Close if last message is from seller (customer didn't respond)
-          // AND 24 hours have passed since the last message
-          if (lastMessage.direction === "outgoing" && hoursSinceLastMessage >= AUTO_CLOSE_DELAY_HOURS) {
-            console.log(`Cycle ${cycle.id}: Customer didn't respond for ${hoursSinceLastMessage.toFixed(1)}h - will close`);
+          // AND auto_close_delay_hours have passed since the last message
+          if (lastMessage.direction === "outgoing" && hoursSinceLastMessage >= autoCloseDelayHours) {
+            console.log(`Cycle ${cycle.id}: Customer didn't respond for ${hoursSinceLastMessage.toFixed(1)}h (threshold: ${autoCloseDelayHours}h) - will close`);
             shouldClose = true;
           }
         }

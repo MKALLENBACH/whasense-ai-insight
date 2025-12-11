@@ -508,6 +508,7 @@ export type Database = {
       }
       company_settings: {
         Row: {
+          auto_close_delay_hours: number
           company_id: string
           created_at: string
           followup_delay_hours: number
@@ -516,6 +517,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_close_delay_hours?: number
           company_id: string
           created_at?: string
           followup_delay_hours?: number
@@ -524,6 +526,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_close_delay_hours?: number
           company_id?: string
           created_at?: string
           followup_delay_hours?: number
