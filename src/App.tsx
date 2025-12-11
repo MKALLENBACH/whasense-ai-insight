@@ -35,12 +35,14 @@ import AdminMonitorPage from "./pages/admin/AdminMonitorPage";
 import AdminSystemHealthPage from "./pages/admin/AdminSystemHealthPage";
 import AdminPaymentsPage from "./pages/admin/AdminPaymentsPage";
 import AdminWebhookPage from "./pages/admin/AdminWebhookPage";
+import AdminTutorialWhatsAppPage from "./pages/admin/AdminTutorialWhatsAppPage";
 
 // Manager pages
 import FinanceiroPage from "./pages/FinanceiroPage";
 import ManagerOperationSettingsPage from "./pages/ManagerOperationSettingsPage";
 import InboxPaiPage from "./pages/InboxPaiPage";
 import CompanyWhatsAppSettingsPage from "./pages/CompanyWhatsAppSettingsPage";
+import WhatsAppTutorialPage from "./pages/WhatsAppTutorialPage";
 
 // Trial pages
 import TrialPage from "./pages/TrialPage";
@@ -77,6 +79,7 @@ const App = () => (
             <Route path="/admin/system-health" element={<AdminSystemHealthPage />} />
             <Route path="/admin/payments" element={<AdminPaymentsPage />} />
             <Route path="/admin/webhook" element={<AdminWebhookPage />} />
+            <Route path="/admin/tutorial-whatsapp" element={<AdminTutorialWhatsAppPage />} />
             
             {/* Seller routes */}
             <Route 
@@ -152,6 +155,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="gestor">
                   <CompanyWhatsAppSettingsPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/gestor/whatsapp/tutorial" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <WhatsAppTutorialPage />
                 </ProtectedRoute>
               } 
             />

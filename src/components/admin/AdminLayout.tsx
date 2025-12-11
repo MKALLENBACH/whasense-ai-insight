@@ -17,6 +17,7 @@ import {
   Activity,
   HeartPulse,
   Webhook,
+  Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ const navItems = [
   { label: "Planos", href: "/admin/planos", icon: CreditCard },
   { label: "Pagamentos", href: "/admin/payments", icon: DollarSign },
   { label: "Webhook WhatsApp", href: "/admin/webhook", icon: Webhook },
+  { label: "Tutorial WhatsApp", href: "/admin/tutorial-whatsapp", icon: Video },
   { label: "AI Scripts", href: "/admin/ai", icon: Bot },
   { label: "Monitor", href: "/admin/monitor", icon: Activity },
   { label: "Saúde do Sistema", href: "/admin/system-health", icon: HeartPulse },
