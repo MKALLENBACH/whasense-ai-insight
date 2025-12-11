@@ -78,7 +78,6 @@ serve(async (req) => {
             continue;
           }
 
-          const sellerId = integration.seller_id;
           const companyId = integration.company_id;
 
           // Update last_webhook_at
@@ -97,7 +96,7 @@ serve(async (req) => {
             console.log('[WHATSAPP-CLOUD-WEBHOOK] Processing message:', { 
               from: contactPhone, 
               type: messageType, 
-              seller: sellerId 
+              company: companyId 
             });
 
             // Extract message content based on type
@@ -111,7 +110,6 @@ serve(async (req) => {
             } else if (messageType === 'image') {
               content = message.image?.caption || '[Imagem]';
               attachmentType = 'image';
-              // Would need to download media using media ID
             } else if (messageType === 'audio') {
               content = '[Áudio]';
               attachmentType = 'audio';
@@ -132,17 +130,20 @@ serve(async (req) => {
               content = `[${messageType}]`;
             }
 
-            // Find or create customer
+            // CORREÇÃO: Buscar cliente por telefone E company_id (não seller_id)
             let customerId: string;
+            let assignedSellerId: string | null = null;
+            
             const { data: existingCustomer } = await supabase
               .from('customers')
-              .select('id')
+              .select('id, assigned_to, seller_id')
               .eq('phone', contactPhone)
-              .eq('seller_id', sellerId)
+              .eq('company_id', companyId)
               .maybeSingle();
 
             if (existingCustomer) {
               customerId = existingCustomer.id;
+              assignedSellerId = existingCustomer.assigned_to || existingCustomer.seller_id;
             } else {
               // Create new customer WITHOUT seller assignment (goes to Inbox Pai)
               const { data: newCustomer, error: customerError } = await supabase
@@ -154,6 +155,7 @@ serve(async (req) => {
                   assigned_to: null, // Goes to Inbox Pai
                   company_id: companyId,
                   is_incomplete: true,
+                  lead_status: 'pending',
                 })
                 .select('id')
                 .single();
@@ -163,25 +165,32 @@ serve(async (req) => {
                 continue;
               }
               customerId = newCustomer.id;
+              assignedSellerId = null;
             }
 
             // Get or create active cycle
+            // CORREÇÃO: Ciclo só tem seller_id se lead estiver atribuído
             let cycleId: string;
             const { data: existingCycle } = await supabase
               .from('sale_cycles')
-              .select('id')
+              .select('id, seller_id')
               .eq('customer_id', customerId)
               .in('status', ['pending', 'in_progress'])
               .maybeSingle();
 
             if (existingCycle) {
               cycleId = existingCycle.id;
+              // Use the seller from existing cycle if exists
+              if (!assignedSellerId && existingCycle.seller_id) {
+                assignedSellerId = existingCycle.seller_id;
+              }
             } else {
+              // CORREÇÃO: Criar ciclo com seller_id correto (do assigned_to ou null)
               const { data: newCycle, error: cycleError } = await supabase
                 .from('sale_cycles')
                 .insert({
                   customer_id: customerId,
-                  seller_id: sellerId,
+                  seller_id: assignedSellerId || integration.seller_id, // Usa assigned ou fallback para integração
                   status: 'in_progress',
                   start_message_timestamp: new Date(parseInt(timestamp) * 1000).toISOString(),
                 })
@@ -196,11 +205,12 @@ serve(async (req) => {
             }
 
             // Save message
+            // CORREÇÃO: Mensagem usa seller da integração para tracking, mas não para atribuição
             const { data: savedMessage, error: messageError } = await supabase
               .from('messages')
               .insert({
                 customer_id: customerId,
-                seller_id: sellerId,
+                seller_id: assignedSellerId || integration.seller_id, // Usa assigned ou integração
                 content,
                 direction: 'incoming',
                 timestamp: new Date(parseInt(timestamp) * 1000).toISOString(),
@@ -229,6 +239,7 @@ serve(async (req) => {
             // Only trigger AI analysis if lead is assigned to a seller
             if (customerCheck?.assigned_to) {
               try {
+                console.log('[WHATSAPP-CLOUD-WEBHOOK] Triggering AI for assigned lead');
                 await fetch(`${supabaseUrl}/functions/v1/analyze-message`, {
                   method: 'POST',
                   headers: {
@@ -251,7 +262,6 @@ serve(async (req) => {
           // Process status updates (delivery, read receipts)
           for (const status of value.statuses || []) {
             console.log('[WHATSAPP-CLOUD-WEBHOOK] Status update:', status);
-            // Could update message delivery/read status here if needed
           }
         }
       }

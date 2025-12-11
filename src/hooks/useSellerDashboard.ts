@@ -129,13 +129,13 @@ export function useSellerDashboard() {
       const customerIds = [...new Set(messages.map((m) => m.customer_id))];
 
       // Segunda rodada de queries paralelas
+      // CORREÇÃO: Buscar customers onde assigned_to = sellerId
       const [customersResult, insightsResult] = await Promise.all([
-        customerIds.length > 0
-          ? supabase
-              .from("customers")
-              .select("id, name, lead_status")
-              .in("id", customerIds)
-          : Promise.resolve({ data: [] }),
+        supabase
+          .from("customers")
+          .select("id, name, lead_status, assigned_to")
+          .eq("assigned_to", sellerId) // CRÍTICO: Só leads atribuídos ao vendedor
+          .limit(500),
         messages.length > 0
           ? supabase
               .from("insights")
