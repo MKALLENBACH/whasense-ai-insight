@@ -41,6 +41,7 @@ import AdminPaymentsPage from "./pages/admin/AdminPaymentsPage";
 
 // Manager pages
 import FinanceiroPage from "./pages/FinanceiroPage";
+import ManagerOperationSettingsPage from "./pages/ManagerOperationSettingsPage";
 
 // Trial pages
 import TrialPage from "./pages/TrialPage";
@@ -81,7 +82,7 @@ const App = () => (
             <Route 
               path="/conversas" 
               element={
-                <ProtectedRoute requiredRole="vendedor">
+                <ProtectedRoute>
                   <ConversationsPage />
                 </ProtectedRoute>
               } 
@@ -206,6 +207,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="gestor" allowRestrictedAccess={true}>
                   <FinanceiroPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/gestor/configuracoes" 
+              element={
+                <ProtectedRoute requiredRole="gestor">
+                  <ManagerOperationSettingsPage />
                 </ProtectedRoute>
               } 
             />

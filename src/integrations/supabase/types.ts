@@ -603,6 +603,7 @@ export type Database = {
       }
       customers: {
         Row: {
+          assigned_to: string | null
           buyer_id: string | null
           client_id: string | null
           company_id: string | null
@@ -617,6 +618,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_to?: string | null
           buyer_id?: string | null
           client_id?: string | null
           company_id?: string | null
@@ -631,6 +633,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_to?: string | null
           buyer_id?: string | null
           client_id?: string | null
           company_id?: string | null
@@ -935,6 +938,62 @@ export type Database = {
             foreignKeyName: "leaderboard_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      manager_operation_settings: {
+        Row: {
+          ai_after_assignment_only: boolean
+          allow_free_pull: boolean
+          company_id: string
+          created_at: string
+          distribution_method: string
+          id: string
+          inbox_ordering: string
+          manager_can_move_leads: boolean
+          manager_can_reassign: boolean
+          max_active_leads_per_seller: number
+          notify_on_lead_loss: boolean
+          require_approval: boolean
+          updated_at: string
+        }
+        Insert: {
+          ai_after_assignment_only?: boolean
+          allow_free_pull?: boolean
+          company_id: string
+          created_at?: string
+          distribution_method?: string
+          id?: string
+          inbox_ordering?: string
+          manager_can_move_leads?: boolean
+          manager_can_reassign?: boolean
+          max_active_leads_per_seller?: number
+          notify_on_lead_loss?: boolean
+          require_approval?: boolean
+          updated_at?: string
+        }
+        Update: {
+          ai_after_assignment_only?: boolean
+          allow_free_pull?: boolean
+          company_id?: string
+          created_at?: string
+          distribution_method?: string
+          id?: string
+          inbox_ordering?: string
+          manager_can_move_leads?: boolean
+          manager_can_reassign?: boolean
+          max_active_leads_per_seller?: number
+          notify_on_lead_loss?: boolean
+          require_approval?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manager_operation_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
