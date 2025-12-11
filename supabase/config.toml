@@ -125,3 +125,6 @@ verify_jwt = false
 
 [functions.list-inbox-pai]
 verify_jwt = false
+
+[functions.update-admin-credentials]
+verify_jwt = false
