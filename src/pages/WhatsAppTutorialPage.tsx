@@ -156,16 +156,6 @@ export default function WhatsAppTutorialPage() {
           </CardContent>
         </Card>
 
-        {/* Trial Plan Notice */}
-        {isTrialPlan && (
-          <Alert className="border-primary/50 bg-primary/10">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <AlertDescription>
-              <strong>Se estiver em período de teste, não se preocupe:</strong> adicionaremos dias extras após a conclusão da configuração.
-            </AlertDescription>
-          </Alert>
-        )}
-
         {/* Action Buttons */}
         <div className="space-y-4">
           <Button
@@ -187,6 +177,16 @@ export default function WhatsAppTutorialPage() {
               <MessageCircle className="h-4 w-4 mr-2" />
               Falar com Suporte
             </Button>
+            
+            {/* Trial Plan Notice - highlighted sub-message */}
+            {isTrialPlan && (
+              <div className="mt-4 p-4 rounded-lg border-2 border-primary bg-primary/10">
+                <p className="text-sm font-medium text-primary flex items-center justify-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  Se estiver em período de teste, não se preocupe: adicionaremos dias extras após a conclusão da configuração.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
