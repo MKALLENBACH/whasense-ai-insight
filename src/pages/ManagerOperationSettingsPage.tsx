@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Loader2, Save, Settings, Users, SortAsc } from "lucide-react";
+import { Loader2, Save, Settings, Users, SortAsc, XCircle } from "lucide-react";
 
 interface OperationSettings {
   distribution_method: string;
@@ -20,6 +20,12 @@ interface OperationSettings {
   manager_can_move_leads: boolean;
   notify_on_lead_loss: boolean;
   inbox_ordering: string;
+}
+
+interface CompanySettings {
+  id?: string;
+  auto_close_delay_hours: number;
+  followups_enabled: boolean;
 }
 
 const defaultSettings: OperationSettings = {
@@ -38,6 +44,8 @@ const ManagerOperationSettingsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [settings, setSettings] = useState<OperationSettings>(defaultSettings);
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
+  const [autoCloseDelayHours, setAutoCloseDelayHours] = useState(24);
 
   useEffect(() => {
     fetchSettings();
@@ -47,6 +55,7 @@ const ManagerOperationSettingsPage = () => {
     if (!user?.companyId) return;
 
     try {
+      // Fetch operation settings
       const { data, error } = await supabase
         .from('manager_operation_settings')
         .select('*')
@@ -67,6 +76,36 @@ const ManagerOperationSettingsPage = () => {
           inbox_ordering: data.inbox_ordering,
         });
       }
+
+      // Fetch company settings for auto-close
+      const { data: compSettings, error: compSettingsError } = await supabase
+        .from('company_settings')
+        .select('id, auto_close_delay_hours, followups_enabled')
+        .eq('company_id', user.companyId)
+        .maybeSingle();
+
+      if (compSettingsError) throw compSettingsError;
+
+      if (compSettings) {
+        setCompanySettings(compSettings as CompanySettings);
+        setAutoCloseDelayHours(compSettings.auto_close_delay_hours ?? 24);
+      } else {
+        // Create default company settings if not exists
+        const { data: newSettings, error: createError } = await supabase
+          .from('company_settings')
+          .insert({
+            company_id: user.companyId,
+            followups_enabled: true,
+            followup_delay_hours: 24,
+            auto_close_delay_hours: 24,
+          })
+          .select('id, auto_close_delay_hours, followups_enabled')
+          .single();
+
+        if (createError) throw createError;
+        setCompanySettings(newSettings as CompanySettings);
+        setAutoCloseDelayHours(24);
+      }
     } catch (error) {
       console.error('Error fetching settings:', error);
       toast.error('Erro ao carregar configurações');
@@ -80,6 +119,7 @@ const ManagerOperationSettingsPage = () => {
 
     setIsSaving(true);
     try {
+      // Save operation settings
       const { error } = await supabase
         .from('manager_operation_settings')
         .upsert({
@@ -92,6 +132,18 @@ const ManagerOperationSettingsPage = () => {
         });
 
       if (error) throw error;
+
+      // Save auto-close settings
+      if (companySettings?.id) {
+        const hours = Math.max(1, autoCloseDelayHours);
+        const { error: compError } = await supabase
+          .from('company_settings')
+          .update({ auto_close_delay_hours: hours })
+          .eq('id', companySettings.id);
+
+        if (compError) throw compError;
+        setCompanySettings({ ...companySettings, auto_close_delay_hours: hours });
+      }
 
       toast.success('Configurações salvas com sucesso!');
     } catch (error) {
@@ -389,6 +441,55 @@ const ManagerOperationSettingsPage = () => {
                 </div>
               </div>
             </RadioGroup>
+          </CardContent>
+        </Card>
+
+        {/* Auto-Close Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5" />
+              Encerramento Automático de Ciclos
+            </CardTitle>
+            <CardDescription>
+              {companySettings?.followups_enabled 
+                ? "Após o follow-up ser enviado, encerra o ciclo automaticamente se o cliente não responder"
+                : "Encerra o ciclo automaticamente se o cliente não responder após a última mensagem do vendedor"
+              }
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-end gap-4">
+              <div className="space-y-2 flex-1 max-w-xs">
+                <Label htmlFor="auto-close-hours">
+                  {companySettings?.followups_enabled 
+                    ? "Horas após o follow-up sem resposta"
+                    : "Horas sem resposta do cliente"
+                  }
+                </Label>
+                <Input
+                  id="auto-close-hours"
+                  type="number"
+                  min={1}
+                  value={autoCloseDelayHours}
+                  onChange={(e) => setAutoCloseDelayHours(parseInt(e.target.value) || 24)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Mínimo: 1 hora • O ciclo será encerrado como "perdido" com motivo: falta de resposta
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground border-l-2 border-primary/30 pl-3">
+              {companySettings?.followups_enabled ? (
+                <>
+                  <strong>Follow-up ativo:</strong> O sistema aguardará o envio do follow-up automático e, após o tempo configurado sem resposta do cliente, encerrará o ciclo automaticamente.
+                </>
+              ) : (
+                <>
+                  <strong>Follow-up desativado:</strong> Após a última mensagem do vendedor ficar sem resposta pelo tempo configurado, o ciclo será encerrado automaticamente.
+                </>
+              )}
+            </p>
           </CardContent>
         </Card>
       </div>
