@@ -97,10 +97,27 @@ const ClientsListPage = () => {
       // Enrich with counts (filtered by seller for sellers)
       const enrichedClients = await Promise.all(
         (clientsData || []).map(async (client) => {
-          let buyersQuery = supabase
-            .from("buyers")
-            .select("id", { count: "exact", head: true })
-            .eq("client_id", client.id);
+          let buyersCount = 0;
+          
+          if (!isManager) {
+            // For sellers: count only buyers they have customers assigned to
+            const { data: customerBuyers } = await supabase
+              .from("customers")
+              .select("buyer_id")
+              .eq("client_id", client.id)
+              .eq("assigned_to", user.id)
+              .not("buyer_id", "is", null);
+            
+            const uniqueBuyerIds = [...new Set(customerBuyers?.map(c => c.buyer_id).filter(Boolean) || [])];
+            buyersCount = uniqueBuyerIds.length;
+          } else {
+            // Managers see all buyers
+            const { count } = await supabase
+              .from("buyers")
+              .select("id", { count: "exact", head: true })
+              .eq("client_id", client.id);
+            buyersCount = count || 0;
+          }
           
           let cyclesQuery = supabase
             .from("sale_cycles")
@@ -112,16 +129,13 @@ const ClientsListPage = () => {
             cyclesQuery = cyclesQuery.eq("seller_id", user.id);
           }
           
-          const [buyersResult, cyclesResult] = await Promise.all([
-            buyersQuery,
-            cyclesQuery,
-          ]);
+          const cyclesResult = await cyclesQuery;
 
           const wonCount = cyclesResult.data?.filter(c => c.status === "won").length || 0;
 
           return {
             ...client,
-            buyers_count: buyersResult.count || 0,
+            buyers_count: buyersCount,
             cycles_count: cyclesResult.count || 0,
             won_count: wonCount,
           };
