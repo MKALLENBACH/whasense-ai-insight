@@ -17,7 +17,18 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { date, companyId } = await req.json().catch(() => ({}));
+    // Authorization: Require internal cron secret for background jobs
+    const cronSecret = Deno.env.get('INTERNAL_CRON_SECRET');
+    const body = await req.json().catch(() => ({}));
+    const { date, companyId, secret } = body;
+    
+    if (cronSecret && secret !== cronSecret) {
+      console.warn('Unauthorized aggregate-analytics attempt');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     
     // Default to today if no date provided
     const targetDate = date ? new Date(date) : new Date();

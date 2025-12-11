@@ -19,6 +19,18 @@ serve(async (req) => {
   }
 
   try {
+    // Authorization: Require internal cron secret for background jobs
+    const cronSecret = Deno.env.get('INTERNAL_CRON_SECRET');
+    const { secret } = await req.json().catch(() => ({}));
+    
+    if (cronSecret && secret !== cronSecret) {
+      console.warn('Unauthorized expire-free-trials attempt');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     logStep("Starting free trial expiration check");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
