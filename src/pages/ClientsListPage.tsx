@@ -62,29 +62,12 @@ const ClientsListPage = () => {
       let clientIds: string[] = [];
       
       if (!isManager) {
-        // For sellers: get only clients they've had contact with
-        // First get customer IDs where seller has messages
-        const { data: messagesData, error: messagesError } = await supabase
-          .from("messages")
-          .select("customer_id")
-          .eq("seller_id", user.id);
-        
-        if (messagesError) throw messagesError;
-        
-        const customerIds = [...new Set(messagesData?.map(m => m.customer_id) || [])];
-        
-        if (customerIds.length === 0) {
-          setClients([]);
-          setIsLoading(false);
-          return;
-        }
-        
-        // Get client IDs from those customers
+        // For sellers: get clients from customers they own or are assigned to
         const { data: customersData, error: customersError } = await supabase
           .from("customers")
           .select("client_id")
-          .in("id", customerIds)
-          .not("client_id", "is", null);
+          .not("client_id", "is", null)
+          .or(`seller_id.eq.${user.id},assigned_to.eq.${user.id}`);
         
         if (customersError) throw customersError;
         
