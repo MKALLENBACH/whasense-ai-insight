@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import AppLayout from "@/components/layout/AppLayout";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, MessageSquare, CheckCircle2, AlertCircle, XCircle, Eye, EyeOff, ExternalLink, RefreshCw, Shield, Building2 } from "lucide-react";
+import { Loader2, MessageSquare, CheckCircle2, AlertCircle, XCircle, Eye, EyeOff, ExternalLink, RefreshCw, Shield, Building2, PlayCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface CompanyWhatsAppSettings {
@@ -27,6 +28,7 @@ interface CompanyWhatsAppSettings {
 }
 
 export default function CompanyWhatsAppSettingsPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -280,6 +282,24 @@ export default function CompanyWhatsAppSettingsPage() {
             Configure o número oficial do WhatsApp Business da sua empresa
           </p>
         </div>
+
+        {/* Tutorial Button */}
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <PlayCircle className="h-8 w-8 text-primary" />
+                <div>
+                  <h3 className="font-semibold">Precisa de ajuda?</h3>
+                  <p className="text-sm text-muted-foreground">Assista ao tutorial de configuração</p>
+                </div>
+              </div>
+              <Button onClick={() => navigate("/gestor/whatsapp/tutorial")} variant="outline">
+                Como conectar o WhatsApp da empresa
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Security Notice */}
         <Alert>
