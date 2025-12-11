@@ -107,14 +107,6 @@ const InboxPaiPage = () => {
     
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('list-inbox-pai', {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: null,
-      });
-
-      // Add query params via URL
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/list-inbox-pai?page=${page}&limit=${ITEMS_PER_PAGE}`,
         {
