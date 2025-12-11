@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/supabaseApi";
 import { useAuth } from "@/contexts/AuthContext";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -115,7 +116,7 @@ const AdminMonitorPage = () => {
   const triggerQueueProcessor = async () => {
     try {
       setIsRefreshing(true);
-      const { error } = await supabase.functions.invoke("queue-processor", {
+      const { error } = await invokeFunction("queue-processor", {
         body: { batchSize: 50 },
       });
       if (error) throw error;
@@ -131,7 +132,7 @@ const AdminMonitorPage = () => {
   const triggerAggregation = async () => {
     try {
       setIsRefreshing(true);
-      const { error } = await supabase.functions.invoke("aggregate-analytics", {
+      const { error } = await invokeFunction("aggregate-analytics", {
         body: {},
       });
       if (error) throw error;

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/supabaseApi";
 import {
   Dialog,
   DialogContent,
@@ -108,16 +109,18 @@ const SaleRegistrationModal = ({
   const fetchLossReasonSuggestion = async () => {
     setIsLoadingSuggestion(true);
     try {
-      const { data, error } = await supabase.functions.invoke("loss-reason", {
+      const { data, error } = await invokeFunction<{ suggested_reason: string; explanation: string }>("loss-reason", {
         body: { customer_id: customerId, seller_id: sellerId },
       });
 
       if (error) throw error;
 
-      setAiSuggestion(data);
-      // Auto-select the suggested reason
-      if (data?.suggested_reason) {
-        setSelectedReason(data.suggested_reason);
+      if (data) {
+        setAiSuggestion(data);
+        // Auto-select the suggested reason
+        if (data.suggested_reason) {
+          setSelectedReason(data.suggested_reason);
+        }
       }
     } catch (error) {
       console.error("Error fetching loss reason suggestion:", error);
@@ -149,7 +152,7 @@ const SaleRegistrationModal = ({
         toast.success("Status atualizado com sucesso!");
       } else {
         // Create new sale
-        const { data, error } = await supabase.functions.invoke("register-sale", {
+        const { data, error } = await invokeFunction<{ error?: string }>("register-sale", {
           body: {
             seller_id: sellerId,
             customer_id: customerId,

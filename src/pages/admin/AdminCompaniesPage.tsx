@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/supabaseApi";
 import AdminLayout from "@/components/admin/AdminLayout";
 import EditCompanyModal from "@/components/admin/EditCompanyModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -155,7 +156,7 @@ const AdminCompaniesPage = () => {
 
     try {
       // Use edge function for admin operations (bypasses RLS)
-      const { data, error } = await supabase.functions.invoke("admin-operations", {
+      const { data, error } = await invokeFunction<{ error?: string }>("admin-operations", {
         body: {
           action: "create_company_with_manager",
           companyName,

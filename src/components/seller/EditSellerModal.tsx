@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/supabaseApi";
 import {
   Dialog,
   DialogContent,
@@ -81,7 +82,7 @@ const EditSellerModal = ({ open, onOpenChange, seller, onSuccess }: EditSellerMo
 
       // If email changed, update auth user email via edge function
       if (email !== seller.email) {
-        const { data, error: updateError } = await supabase.functions.invoke("update-seller-email", {
+        const { data, error: updateError } = await invokeFunction<{ error?: string }>("update-seller-email", {
           body: { userId: seller.user_id, newEmail: email },
         });
 
@@ -104,7 +105,7 @@ const EditSellerModal = ({ open, onOpenChange, seller, onSuccess }: EditSellerMo
   const handleResendEmail = async () => {
     setIsResending(true);
     try {
-      const { data, error } = await supabase.functions.invoke("resend-seller-welcome", {
+      const { data, error } = await invokeFunction<{ error?: string }>("resend-seller-welcome", {
         body: { userId: seller.user_id },
       });
 

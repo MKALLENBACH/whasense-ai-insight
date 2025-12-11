@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchWithAuth } from '@/lib/supabaseApi';
 
 interface SimulationOptions {
   customerId: string;
@@ -30,17 +31,10 @@ export function useCustomerSimulation(options: SimulationOptions) {
     try {
       setIsSimulating(true);
       
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return null;
-
-      const response = await fetch(
+      const { data, error } = await fetchWithAuth<{ success: boolean; message: string; messageId: string }>(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/simulate-customer`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
           body: JSON.stringify({
             customerId,
             sellerId,
@@ -50,9 +44,9 @@ export function useCustomerSimulation(options: SimulationOptions) {
         }
       );
 
-      const data = await response.json();
+      if (error) throw error;
       
-      if (data.success) {
+      if (data?.success) {
         return {
           message: data.message,
           messageId: data.messageId,

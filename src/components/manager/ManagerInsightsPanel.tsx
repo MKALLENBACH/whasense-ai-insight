@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/supabaseApi";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -97,7 +97,7 @@ const ManagerInsightsPanel = ({ customerId, cycleId }: ManagerInsightsPanelProps
         body.customerId = customerId;
       }
 
-      const { data, error: fnError } = await supabase.functions.invoke("manager-insights", {
+      const { data, error: fnError } = await invokeFunction<ManagerInsights>("manager-insights", {
         body,
       });
 

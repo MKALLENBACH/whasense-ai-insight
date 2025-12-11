@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/supabaseApi";
 import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -284,7 +285,7 @@ const SellerPerformancePage = () => {
     setIsLoadingAI(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("seller-performance-insights", {
+      const { data, error } = await invokeFunction<AIInsights>("seller-performance-insights", {
         body: { vendor_id: user.id, company_id: user.companyId },
       });
 

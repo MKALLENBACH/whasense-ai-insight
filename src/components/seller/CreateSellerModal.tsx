@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/supabaseApi";
 import {
   Dialog,
   DialogContent,
@@ -59,7 +60,7 @@ const CreateSellerModal = ({ open, onOpenChange, onSuccess }: CreateSellerModalP
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("create-seller", {
+      const { data, error } = await invokeFunction<{ error?: string }>("create-seller", {
         body: { name, email },
       });
 

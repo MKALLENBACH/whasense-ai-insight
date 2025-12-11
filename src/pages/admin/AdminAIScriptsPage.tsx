@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/supabaseApi";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -111,7 +112,7 @@ const AdminAIScriptsPage = () => {
 
   const fetchDefaultScript = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke("ai-scripts/default");
+      const { data, error } = await invokeFunction<{ script: any }>("ai-scripts/default");
       if (error) throw error;
       setDefaultScript(data.script);
     } catch (error) {
@@ -121,7 +122,7 @@ const AdminAIScriptsPage = () => {
 
   const fetchScriptsForCompany = async (companyId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke("ai-scripts/by-company", {
+      const { data, error } = await invokeFunction<{ scripts: any[]; error?: string }>("ai-scripts/by-company", {
         body: { companyId },
       });
       

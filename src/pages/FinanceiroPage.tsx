@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/supabaseApi";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -163,7 +164,7 @@ export default function FinanceiroPage() {
   const checkSubscriptionStatus = async () => {
     setCheckingStatus(true);
     try {
-      const { data, error } = await supabase.functions.invoke("check-subscription");
+      const { data, error } = await invokeFunction("check-subscription");
       if (error) throw error;
       
       toast.success("Status atualizado");
@@ -177,7 +178,7 @@ export default function FinanceiroPage() {
 
   const openCustomerPortal = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke("customer-portal", {
+      const { data, error } = await invokeFunction<{ url: string }>("customer-portal", {
         body: { returnUrl: window.location.href }
       });
       
@@ -201,7 +202,7 @@ export default function FinanceiroPage() {
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
+      const { data, error } = await invokeFunction<{ url: string }>("create-checkout", {
         body: {
           priceId,
           planId: plan.id,
