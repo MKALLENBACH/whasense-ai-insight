@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LeadDistributionDashboard } from "@/components/dashboard/LeadDistributionDashboard";
 import InboxPaiCard from "@/components/conversation/InboxPaiCard";
+import { fetchWithAuth, invokeFunction } from "@/lib/supabaseApi";
 
 interface InboxPaiLead {
   id: string;
@@ -144,26 +145,14 @@ const InboxPaiPage = () => {
   }, [user?.companyId, user?.id, isManager]);
 
   const fetchInboxPai = useCallback(async (page = 1) => {
-    if (!session?.access_token) return;
-    
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/list-inbox-pai?page=${page}&limit=${ITEMS_PER_PAGE}`,
-        {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        }
+      const { data: result, error } = await fetchWithAuth<{ leads: InboxPaiLead[]; pagination: Pagination }>(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/list-inbox-pai?page=${page}&limit=${ITEMS_PER_PAGE}`
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch');
-      }
+      if (error) throw error;
 
-      const result = await response.json();
       setInboxLeads(result?.leads || []);
       setPagination(result?.pagination || {
         page: 1,
@@ -178,7 +167,7 @@ const InboxPaiPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [session?.access_token]);
+  }, []);
 
   // Refresh lead limit info
   const refreshLeadLimitInfo = useCallback(async () => {
@@ -248,14 +237,9 @@ const InboxPaiPage = () => {
   }, [fetchInboxPai, pagination.page, refreshLeadLimitInfo]);
 
   const handlePullLead = async (customerId: string) => {
-    if (!session?.access_token) return;
-    
     setIsPulling(customerId);
     try {
-      const { data, error } = await supabase.functions.invoke('pull-lead', {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+      const { data, error } = await invokeFunction('pull-lead', {
         body: { customer_id: customerId },
       });
 
