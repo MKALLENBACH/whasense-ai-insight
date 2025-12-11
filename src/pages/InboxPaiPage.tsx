@@ -71,6 +71,42 @@ const InboxPaiPage = () => {
     fetchInboxPai();
   }, [fetchInboxPai]);
 
+  // Realtime subscription for new leads and assignments
+  useEffect(() => {
+    const channel = supabase
+      .channel('inbox-pai-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'customers',
+        },
+        (payload) => {
+          // Refresh when:
+          // - New customer created (INSERT)
+          // - Customer assigned_to changed (UPDATE)
+          if (payload.eventType === 'INSERT') {
+            // New lead arrived
+            fetchInboxPai();
+          } else if (payload.eventType === 'UPDATE') {
+            const newRecord = payload.new as { assigned_to: string | null };
+            const oldRecord = payload.old as { assigned_to: string | null };
+            
+            // assigned_to changed - either pulled or returned to inbox
+            if (newRecord.assigned_to !== oldRecord.assigned_to) {
+              fetchInboxPai();
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchInboxPai]);
+
   const handlePullLead = async (customerId: string) => {
     if (!session?.access_token) return;
     
