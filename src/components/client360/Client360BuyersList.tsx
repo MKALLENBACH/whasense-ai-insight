@@ -36,6 +36,7 @@ interface Buyer {
 }
 
 interface BuyerWithStats extends Buyer {
+  customerId?: string;
   currentCycleStatus?: string;
   lastMessage?: string;
   lastMessageTime?: string;
@@ -86,6 +87,7 @@ const Client360BuyersList = ({ buyers, clientId, onRefresh }: Client360BuyersLis
           let cycleData = null;
           let messageData = null;
           let temperature: "hot" | "warm" | "cold" | undefined = undefined;
+          let customerId: string | undefined = customerData?.id;
 
           if (customerData) {
             // Get current cycle via customer_id
@@ -122,6 +124,7 @@ const Client360BuyersList = ({ buyers, clientId, onRefresh }: Client360BuyersLis
 
           return {
             ...buyer,
+            customerId,
             currentCycleStatus: cycleData?.status,
             lastMessage: messageData?.content ? 
               messageData.content.substring(0, 50) + (messageData.content.length > 50 ? "..." : "") : 
@@ -256,7 +259,8 @@ const Client360BuyersList = ({ buyers, clientId, onRefresh }: Client360BuyersLis
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {/* Navigate to buyer chat */}}
+                      disabled={!buyer.customerId}
+                      onClick={() => buyer.customerId && navigate(`/chat/${buyer.customerId}`)}
                     >
                       <MessageSquare className="h-4 w-4" />
                     </Button>
