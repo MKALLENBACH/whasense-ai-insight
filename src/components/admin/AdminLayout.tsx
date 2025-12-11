@@ -16,6 +16,7 @@ import {
   CreditCard,
   Activity,
   HeartPulse,
+  Webhook,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ const navItems = [
   { label: "Gestores", href: "/admin/gestores", icon: UserCog },
   { label: "Planos", href: "/admin/planos", icon: CreditCard },
   { label: "Pagamentos", href: "/admin/payments", icon: DollarSign },
+  { label: "Webhook WhatsApp", href: "/admin/webhook", icon: Webhook },
   { label: "AI Scripts", href: "/admin/ai", icon: Bot },
   { label: "Monitor", href: "/admin/monitor", icon: Activity },
   { label: "Saúde do Sistema", href: "/admin/system-health", icon: HeartPulse },
