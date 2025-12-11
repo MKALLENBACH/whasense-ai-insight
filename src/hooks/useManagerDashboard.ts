@@ -28,6 +28,13 @@ export interface PostSaleMetrics {
   satisfactionTrend: "positive" | "neutral" | "negative";
 }
 
+export interface AutoCloseMetrics {
+  total: number;
+  last24h: number;
+  last7days: number;
+  last30days: number;
+}
+
 export interface LeadDistribution {
   bySeller: { name: string; pending: number; inProgress: number }[];
   byTemperature: { temperature: string; count: number }[];
@@ -108,6 +115,12 @@ export function useManagerDashboard() {
     avgResolutionTime: 0,
     topIssues: [],
     satisfactionTrend: "neutral",
+  });
+  const [autoCloseMetrics, setAutoCloseMetrics] = useState<AutoCloseMetrics>({
+    total: 0,
+    last24h: 0,
+    last7days: 0,
+    last30days: 0,
   });
 
   const fetchData = useCallback(async () => {
@@ -620,6 +633,33 @@ export function useManagerDashboard() {
         satisfactionTrend,
       });
 
+      // Auto-close metrics - ciclos encerrados automaticamente por falta de resposta
+      const autoCloseReason = "Ciclo encerrado automaticamente por falta de resposta do cliente";
+      const autoClosedCycles = cycles.filter(c => 
+        c.status === "lost" && c.lost_reason === autoCloseReason
+      );
+      
+      const now = new Date();
+      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const last7days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      const autoCloseLast24h = autoClosedCycles.filter(c => 
+        c.closed_at && new Date(c.closed_at) >= last24h
+      ).length;
+      const autoCloseLast7days = autoClosedCycles.filter(c => 
+        c.closed_at && new Date(c.closed_at) >= last7days
+      ).length;
+      const autoCloseLast30days = autoClosedCycles.filter(c => 
+        c.closed_at && new Date(c.closed_at) >= thirtyDaysAgo
+      ).length;
+
+      setAutoCloseMetrics({
+        total: autoClosedCycles.length,
+        last24h: autoCloseLast24h,
+        last7days: autoCloseLast7days,
+        last30days: autoCloseLast30days,
+      });
+
     } catch (error) {
       console.error("Error fetching manager dashboard:", error);
     } finally {
@@ -658,6 +698,7 @@ export function useManagerDashboard() {
     recentSales,
     followupMetrics,
     postSaleMetrics,
+    autoCloseMetrics,
     refresh: fetchData,
   };
 }

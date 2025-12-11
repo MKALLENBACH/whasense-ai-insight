@@ -10,6 +10,7 @@ import { SellerPerformanceChart } from "@/components/dashboard/SellerPerformance
 import { SalesTimelineChart } from "@/components/dashboard/SalesTimelineChart";
 import { RecentSalesTable } from "@/components/dashboard/RecentSalesTable";
 import { PostSaleMetrics } from "@/components/dashboard/PostSaleMetrics";
+import { AutoCloseMetrics } from "@/components/dashboard/AutoCloseMetrics";
 import SellerLimitExceededModal from "@/components/seller/SellerLimitExceededModal";
 import { Button } from "@/components/ui/button";
 import { Loader2, RefreshCw, Clock, Target, Flame, TrendingUp, TrendingDown, Users, CheckCircle2, XCircle, Bot, Send } from "lucide-react";
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const ManagerDashboardPage = () => {
-  const { isLoading, kpis, leadDistribution, riskCycles, objections, sellerPerformance, salesTimeline, recentSales, followupMetrics, postSaleMetrics, refresh } = useManagerDashboard();
+  const { isLoading, kpis, leadDistribution, riskCycles, objections, sellerPerformance, salesTimeline, recentSales, followupMetrics, postSaleMetrics, autoCloseMetrics, refresh } = useManagerDashboard();
   const { hasSellerLimitExceeded, sellerLimitInfo, companyPlan } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -101,6 +102,9 @@ const ManagerDashboardPage = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* Auto-Close Metrics */}
+        <AutoCloseMetrics data={autoCloseMetrics} />
 
         {/* Post-Sale Metrics */}
         <PostSaleMetrics data={postSaleMetrics} />
