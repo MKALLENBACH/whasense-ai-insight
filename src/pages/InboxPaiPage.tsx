@@ -16,6 +16,8 @@ import {
   Clock,
   Phone,
   MessageSquare,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,6 +25,7 @@ import { toast } from "sonner";
 import { LeadDistributionDashboard } from "@/components/dashboard/LeadDistributionDashboard";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import InboxPaiCard from "@/components/conversation/InboxPaiCard";
 
 interface InboxPaiLead {
   id: string;
@@ -30,13 +33,24 @@ interface InboxPaiLead {
     id: string;
     name: string;
     phone: string | null;
-    email: string | null;
+    email?: string | null;
   };
   lastMessage: string;
   lastMessageAt: string;
+  lastMessageTime: string;
   messageCount: number;
   waitingTime: string;
 }
+
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasMore: boolean;
+}
+
+const ITEMS_PER_PAGE = 50;
 
 const InboxPaiPage = () => {
   const { session, isManager } = useAuth();
@@ -45,8 +59,15 @@ const InboxPaiPage = () => {
   const [inboxLeads, setInboxLeads] = useState<InboxPaiLead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPulling, setIsPulling] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<Pagination>({
+    page: 1,
+    limit: ITEMS_PER_PAGE,
+    total: 0,
+    totalPages: 0,
+    hasMore: false,
+  });
 
-  const fetchInboxPai = useCallback(async () => {
+  const fetchInboxPai = useCallback(async (page = 1) => {
     if (!session?.access_token) return;
     
     setIsLoading(true);
@@ -55,10 +76,34 @@ const InboxPaiPage = () => {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
+        body: null,
       });
 
-      if (error) throw error;
-      setInboxLeads(data?.leads || []);
+      // Add query params via URL
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/list-inbox-pai?page=${page}&limit=${ITEMS_PER_PAGE}`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch');
+      }
+
+      const result = await response.json();
+      setInboxLeads(result?.leads || []);
+      setPagination(result?.pagination || {
+        page: 1,
+        limit: ITEMS_PER_PAGE,
+        total: 0,
+        totalPages: 0,
+        hasMore: false,
+      });
     } catch (error) {
       console.error('Error fetching inbox pai:', error);
       toast.error('Erro ao carregar Inbox Pai');
@@ -68,7 +113,7 @@ const InboxPaiPage = () => {
   }, [session?.access_token]);
 
   useEffect(() => {
-    fetchInboxPai();
+    fetchInboxPai(1);
   }, [fetchInboxPai]);
 
   // Realtime subscription for new leads and assignments
@@ -87,15 +132,15 @@ const InboxPaiPage = () => {
           // - New customer created (INSERT)
           // - Customer assigned_to changed (UPDATE)
           if (payload.eventType === 'INSERT') {
-            // New lead arrived
-            fetchInboxPai();
+            // New lead arrived - refresh current page
+            fetchInboxPai(pagination.page);
           } else if (payload.eventType === 'UPDATE') {
             const newRecord = payload.new as { assigned_to: string | null };
             const oldRecord = payload.old as { assigned_to: string | null };
             
             // assigned_to changed - either pulled or returned to inbox
             if (newRecord.assigned_to !== oldRecord.assigned_to) {
-              fetchInboxPai();
+              fetchInboxPai(pagination.page);
             }
           }
         }
@@ -105,7 +150,7 @@ const InboxPaiPage = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchInboxPai]);
+  }, [fetchInboxPai, pagination.page]);
 
   const handlePullLead = async (customerId: string) => {
     if (!session?.access_token) return;
@@ -128,9 +173,15 @@ const InboxPaiPage = () => {
     } catch (error: any) {
       console.error('Error pulling lead:', error);
       toast.error(error.message || 'Erro ao puxar lead');
-      fetchInboxPai(); // Refresh list on error
+      fetchInboxPai(pagination.page); // Refresh list on error
     } finally {
       setIsPulling(null);
+    }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      fetchInboxPai(newPage);
     }
   };
 
@@ -161,7 +212,7 @@ const InboxPaiPage = () => {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={fetchInboxPai} 
+            onClick={() => fetchInboxPai(pagination.page)} 
             disabled={isLoading}
           >
             <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
@@ -179,9 +230,16 @@ const InboxPaiPage = () => {
               <CardTitle className="text-base font-medium">
                 Leads Aguardando
                 <Badge variant="secondary" className="ml-2">
-                  {inboxLeads.length}
+                  {pagination.total}
                 </Badge>
               </CardTitle>
+              
+              {/* Pagination Info */}
+              {pagination.totalPages > 1 && (
+                <div className="text-sm text-muted-foreground">
+                  Página {pagination.page} de {pagination.totalPages}
+                </div>
+              )}
             </div>
             {/* Search */}
             <div className="relative mt-3">
@@ -200,65 +258,79 @@ const InboxPaiPage = () => {
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : filteredLeads.length > 0 ? (
-              <ScrollArea className="max-h-[600px]">
-                <div className="divide-y divide-border">
-                  {filteredLeads.map((lead) => (
-                    <div 
-                      key={lead.id}
-                      className="p-4 hover:bg-muted/30 transition-colors"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-medium truncate">{lead.customer.name}</h4>
-                            <Badge variant="outline" className="shrink-0 text-xs">
-                              {lead.messageCount} msg
-                            </Badge>
-                          </div>
-                          
-                          {lead.customer.phone && (
-                            <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
-                              <Phone className="h-3.5 w-3.5" />
-                              {lead.customer.phone}
-                            </div>
-                          )}
-                          
-                          <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                            <MessageSquare className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                            <p className="line-clamp-2">{lead.lastMessage}</p>
-                          </div>
-                          
-                          <div className="flex items-center gap-4 mt-2">
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatDistanceToNow(new Date(lead.lastMessageAt), { 
-                                addSuffix: true, 
-                                locale: ptBR 
-                              })}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        <Button
-                          size="sm"
-                          onClick={() => handlePullLead(lead.customer.id)}
-                          disabled={isPulling === lead.customer.id}
-                          className="shrink-0"
-                        >
-                          {isPulling === lead.customer.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <>
-                              Puxar Lead
-                              <ArrowRight className="h-4 w-4 ml-1" />
-                            </>
-                          )}
-                        </Button>
-                      </div>
+              <>
+                <ScrollArea className="max-h-[600px]">
+                  <div className="divide-y divide-border">
+                    {filteredLeads.map((lead) => (
+                      <InboxPaiCard
+                        key={lead.id}
+                        lead={lead}
+                        onPullLead={handlePullLead}
+                        isPulling={isPulling !== null}
+                      />
+                    ))}
+                  </div>
+                </ScrollArea>
+                
+                {/* Pagination Controls */}
+                {pagination.totalPages > 1 && (
+                  <div className="flex items-center justify-between p-4 border-t border-border">
+                    <div className="text-sm text-muted-foreground">
+                      Mostrando {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total} leads
                     </div>
-                  ))}
-                </div>
-              </ScrollArea>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(pagination.page - 1)}
+                        disabled={pagination.page <= 1 || isLoading}
+                      >
+                        <ChevronLeft className="h-4 w-4 mr-1" />
+                        Anterior
+                      </Button>
+                      
+                      {/* Page Numbers */}
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                          let pageNum: number;
+                          if (pagination.totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (pagination.page <= 3) {
+                            pageNum = i + 1;
+                          } else if (pagination.page >= pagination.totalPages - 2) {
+                            pageNum = pagination.totalPages - 4 + i;
+                          } else {
+                            pageNum = pagination.page - 2 + i;
+                          }
+                          
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={pagination.page === pageNum ? "default" : "outline"}
+                              size="sm"
+                              className="w-9 px-0"
+                              onClick={() => handlePageChange(pageNum)}
+                              disabled={isLoading}
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(pagination.page + 1)}
+                        disabled={!pagination.hasMore || isLoading}
+                      >
+                        Próxima
+                        <ChevronRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="flex items-center justify-center h-64">
                 <div className="text-center text-muted-foreground">

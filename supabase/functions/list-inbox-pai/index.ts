@@ -23,6 +23,12 @@ serve(async (req) => {
       );
     }
 
+    // Parse query params for pagination
+    const url = new URL(req.url);
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100); // Max 100 per page
+    const offset = (page - 1) * limit;
+
     const token = authHeader.replace('Bearer ', '');
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
@@ -49,7 +55,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('[LIST-INBOX-PAI] Fetching unassigned leads for company:', profile.company_id);
+    console.log(`[LIST-INBOX-PAI] Fetching page ${page} (limit: ${limit}, offset: ${offset}) for company:`, profile.company_id);
 
     // Get operation settings for ordering preference
     const { data: settings } = await supabase
@@ -60,14 +66,47 @@ serve(async (req) => {
 
     const ordering = settings?.inbox_ordering || 'last_message';
 
-    // Get all unassigned customers in the company
+    // First, get total count of unassigned customers
+    const { count: totalCount, error: countError } = await supabase
+      .from('customers')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', profile.company_id)
+      .is('assigned_to', null)
+      .in('lead_status', ['pending', 'in_progress']);
+
+    if (countError) {
+      console.error('[LIST-INBOX-PAI] Error counting customers:', countError);
+      throw countError;
+    }
+
+    const total = totalCount || 0;
+
+    if (total === 0) {
+      return new Response(
+        JSON.stringify({ 
+          leads: [], 
+          pagination: { 
+            page, 
+            limit, 
+            total: 0, 
+            totalPages: 0,
+            hasMore: false 
+          } 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Get unassigned customers with pagination
+    // We need to get customer IDs first, then fetch messages separately
     const { data: unassignedCustomers, error: customersError } = await supabase
       .from('customers')
       .select('id, name, phone, email, created_at, lead_status')
       .eq('company_id', profile.company_id)
       .is('assigned_to', null)
       .in('lead_status', ['pending', 'in_progress'])
-      .limit(500);
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (customersError) {
       console.error('[LIST-INBOX-PAI] Error fetching customers:', customersError);
@@ -76,14 +115,23 @@ serve(async (req) => {
 
     if (!unassignedCustomers || unassignedCustomers.length === 0) {
       return new Response(
-        JSON.stringify({ leads: [] }),
+        JSON.stringify({ 
+          leads: [], 
+          pagination: { 
+            page, 
+            limit, 
+            total, 
+            totalPages: Math.ceil(total / limit),
+            hasMore: false 
+          } 
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const customerIds = unassignedCustomers.map(c => c.id);
 
-    // Get latest message for each customer
+    // Get latest message for each customer (only for current page customers)
     const { data: messages } = await supabase
       .from('messages')
       .select('customer_id, content, timestamp, direction')
@@ -117,41 +165,40 @@ serve(async (req) => {
     }
 
     // Build leads array
-    let leads = unassignedCustomers
-      .filter(c => customerMessages.has(c.id))
-      .map(customer => {
-        const msgInfo = customerMessages.get(customer.id)!;
-        const createdAt = new Date(customer.created_at);
-        const now = new Date();
-        const waitingMs = now.getTime() - createdAt.getTime();
-        const waitingMinutes = Math.floor(waitingMs / (1000 * 60));
-        const waitingHours = Math.floor(waitingMinutes / 60);
-        const waitingDays = Math.floor(waitingHours / 24);
+    let leads = unassignedCustomers.map(customer => {
+      const msgInfo = customerMessages.get(customer.id);
+      const createdAt = new Date(customer.created_at);
+      const now = new Date();
+      const waitingMs = now.getTime() - createdAt.getTime();
+      const waitingMinutes = Math.floor(waitingMs / (1000 * 60));
+      const waitingHours = Math.floor(waitingMinutes / 60);
+      const waitingDays = Math.floor(waitingHours / 24);
 
-        let waitingTime = '';
-        if (waitingDays > 0) {
-          waitingTime = `${waitingDays}d`;
-        } else if (waitingHours > 0) {
-          waitingTime = `${waitingHours}h`;
-        } else {
-          waitingTime = `${waitingMinutes}m`;
-        }
+      let waitingTime = '';
+      if (waitingDays > 0) {
+        waitingTime = `${waitingDays}d`;
+      } else if (waitingHours > 0) {
+        waitingTime = `${waitingHours}h`;
+      } else {
+        waitingTime = `${waitingMinutes}m`;
+      }
 
-        return {
+      return {
+        id: customer.id,
+        customer: {
           id: customer.id,
-          customer: {
-            id: customer.id,
-            name: customer.name,
-            phone: customer.phone,
-          },
-          lastMessage: msgInfo.lastMessage,
-          lastMessageTime: msgInfo.lastMessageTime,
-          messageCount: msgInfo.messageCount,
-          waitingTime,
-          createdAt: customer.created_at,
-          firstMessageTime: msgInfo.firstMessageTime,
-        };
-      });
+          name: customer.name,
+          phone: customer.phone,
+        },
+        lastMessage: msgInfo?.lastMessage || 'Sem mensagens',
+        lastMessageAt: msgInfo?.lastMessageTime || customer.created_at,
+        lastMessageTime: msgInfo?.lastMessageTime || customer.created_at,
+        messageCount: msgInfo?.messageCount || 0,
+        waitingTime,
+        createdAt: customer.created_at,
+        firstMessageTime: msgInfo?.firstMessageTime || customer.created_at,
+      };
+    });
 
     // Sort based on ordering preference
     switch (ordering) {
@@ -176,10 +223,22 @@ serve(async (req) => {
         break;
     }
 
-    console.log(`[LIST-INBOX-PAI] Found ${leads.length} unassigned leads`);
+    const totalPages = Math.ceil(total / limit);
+    const hasMore = page < totalPages;
+
+    console.log(`[LIST-INBOX-PAI] Found ${leads.length} leads on page ${page} of ${totalPages} (total: ${total})`);
 
     return new Response(
-      JSON.stringify({ leads }),
+      JSON.stringify({ 
+        leads,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasMore
+        }
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
