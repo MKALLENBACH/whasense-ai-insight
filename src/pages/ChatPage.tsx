@@ -624,9 +624,9 @@ const ChatPage = () => {
 
   return (
     <AppLayout>
-      <div className="h-[calc(100vh-3rem)] flex gap-4">
+      <div className="h-[calc(100vh-3rem)] flex gap-4 overflow-hidden">
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col bg-card rounded-lg border border-border overflow-hidden">
+        <div className="flex-1 min-w-0 flex flex-col bg-card rounded-lg border border-border overflow-hidden">
           {/* Chat Header */}
           <ChatHeader
             customerName={customer?.name || "Cliente"}
@@ -776,7 +776,7 @@ const ChatPage = () => {
         </div>
 
         {/* Right Panel */}
-        <div className="w-80 flex-shrink-0 flex flex-col gap-4">
+        <div className="w-80 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
           {/* Cycle History */}
           {cycles.length > 0 && (
             <SaleCycleHistory
