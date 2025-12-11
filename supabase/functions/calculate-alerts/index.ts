@@ -43,11 +43,15 @@ serve(async (req) => {
   }
 
   try {
-    // Authorization: Require internal cron secret for background jobs
+    // Authorization: Require internal cron secret for full runs OR accept internal calls
     const cronSecret = Deno.env.get('INTERNAL_CRON_SECRET');
-    const { secret } = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({}));
+    const { secret, internal, seller_id } = body;
     
-    if (cronSecret && secret !== cronSecret) {
+    // Allow internal calls from other edge functions OR cron with secret
+    const isAuthorized = internal === true || (cronSecret && secret === cronSecret) || !cronSecret;
+    
+    if (!isAuthorized) {
       console.warn('Unauthorized calculate-alerts attempt');
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
@@ -198,7 +202,7 @@ serve(async (req) => {
 
       // ALERT 4: Open objection
       // Condition: Objection detected and seller hasn't responded since
-      if (latestInsight?.objection && latestInsight.objection !== 'none') {
+      if (latestInsight?.objection && latestInsight.objection !== 'none' && latestInsight.objection !== 'nenhuma') {
         const insightTime = new Date(latestInsight.created_at);
         const { data: responseAfterObjection } = await supabase
           .from('messages')
