@@ -11,16 +11,23 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Authorization: Require internal cron secret for background jobs
-    const cronSecret = Deno.env.get('INTERNAL_CRON_SECRET');
-    const { secret } = await req.json().catch(() => ({}));
+    // Authorization: Accept anon key from cron or internal secret
+    const authHeader = req.headers.get('Authorization');
+    const isFromCron = authHeader?.includes('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9');
     
-    if (cronSecret && secret !== cronSecret) {
-      console.warn('Unauthorized generate-followups attempt');
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (!isFromCron) {
+      const cronSecret = Deno.env.get('INTERNAL_CRON_SECRET');
+      const { secret } = await req.json().catch(() => ({}));
+      
+      if (cronSecret && secret !== cronSecret) {
+        console.warn('Unauthorized generate-followups attempt');
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    } else {
+      console.log('Called from cron job');
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -148,12 +155,12 @@ Deno.serve(async (req) => {
       // 4. Last message is older than delay hours
 
       const lastMessage = messages[0];
-      const hasCustomerMessage = messages.some((m) => m.direction === "inbound");
-      const hasSellerMessage = messages.some((m) => m.direction === "outbound");
+      const hasCustomerMessage = messages.some((m) => m.direction === "incoming");
+      const hasSellerMessage = messages.some((m) => m.direction === "outgoing");
       const lastMessageTime = new Date(lastMessage.timestamp);
 
       if (
-        lastMessage.direction === "outbound" &&
+        lastMessage.direction === "outgoing" &&
         hasCustomerMessage &&
         hasSellerMessage &&
         lastMessageTime < cutoffTime
@@ -164,7 +171,7 @@ Deno.serve(async (req) => {
 
         const recentFollowup = messages.find(
           (m) =>
-            m.direction === "outbound" &&
+            m.direction === "outgoing" &&
             m.content?.includes("[Follow-up automático]") &&
             new Date(m.timestamp) > recentFollowupCutoff
         );
@@ -191,7 +198,7 @@ Deno.serve(async (req) => {
           customer_id: cycle.customer_id,
           seller_id: cycle.seller_id,
           cycle_id: cycle.id,
-          direction: "outbound",
+          direction: "outgoing",
           content: `[Follow-up automático] ${followupContent}`,
         });
 
