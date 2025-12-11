@@ -93,50 +93,35 @@ serve(async (req) => {
       }
     }
 
-    // Verify customer exists and is unassigned
-    const { data: customer, error: customerError } = await supabase
-      .from('customers')
-      .select('id, assigned_to, company_id, seller_id')
-      .eq('id', customer_id)
-      .single();
-
-    if (customerError || !customer) {
-      return new Response(
-        JSON.stringify({ error: 'Customer not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Verify customer belongs to same company
-    if (customer.company_id !== profile.company_id) {
-      return new Response(
-        JSON.stringify({ error: 'Customer does not belong to your company' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Check if already assigned
-    if (customer.assigned_to) {
-      return new Response(
-        JSON.stringify({ error: 'Lead is already assigned to another seller' }),
-        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Assign lead to seller
-    const { error: updateError } = await supabase
+    // CORREÇÃO: Usar UPDATE com WHERE para lock otimista
+    // Isso previne condição de corrida onde dois vendedores puxam o mesmo lead
+    const { data: updatedCustomer, error: updateError } = await supabase
       .from('customers')
       .update({ 
         assigned_to: user.id,
         seller_id: user.id,
         updated_at: new Date().toISOString()
       })
-      .eq('id', customer_id);
+      .eq('id', customer_id)
+      .eq('company_id', profile.company_id)
+      .is('assigned_to', null) // CRÍTICO: Só atualiza se ainda não estiver atribuído
+      .select('id, name')
+      .maybeSingle();
 
     if (updateError) {
       console.error('[PULL-LEAD] Update error:', updateError);
       throw updateError;
     }
+
+    // Se não retornou nenhum registro, o lead já foi atribuído a outro
+    if (!updatedCustomer) {
+      return new Response(
+        JSON.stringify({ error: 'Lead já foi atribuído a outro vendedor' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[PULL-LEAD] Lead assigned successfully:', updatedCustomer.name);
 
     // Update sale cycles to use the new seller
     await supabase
@@ -145,51 +130,41 @@ serve(async (req) => {
       .eq('customer_id', customer_id)
       .in('status', ['pending', 'in_progress']);
 
-    // Update messages to use the new seller (for new messages going forward)
-    // Note: We don't update historical messages, only future ones will use the new seller_id
+    // Trigger AI analysis for recent messages
+    const { data: recentMessages } = await supabase
+      .from('messages')
+      .select('id, content, direction')
+      .eq('customer_id', customer_id)
+      .order('timestamp', { ascending: false })
+      .limit(10);
 
-    console.log('[PULL-LEAD] Lead assigned successfully');
+    if (recentMessages && recentMessages.length > 0) {
+      // Analyze each incoming message that hasn't been analyzed yet
+      for (const msg of recentMessages.filter(m => m.direction === 'incoming')) {
+        // Check if insight already exists
+        const { data: existingInsight } = await supabase
+          .from('insights')
+          .select('id')
+          .eq('message_id', msg.id)
+          .maybeSingle();
 
-    // Trigger AI analysis if configured
-    const shouldRunAI = !settings || settings.ai_after_assignment_only;
-    
-    if (shouldRunAI) {
-      // Get the most recent messages for this customer to analyze
-      const { data: recentMessages } = await supabase
-        .from('messages')
-        .select('id, content, direction')
-        .eq('customer_id', customer_id)
-        .order('timestamp', { ascending: false })
-        .limit(10);
-
-      if (recentMessages && recentMessages.length > 0) {
-        // Analyze each incoming message that hasn't been analyzed yet
-        for (const msg of recentMessages.filter(m => m.direction === 'incoming')) {
-          // Check if insight already exists
-          const { data: existingInsight } = await supabase
-            .from('insights')
-            .select('id')
-            .eq('message_id', msg.id)
-            .maybeSingle();
-
-          if (!existingInsight) {
-            try {
-              console.log('[PULL-LEAD] Triggering AI analysis for message:', msg.id);
-              await fetch(`${supabaseUrl}/functions/v1/analyze-message`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${supabaseServiceKey}`,
-                },
-                body: JSON.stringify({
-                  message: msg.content,
-                  message_id: msg.id,
-                }),
-              });
-            } catch (analyzeError) {
-              console.error('[PULL-LEAD] AI analysis error:', analyzeError);
-              // Don't fail the pull if AI analysis fails
-            }
+        if (!existingInsight) {
+          try {
+            console.log('[PULL-LEAD] Triggering AI analysis for message:', msg.id);
+            await fetch(`${supabaseUrl}/functions/v1/analyze-message`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({
+                message: msg.content,
+                message_id: msg.id,
+              }),
+            });
+          } catch (analyzeError) {
+            console.error('[PULL-LEAD] AI analysis error:', analyzeError);
+            // Don't fail the pull if AI analysis fails
           }
         }
       }

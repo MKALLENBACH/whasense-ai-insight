@@ -133,7 +133,7 @@ export function useManagerDashboard() {
           .eq("company_id", user.companyId),
         supabase
           .from("customers")
-          .select("id, name, lead_status, seller_id")
+          .select("id, name, lead_status, seller_id, assigned_to")
           .eq("company_id", user.companyId)
           .limit(1000),
         supabase
@@ -212,13 +212,27 @@ export function useManagerDashboard() {
       // Separate cycles by type and status
       const preSaleCycles = cycles.filter(c => (c as any).cycle_type !== 'post_sale');
       const postSaleCycles = cycles.filter(c => (c as any).cycle_type === 'post_sale');
-      const activeCycles = preSaleCycles.filter(c => c.status === "pending" || c.status === "in_progress");
+      
+      // CORREÇÃO: Filtrar apenas leads ATRIBUÍDOS (não do Inbox Pai)
+      const assignedCustomerIds = new Set(
+        customers.filter(c => c.assigned_to !== null).map(c => c.id)
+      );
+      const inboxPaiCustomerIds = new Set(
+        customers.filter(c => c.assigned_to === null).map(c => c.id)
+      );
+      
+      // Ciclos ativos são apenas de clientes atribuídos
+      const activeCycles = preSaleCycles.filter(c => 
+        (c.status === "pending" || c.status === "in_progress") &&
+        assignedCustomerIds.has(c.customer_id)
+      );
       const closedCycles = preSaleCycles.filter(c => c.status === "won" || c.status === "lost");
 
-      // Calculate KPIs
+      // Calculate KPIs - apenas leads atribuídos
       const activeCustomerIds = activeCycles.map(c => c.customer_id);
       const pendingLeads = activeCycles.filter((c) => c.status === "pending").length;
       const inProgressLeads = activeCycles.filter((c) => c.status === "in_progress").length;
+      const inboxPaiCount = inboxPaiCustomerIds.size; // Leads no Inbox Pai
       
       const thirtyDaysAgoStr = thirtyDaysAgo.toISOString();
       const last30DaysSales = sales.filter(s => s.created_at >= thirtyDaysAgoStr);

@@ -15,7 +15,6 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // Get the authorization header to identify the user
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
       return new Response(
@@ -24,10 +23,7 @@ serve(async (req) => {
       );
     }
 
-    // Extract the JWT token from the header
     const token = authHeader.replace('Bearer ', '');
-
-    // Use service role client with getUser(token) to validate the user
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -40,7 +36,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Fetching conversations for seller:', user.id);
+    console.log('Fetching conversations for user:', user.id);
 
     // Get user role and company in parallel
     const [roleResult, profileResult] = await Promise.all([
@@ -59,55 +55,59 @@ serve(async (req) => {
     const isManager = roleResult.data?.role === 'manager';
     const companyId = profileResult.data?.company_id;
 
-    // Get all customers that have messages with this seller (or all for manager)
-    // PERFORMANCE: Limit to most recent messages and paginate
-    let messagesQuery = supabase
-      .from('messages')
-      .select(`
-        id,
-        content,
-        direction,
-        timestamp,
-        customer_id,
-        seller_id,
-        cycle_id,
-        customers (
-          id,
-          name,
-          phone,
-          email,
-          lead_status,
-          seller_id,
-          is_incomplete,
-          company_id,
-          client_id
-        )
-      `)
-      .order('timestamp', { ascending: false })
-      .limit(2000); // Limit total messages fetched for performance
+    if (!companyId) {
+      return new Response(
+        JSON.stringify({ conversations: [] }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // CORREÇÃO: Para vendedor, buscar apenas customers onde assigned_to = user.id
+    // Para gestor, buscar todos os customers da empresa com assigned_to != null
+    let customersQuery = supabase
+      .from('customers')
+      .select('id, name, phone, email, lead_status, seller_id, assigned_to, is_incomplete, company_id, client_id')
+      .eq('company_id', companyId)
+      .not('assigned_to', 'is', null) // CRÍTICO: Só mostra leads atribuídos
+      .limit(500);
 
     if (!isManager) {
-      messagesQuery = messagesQuery.eq('seller_id', user.id);
+      // Vendedor vê apenas seus leads atribuídos
+      customersQuery = customersQuery.eq('assigned_to', user.id);
     }
 
-    const { data: messages, error: messagesError } = await messagesQuery;
+    const { data: customers, error: customersError } = await customersQuery;
 
-    if (messagesError) {
-      console.error('Error fetching messages:', messagesError);
-      throw messagesError;
+    if (customersError) {
+      console.error('Error fetching customers:', customersError);
+      throw customersError;
     }
 
-    // Get all customer IDs from messages
-    const customerIds = [...new Set((messages || []).map(m => m.customer_id).filter(Boolean))];
+    if (!customers || customers.length === 0) {
+      return new Response(
+        JSON.stringify({ conversations: [] }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Fetch all sale_cycles for these customers (including cycle_type)
+    const customerIds = customers.map(c => c.id);
+
+    // Get messages for these customers
+    const { data: messages } = await supabase
+      .from('messages')
+      .select('id, content, direction, timestamp, customer_id, seller_id, cycle_id')
+      .in('customer_id', customerIds)
+      .order('timestamp', { ascending: false })
+      .limit(2000);
+
+    // Fetch all sale_cycles for these customers
     const { data: allCycles } = await supabase
       .from('sale_cycles')
       .select('id, customer_id, seller_id, status, cycle_type, created_at, closed_at, lost_reason, won_summary')
-      .in('customer_id', customerIds.length > 0 ? customerIds : [''])
+      .in('customer_id', customerIds)
       .order('created_at', { ascending: false });
 
-    // Build a map of customer_id -> most recent cycle (active or last closed)
+    // Build a map of customer_id -> most recent cycle
     const customerCycleMap = new Map<string, {
       id: string;
       status: string;
@@ -119,7 +119,6 @@ serve(async (req) => {
     }>();
 
     for (const cycle of allCycles || []) {
-      // Only keep the most recent cycle per customer
       if (!customerCycleMap.has(cycle.customer_id)) {
         customerCycleMap.set(cycle.customer_id, {
           id: cycle.id,
@@ -133,11 +132,8 @@ serve(async (req) => {
       }
     }
 
-    // Get client company names (these are the customer's companies, not Whasense companies)
-    const clientIds = [...new Set((messages || [])
-      .map(m => (m.customers as any)?.client_id)
-      .filter(Boolean)
-    )];
+    // Get client company names
+    const clientIds = [...new Set(customers.map(c => c.client_id).filter(Boolean))];
 
     let clientsMap = new Map<string, string>();
     if (clientIds.length > 0) {
@@ -150,70 +146,73 @@ serve(async (req) => {
     }
 
     // Group messages by customer
-    const conversationsMap = new Map();
-    const customerMessageIds = new Map<string, string[]>();
+    const customerMessagesMap = new Map<string, {
+      lastMessage: string;
+      lastMessageTime: string;
+      lastMessageDirection: string;
+      messageCount: number;
+      messageIds: string[];
+    }>();
 
     for (const message of messages || []) {
       const customerId = message.customer_id;
-      const customer = message.customers as any;
+      const existing = customerMessagesMap.get(customerId);
       
-      // Skip if no customer data
-      if (!customer) continue;
-      
-      if (!conversationsMap.has(customerId)) {
-        const cycleInfo = customerCycleMap.get(customerId);
-        // Use cycle status if available, otherwise fallback to customer lead_status
-        const currentStatus = cycleInfo?.status || customer.lead_status || 'pending';
-        const cycleType = cycleInfo?.cycle_type || 'pre_sale';
-        
-        conversationsMap.set(customerId, {
-          id: customerId,
-          customer: {
-            ...customer,
-            lead_status: customer.lead_status || 'pending',
-            is_incomplete: customer.is_incomplete || false,
-            companyName: customer.client_id ? clientsMap.get(customer.client_id) : null,
-          },
+      if (existing) {
+        existing.messageCount++;
+        existing.messageIds.push(message.id);
+      } else {
+        customerMessagesMap.set(customerId, {
           lastMessage: message.content,
           lastMessageTime: message.timestamp,
           lastMessageDirection: message.direction,
-          sellerId: message.seller_id,
-          insight: null,
           messageCount: 1,
-          hasRisk: false,
-          // Use cycle status for filtering tabs
-          cycleStatus: currentStatus,
-          cycleType: cycleType,
-          cycleId: cycleInfo?.id || null,
-          cycleLostReason: cycleInfo?.lost_reason || null,
-          cycleWonSummary: cycleInfo?.won_summary || null,
-          // Keep leadStatus for backward compatibility but use cycleStatus for tabs
-          leadStatus: currentStatus,
-          isIncomplete: customer.is_incomplete || false,
+          messageIds: [message.id],
         });
-        customerMessageIds.set(customerId, [message.id]);
-      } else {
-        conversationsMap.get(customerId).messageCount++;
-        customerMessageIds.get(customerId)?.push(message.id);
       }
     }
 
-    // Filter by company for manager
-    let filteredConversations = Array.from(conversationsMap.values());
-    
-    if (isManager && companyId) {
-      // For managers, we need to filter by company - get customers with company_id
-      const { data: companyCustomers } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('company_id', companyId);
-      
-      const companyCustomerIds = new Set(companyCustomers?.map(c => c.id) || []);
-      filteredConversations = filteredConversations.filter(c => companyCustomerIds.has(c.id));
+    // Build conversations array
+    const conversationsMap = new Map();
+
+    for (const customer of customers) {
+      const msgInfo = customerMessagesMap.get(customer.id);
+      if (!msgInfo) continue; // Skip customers with no messages
+
+      const cycleInfo = customerCycleMap.get(customer.id);
+      const currentStatus = cycleInfo?.status || customer.lead_status || 'pending';
+      const cycleType = cycleInfo?.cycle_type || 'pre_sale';
+
+      conversationsMap.set(customer.id, {
+        id: customer.id,
+        customer: {
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          email: customer.email,
+          lead_status: customer.lead_status || 'pending',
+          is_incomplete: customer.is_incomplete || false,
+          companyName: customer.client_id ? clientsMap.get(customer.client_id) : null,
+        },
+        lastMessage: msgInfo.lastMessage,
+        lastMessageTime: msgInfo.lastMessageTime,
+        lastMessageDirection: msgInfo.lastMessageDirection,
+        sellerId: customer.assigned_to || customer.seller_id,
+        insight: null,
+        messageCount: msgInfo.messageCount,
+        hasRisk: false,
+        cycleStatus: currentStatus,
+        cycleType: cycleType,
+        cycleId: cycleInfo?.id || null,
+        cycleLostReason: cycleInfo?.lost_reason || null,
+        cycleWonSummary: cycleInfo?.won_summary || null,
+        leadStatus: currentStatus,
+        isIncomplete: customer.is_incomplete || false,
+      });
     }
 
-    // Get the latest insight for each conversation (batch query)
-    const allMessageIds = Array.from(customerMessageIds.values()).flat();
+    // Get insights for messages
+    const allMessageIds = Array.from(customerMessagesMap.values()).flatMap(m => m.messageIds);
     
     if (allMessageIds.length > 0) {
       const { data: allInsights } = await supabase
@@ -222,7 +221,6 @@ serve(async (req) => {
         .in('message_id', allMessageIds)
         .order('created_at', { ascending: false });
 
-      // Build a map of message_id -> insight
       const insightsByMessage = new Map<string, any>();
       for (const insight of allInsights || []) {
         if (!insightsByMessage.has(insight.message_id)) {
@@ -230,14 +228,14 @@ serve(async (req) => {
         }
       }
 
-      // For each customer, find the most recent insight from any of their messages
-      for (const [customerId, messageIds] of customerMessageIds.entries()) {
+      // Find latest insight for each customer
+      for (const [customerId, msgInfo] of customerMessagesMap.entries()) {
         let latestInsight = null;
-        for (const msgId of messageIds) {
+        for (const msgId of msgInfo.messageIds) {
           const insight = insightsByMessage.get(msgId);
           if (insight) {
             latestInsight = insight;
-            break; // Already sorted by created_at desc, so first match is the latest
+            break;
           }
         }
 
@@ -260,28 +258,30 @@ serve(async (req) => {
       }
     }
 
+    let filteredConversations = Array.from(conversationsMap.values());
+
     // Get seller names for manager view
     if (isManager) {
-      const sellerIds = [...new Set(filteredConversations.map(c => c.sellerId))];
-      const { data: sellers } = await supabase
-        .from('profiles')
-        .select('user_id, name')
-        .in('user_id', sellerIds);
+      const sellerIds = [...new Set(filteredConversations.map(c => c.sellerId).filter(Boolean))];
+      if (sellerIds.length > 0) {
+        const { data: sellers } = await supabase
+          .from('profiles')
+          .select('user_id, name')
+          .in('user_id', sellerIds);
 
-      const sellerMap = new Map(sellers?.map(s => [s.user_id, s.name]) || []);
-      
-      filteredConversations = filteredConversations.map(c => ({
-        ...c,
-        sellerName: sellerMap.get(c.sellerId) || 'Vendedor',
-      }));
+        const sellerMap = new Map(sellers?.map(s => [s.user_id, s.name]) || []);
+        
+        filteredConversations = filteredConversations.map(c => ({
+          ...c,
+          sellerName: sellerMap.get(c.sellerId) || 'Vendedor',
+        }));
+      }
     }
 
     // Sort: incomplete leads first, then by last message time
     filteredConversations.sort((a, b) => {
-      // Incomplete leads first
       if (a.isIncomplete && !b.isIncomplete) return -1;
       if (!a.isIncomplete && b.isIncomplete) return 1;
-      // Then by last message time (most recent first)
       return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
     });
 
