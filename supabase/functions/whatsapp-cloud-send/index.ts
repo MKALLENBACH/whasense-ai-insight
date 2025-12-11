@@ -38,28 +38,50 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const body = await req.json();
-    const { to, message, customer_id, cycle_id, template_name, template_language, template_components } = body;
+    // Get user's company
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('user_id', user.id)
+      .single();
 
-    console.log('[WHATSAPP-CLOUD-SEND] Request:', { to, customer_id, hasMessage: !!message });
+    if (!profile?.company_id) {
+      return new Response(JSON.stringify({ error: 'Empresa não encontrada' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    // Get seller's integration
-    const { data: integration, error: integrationError } = await supabase
-      .from('whatsapp_seller_integrations')
+    // Get company WhatsApp settings (NOT seller-level)
+    const { data: whatsappSettings, error: settingsError } = await supabase
+      .from('company_whatsapp_settings')
       .select('*')
-      .eq('seller_id', user.id)
-      .eq('status', 'connected')
+      .eq('company_id', profile.company_id)
       .maybeSingle();
 
-    if (integrationError || !integration) {
-      console.log('[WHATSAPP-CLOUD-SEND] No active integration for seller:', user.id);
+    if (settingsError || !whatsappSettings) {
+      console.log('[WHATSAPP-CLOUD-SEND] No company WhatsApp settings for:', profile.company_id);
       return new Response(JSON.stringify({ 
-        error: 'WhatsApp não conectado. Configure sua integração em Configurações > WhatsApp.' 
+        error: 'WhatsApp não configurado. Peça ao gestor para configurar o WhatsApp da empresa.' 
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    if (whatsappSettings.status !== 'connected') {
+      return new Response(JSON.stringify({ 
+        error: 'WhatsApp não está conectado. Peça ao gestor para verificar a conexão.' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const body = await req.json();
+    const { to, message, customer_id, cycle_id, template_name, template_language, template_components } = body;
+
+    console.log('[WHATSAPP-CLOUD-SEND] Request:', { to, customer_id, hasMessage: !!message, company: profile.company_id });
 
     // Build the message payload
     let messagePayload: any = {
@@ -82,15 +104,15 @@ serve(async (req) => {
       messagePayload.text = { body: message };
     }
 
-    console.log('[WHATSAPP-CLOUD-SEND] Sending to Meta API:', messagePayload);
+    console.log('[WHATSAPP-CLOUD-SEND] Sending to Meta API');
 
-    // Send via WhatsApp Cloud API
+    // Send via WhatsApp Cloud API using company settings
     const sendResponse = await fetch(
-      `https://graph.facebook.com/v17.0/${integration.phone_number_id}/messages`,
+      `https://graph.facebook.com/v17.0/${whatsappSettings.phone_number_id}/messages`,
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${integration.access_token}`,
+          'Authorization': `Bearer ${whatsappSettings.permanent_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(messagePayload),
@@ -104,9 +126,9 @@ serve(async (req) => {
       // Check if token expired
       if (sendResult.error?.code === 190) {
         await supabase
-          .from('whatsapp_seller_integrations')
+          .from('company_whatsapp_settings')
           .update({ status: 'error', last_error: 'Token expirado' })
-          .eq('id', integration.id);
+          .eq('id', whatsappSettings.id);
       }
 
       return new Response(JSON.stringify({ 
@@ -116,13 +138,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    // Get company_id from profile
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('user_id', user.id)
-      .single();
 
     // Save the outgoing message to database
     const { data: savedMessage, error: messageError } = await supabase

@@ -12,10 +12,6 @@ import AlertsPage from "./pages/AlertsPage";
 import ManagerDashboardPage from "./pages/ManagerDashboardPage";
 import SellerDashboardPage from "./pages/SellerDashboardPage";
 import HistoryPage from "./pages/HistoryPage";
-import WhatsAppConnectPage from "./pages/WhatsAppConnectPage";
-import WhatsAppStatusPage from "./pages/WhatsAppStatusPage";
-import SellerWhatsAppSettingsPage from "./pages/SellerWhatsAppSettingsPage";
-import ManagerWhatsAppStatusPage from "./pages/ManagerWhatsAppStatusPage";
 import SellersPage from "./pages/SellersPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -43,6 +39,7 @@ import AdminPaymentsPage from "./pages/admin/AdminPaymentsPage";
 import FinanceiroPage from "./pages/FinanceiroPage";
 import ManagerOperationSettingsPage from "./pages/ManagerOperationSettingsPage";
 import InboxPaiPage from "./pages/InboxPaiPage";
+import CompanyWhatsAppSettingsPage from "./pages/CompanyWhatsAppSettingsPage";
 
 // Trial pages
 import TrialPage from "./pages/TrialPage";
@@ -112,22 +109,6 @@ const App = () => (
                 </ProtectedRoute>
               } 
             />
-            <Route 
-              path="/whatsapp-connect" 
-              element={
-                <ProtectedRoute requiredRole="vendedor">
-                  <WhatsAppConnectPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/vendedor/whatsapp" 
-              element={
-                <ProtectedRoute requiredRole="vendedor">
-                  <SellerWhatsAppSettingsPage />
-                </ProtectedRoute>
-              } 
-            />
             
             {/* Seller dashboard */}
             <Route 
@@ -146,6 +127,7 @@ const App = () => (
                 </ProtectedRoute>
               } 
             />
+            
             {/* Manager routes */}
             <Route 
               path="/dashboard" 
@@ -164,18 +146,10 @@ const App = () => (
               } 
             />
             <Route 
-              path="/dashboard/whatsapp-status" 
+              path="/gestor/whatsapp" 
               element={
                 <ProtectedRoute requiredRole="gestor">
-                  <WhatsAppStatusPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/gestor/whatsapp-status" 
-              element={
-                <ProtectedRoute requiredRole="gestor">
-                  <ManagerWhatsAppStatusPage />
+                  <CompanyWhatsAppSettingsPage />
                 </ProtectedRoute>
               } 
             />

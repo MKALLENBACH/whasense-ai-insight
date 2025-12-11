@@ -8,116 +8,155 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, MessageSquare, CheckCircle2, AlertCircle, XCircle, Eye, EyeOff, ExternalLink, RefreshCw } from "lucide-react";
+import { Loader2, MessageSquare, CheckCircle2, AlertCircle, XCircle, Eye, EyeOff, ExternalLink, RefreshCw, Shield, Building2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-interface WhatsAppIntegration {
+interface CompanyWhatsAppSettings {
   id: string;
-  phone_number_id: string;
-  whatsapp_business_account_id: string;
-  access_token: string;
-  verification_token: string;
+  company_id: string;
+  waba_id: string | null;
+  phone_number_id: string | null;
+  permanent_token: string | null;
+  verification_token: string | null;
   display_phone_number: string | null;
-  status: 'connected' | 'pending' | 'error' | 'disconnected';
+  status: string;
+  last_check: string | null;
   last_error: string | null;
-  last_webhook_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export default function SellerWhatsAppSettingsPage() {
+export default function CompanyWhatsAppSettingsPage() {
   const { user } = useAuth();
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [integration, setIntegration] = useState<WhatsAppIntegration | null>(null);
+  const [settings, setSettings] = useState<CompanyWhatsAppSettings | null>(null);
   const [showToken, setShowToken] = useState(false);
   
   const [formData, setFormData] = useState({
     phone_number_id: '',
-    whatsapp_business_account_id: '',
-    access_token: '',
+    waba_id: '',
+    permanent_token: '',
     verification_token: '',
   });
 
   useEffect(() => {
-    const fetchCompanyId = async () => {
+    const fetchData = async () => {
       if (!user?.id) return;
-      const { data } = await supabase
+      
+      const { data: profile } = await supabase
         .from('profiles')
         .select('company_id')
         .eq('user_id', user.id)
         .maybeSingle();
-      if (data?.company_id) setCompanyId(data.company_id);
+      
+      if (profile?.company_id) {
+        setCompanyId(profile.company_id);
+        await fetchSettings(profile.company_id);
+      }
+      setLoading(false);
     };
-    fetchCompanyId();
-    fetchIntegration();
+    
+    fetchData();
   }, [user?.id]);
 
-  const fetchIntegration = async () => {
-    if (!user?.id) return;
-    
+  const fetchSettings = async (compId: string) => {
     try {
       const { data, error } = await supabase
-        .from('whatsapp_seller_integrations')
+        .from('company_whatsapp_settings')
         .select('*')
-        .eq('seller_id', user.id)
+        .eq('company_id', compId)
         .maybeSingle();
 
       if (error) throw error;
 
       if (data) {
-        setIntegration(data as WhatsAppIntegration);
+        setSettings(data as CompanyWhatsAppSettings);
         setFormData({
-          phone_number_id: data.phone_number_id,
-          whatsapp_business_account_id: data.whatsapp_business_account_id,
-          access_token: data.access_token,
-          verification_token: data.verification_token,
+          phone_number_id: data.phone_number_id || '',
+          waba_id: data.waba_id || '',
+          permanent_token: data.permanent_token || '',
+          verification_token: data.verification_token || '',
         });
       }
     } catch (error) {
-      console.error('Error fetching integration:', error);
-      toast.error('Erro ao carregar configurações');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching settings:', error);
     }
   };
 
   const handleSave = async () => {
-    if (!user?.id || !companyId) {
-      toast.error('Usuário não autenticado');
+    if (!companyId) {
+      toast.error('Empresa não encontrada');
       return;
     }
 
-    if (!formData.phone_number_id || !formData.whatsapp_business_account_id || 
-        !formData.access_token || !formData.verification_token) {
+    if (!formData.phone_number_id || !formData.waba_id || 
+        !formData.permanent_token || !formData.verification_token) {
       toast.error('Preencha todos os campos obrigatórios');
       return;
     }
 
     setSaving(true);
     try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-cloud-connect', {
-        body: {
-          action: 'connect',
-          phone_number_id: formData.phone_number_id,
-          whatsapp_business_account_id: formData.whatsapp_business_account_id,
-          access_token: formData.access_token,
-          verification_token: formData.verification_token,
+      // Validate the access token by fetching phone number info
+      const phoneInfoResponse = await fetch(
+        `https://graph.facebook.com/v17.0/${formData.phone_number_id}?fields=display_phone_number,verified_name`,
+        {
+          headers: {
+            'Authorization': `Bearer ${formData.permanent_token}`,
+          },
         }
-      });
+      );
 
-      if (error) throw error;
-
-      if (data.success) {
-        toast.success('WhatsApp conectado com sucesso!');
-        fetchIntegration();
+      let displayPhoneNumber = null;
+      
+      if (phoneInfoResponse.ok) {
+        const phoneInfo = await phoneInfoResponse.json();
+        displayPhoneNumber = phoneInfo.display_phone_number;
+        
+        // Subscribe to webhooks
+        await fetch(
+          `https://graph.facebook.com/v17.0/${formData.waba_id}/subscribed_apps`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${formData.permanent_token}`,
+            },
+          }
+        );
       } else {
-        toast.error(data.error || 'Erro ao conectar WhatsApp');
+        const errorData = await phoneInfoResponse.json();
+        console.error('Token validation failed:', errorData);
+        toast.error('Token inválido ou Phone Number ID incorreto');
+        setSaving(false);
+        return;
       }
+
+      // Upsert company settings
+      const { error: upsertError } = await supabase
+        .from('company_whatsapp_settings')
+        .upsert({
+          company_id: companyId,
+          phone_number_id: formData.phone_number_id,
+          waba_id: formData.waba_id,
+          permanent_token: formData.permanent_token,
+          verification_token: formData.verification_token,
+          display_phone_number: displayPhoneNumber,
+          status: 'connected',
+          last_check: new Date().toISOString(),
+          last_error: null,
+        }, {
+          onConflict: 'company_id',
+        });
+
+      if (upsertError) throw upsertError;
+
+      toast.success('WhatsApp configurado com sucesso!');
+      await fetchSettings(companyId);
     } catch (error: any) {
-      console.error('Error saving integration:', error);
+      console.error('Error saving:', error);
       toast.error(error.message || 'Erro ao salvar configurações');
     } finally {
       setSaving(false);
@@ -125,52 +164,73 @@ export default function SellerWhatsAppSettingsPage() {
   };
 
   const handleTest = async () => {
-    if (!integration) return;
+    if (!settings) return;
     
     setTesting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-cloud-connect', {
-        body: {
-          action: 'test',
+      const testResponse = await fetch(
+        `https://graph.facebook.com/v17.0/${settings.phone_number_id}?fields=display_phone_number`,
+        {
+          headers: {
+            'Authorization': `Bearer ${settings.permanent_token}`,
+          },
         }
-      });
+      );
 
-      if (error) throw error;
+      if (!testResponse.ok) {
+        await supabase
+          .from('company_whatsapp_settings')
+          .update({ 
+            status: 'error', 
+            last_error: 'Token expirado ou inválido',
+            last_check: new Date().toISOString()
+          })
+          .eq('id', settings.id);
 
-      if (data.success) {
-        toast.success('Conexão verificada com sucesso!');
-        fetchIntegration();
-      } else {
-        toast.error(data.error || 'Falha na verificação');
+        toast.error('Token expirado ou inválido');
+        await fetchSettings(companyId!);
+        return;
       }
-    } catch (error: any) {
-      console.error('Error testing connection:', error);
-      toast.error(error.message || 'Erro ao testar conexão');
+
+      await supabase
+        .from('company_whatsapp_settings')
+        .update({ 
+          status: 'connected', 
+          last_error: null,
+          last_check: new Date().toISOString()
+        })
+        .eq('id', settings.id);
+
+      toast.success('Conexão verificada com sucesso!');
+      await fetchSettings(companyId!);
+    } catch (error) {
+      console.error('Test error:', error);
+      toast.error('Erro ao testar conexão');
     } finally {
       setTesting(false);
     }
   };
 
   const handleDisconnect = async () => {
-    if (!integration) return;
+    if (!settings) return;
     
-    if (!confirm('Tem certeza que deseja desconectar seu WhatsApp?')) return;
+    if (!confirm('Tem certeza que deseja desconectar o WhatsApp da empresa?')) return;
 
     setSaving(true);
     try {
       const { error } = await supabase
-        .from('whatsapp_seller_integrations')
+        .from('company_whatsapp_settings')
         .delete()
-        .eq('id', integration.id);
+        .eq('id', settings.id);
 
       if (error) throw error;
 
       toast.success('WhatsApp desconectado');
-      setIntegration(null);
+      setSettings(null);
       setFormData({
         phone_number_id: '',
-        whatsapp_business_account_id: '',
-        access_token: '',
+        waba_id: '',
+        permanent_token: '',
         verification_token: '',
       });
     } catch (error) {
@@ -212,13 +272,26 @@ export default function SellerWhatsAppSettingsPage() {
     <AppLayout>
       <div className="space-y-6 max-w-2xl mx-auto">
         <div>
-          <h1 className="text-2xl font-bold">Configurações WhatsApp</h1>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Building2 className="h-7 w-7 text-primary" />
+            WhatsApp da Empresa
+          </h1>
           <p className="text-muted-foreground">
-            Conecte seu número do WhatsApp Business via API Oficial da Meta
+            Configure o número oficial do WhatsApp Business da sua empresa
           </p>
         </div>
 
-        {integration && (
+        {/* Security Notice */}
+        <Alert>
+          <Shield className="h-4 w-4" />
+          <AlertTitle>Acesso Restrito</AlertTitle>
+          <AlertDescription>
+            Apenas gestores podem configurar o WhatsApp da empresa. Os vendedores utilizam automaticamente o número configurado aqui para receber e responder leads.
+          </AlertDescription>
+        </Alert>
+
+        {/* Connection Status */}
+        {settings && (
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -226,27 +299,27 @@ export default function SellerWhatsAppSettingsPage() {
                   <MessageSquare className="h-5 w-5 text-green-500" />
                   Status da Conexão
                 </CardTitle>
-                {getStatusBadge(integration.status)}
+                {getStatusBadge(settings.status)}
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {integration.display_phone_number && (
+              {settings.display_phone_number && (
                 <div className="text-sm">
-                  <span className="text-muted-foreground">Número: </span>
-                  <span className="font-medium">{integration.display_phone_number}</span>
+                  <span className="text-muted-foreground">Número conectado: </span>
+                  <span className="font-medium">{settings.display_phone_number}</span>
                 </div>
               )}
-              {integration.last_webhook_at && (
+              {settings.last_check && (
                 <div className="text-sm">
-                  <span className="text-muted-foreground">Último webhook: </span>
-                  <span>{new Date(integration.last_webhook_at).toLocaleString('pt-BR')}</span>
+                  <span className="text-muted-foreground">Última verificação: </span>
+                  <span>{new Date(settings.last_check).toLocaleString('pt-BR')}</span>
                 </div>
               )}
-              {integration.last_error && integration.status === 'error' && (
+              {settings.last_error && settings.status === 'error' && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Erro na conexão</AlertTitle>
-                  <AlertDescription>{integration.last_error}</AlertDescription>
+                  <AlertDescription>{settings.last_error}</AlertDescription>
                 </Alert>
               )}
               <div className="flex gap-2 pt-2">
@@ -262,11 +335,12 @@ export default function SellerWhatsAppSettingsPage() {
           </Card>
         )}
 
+        {/* Configuration Form */}
         <Card>
           <CardHeader>
             <CardTitle>Credenciais da API WhatsApp</CardTitle>
             <CardDescription>
-              Configure as credenciais do seu WhatsApp Business API. 
+              Configure as credenciais do WhatsApp Business API da empresa. 
               <a 
                 href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started" 
                 target="_blank" 
@@ -279,12 +353,12 @@ export default function SellerWhatsAppSettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="phone_number_id">Phone Number ID *</Label>
+              <Label htmlFor="waba_id">WABA ID (WhatsApp Business Account ID) *</Label>
               <Input
-                id="phone_number_id"
+                id="waba_id"
                 placeholder="Ex: 123456789012345"
-                value={formData.phone_number_id}
-                onChange={(e) => setFormData({ ...formData, phone_number_id: e.target.value })}
+                value={formData.waba_id}
+                onChange={(e) => setFormData({ ...formData, waba_id: e.target.value })}
               />
               <p className="text-xs text-muted-foreground">
                 Encontre em: Meta Business Suite → WhatsApp → Configurações da API
@@ -292,24 +366,24 @@ export default function SellerWhatsAppSettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="waba_id">WhatsApp Business Account ID *</Label>
+              <Label htmlFor="phone_number_id">Phone Number ID *</Label>
               <Input
-                id="waba_id"
+                id="phone_number_id"
                 placeholder="Ex: 123456789012345"
-                value={formData.whatsapp_business_account_id}
-                onChange={(e) => setFormData({ ...formData, whatsapp_business_account_id: e.target.value })}
+                value={formData.phone_number_id}
+                onChange={(e) => setFormData({ ...formData, phone_number_id: e.target.value })}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="access_token">Access Token *</Label>
+              <Label htmlFor="permanent_token">Permanent Token (Access Token) *</Label>
               <div className="relative">
                 <Input
-                  id="access_token"
+                  id="permanent_token"
                   type={showToken ? "text" : "password"}
                   placeholder="Token de acesso permanente"
-                  value={formData.access_token}
-                  onChange={(e) => setFormData({ ...formData, access_token: e.target.value })}
+                  value={formData.permanent_token}
+                  onChange={(e) => setFormData({ ...formData, permanent_token: e.target.value })}
                   className="pr-10"
                 />
                 <Button
@@ -344,17 +418,18 @@ export default function SellerWhatsAppSettingsPage() {
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Conectando...
+                  Salvando...
                 </>
-              ) : integration ? (
+              ) : settings ? (
                 'Atualizar Configurações'
               ) : (
-                'Conectar Meu WhatsApp'
+                'Salvar e Conectar'
               )}
             </Button>
           </CardContent>
         </Card>
 
+        {/* Webhook Configuration */}
         <Card>
           <CardHeader>
             <CardTitle>Configuração do Webhook</CardTitle>

@@ -601,6 +601,59 @@ export type Database = {
           },
         ]
       }
+      company_whatsapp_settings: {
+        Row: {
+          company_id: string
+          created_at: string
+          display_phone_number: string | null
+          id: string
+          last_check: string | null
+          last_error: string | null
+          permanent_token: string | null
+          phone_number_id: string | null
+          status: string
+          updated_at: string
+          verification_token: string | null
+          waba_id: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          display_phone_number?: string | null
+          id?: string
+          last_check?: string | null
+          last_error?: string | null
+          permanent_token?: string | null
+          phone_number_id?: string | null
+          status?: string
+          updated_at?: string
+          verification_token?: string | null
+          waba_id?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          display_phone_number?: string | null
+          id?: string
+          last_check?: string | null
+          last_error?: string | null
+          permanent_token?: string | null
+          phone_number_id?: string | null
+          status?: string
+          updated_at?: string
+          verification_token?: string | null
+          waba_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_whatsapp_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           assigned_to: string | null

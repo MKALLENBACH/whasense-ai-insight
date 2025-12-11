@@ -56,7 +56,7 @@ const AppSidebar = () => {
     featureKey?: 'canAccess360' | 'canUseGamification' | 'canUseFollowups';
   }
 
-  // Links para vendedor - filtrados por features
+  // Links para vendedor - SEM WhatsApp config (apenas gestor configura)
   const getAllVendedorLinks = (): NavLinkItem[] => [
     { to: "/dashboard-vendedor", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/inbox", icon: Inbox, label: "Inbox Pai" },
@@ -64,10 +64,9 @@ const AppSidebar = () => {
     { to: "/clientes", icon: Building2, label: "Clientes 360°", featureKey: 'canAccess360' },
     { to: "/vendedor/performance", icon: Trophy, label: "Performance", featureKey: 'canUseGamification' },
     { to: "/alertas", icon: Bell, label: "Alertas", badge: alertCount },
-    { to: "/vendedor/whatsapp", icon: Smartphone, label: "WhatsApp" },
   ];
 
-  // Links para gestor - filtrados por features
+  // Links para gestor - com WhatsApp config
   const getAllGestorLinks = (): NavLinkItem[] => [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/inbox", icon: Inbox, label: "Inbox Pai" },
@@ -76,11 +75,12 @@ const AppSidebar = () => {
     { to: "/gestor/vendedores", icon: Users, label: "Vendedores" },
     { to: "/gestor/metas", icon: Target, label: "Metas", featureKey: 'canUseGamification' },
     { to: "/gestor/followups", icon: Bot, label: "Follow-ups", featureKey: 'canUseFollowups' },
+    { to: "/gestor/whatsapp", icon: Smartphone, label: "WhatsApp" },
     { to: "/gestor/configuracoes", icon: Settings, label: "Configurações" },
     { to: "/financeiro", icon: CreditCard, label: "Financeiro" },
     { to: "/historico", icon: History, label: "Histórico" },
-    { to: "/gestor/whatsapp-status", icon: Smartphone, label: "Status WhatsApp" },
   ];
+  
   // Se gestor com acesso restrito por plano inativo, mostra apenas Financeiro
   const gestorRestrictedLinks: NavLinkItem[] = [
     { to: "/financeiro", icon: CreditCard, label: "Financeiro" },
