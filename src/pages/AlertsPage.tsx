@@ -168,7 +168,9 @@ const AlertsPage = () => {
   const triggerAlertCalculation = async () => {
     setIsCalculating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('calculate-alerts');
+      const { data, error } = await supabase.functions.invoke('calculate-alerts', {
+        body: { internal: true }
+      });
       if (error) throw error;
       console.log('Alert calculation result:', data);
       await fetchAlerts();
