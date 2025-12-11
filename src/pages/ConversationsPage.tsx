@@ -131,7 +131,10 @@ const ConversationsPage = () => {
     setShowLinkClientModal(true);
   };
 
-  if (isLoading && !isManager) {
+  // Loading state for sellers (full page) or managers with seller selected
+  const showFullPageLoading = isLoading && (!isManager || selectedSellerId);
+  
+  if (showFullPageLoading && !isManager) {
     return (
       <AppLayout>
         <div className="h-[calc(100vh-3rem)] flex items-center justify-center">
@@ -269,8 +272,9 @@ const ConversationsPage = () => {
                 </div>
               </div>
             ) : isLoading ? (
-              <div className="flex items-center justify-center p-8 h-64">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="flex flex-col items-center justify-center p-8 h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                <p className="text-muted-foreground">Carregando conversas...</p>
               </div>
             ) : currentConversations.length > 0 ? (
               <div>
