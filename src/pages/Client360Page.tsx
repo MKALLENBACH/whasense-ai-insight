@@ -106,16 +106,24 @@ const Client360Page = () => {
     
     setIsLoading(true);
     try {
-      // For sellers, first verify they have access to this client via sale_cycles
+      // For sellers, verify they have access to this client
       if (isSeller) {
-        const { data: accessCheck, error: accessError } = await supabase
+        // Check via sale_cycles with client_id OR via customers with client_id
+        const { data: cycleAccess } = await supabase
           .from("sale_cycles")
           .select("id")
           .eq("client_id", clientId)
           .eq("seller_id", user.id)
           .limit(1);
         
-        if (accessError || !accessCheck || accessCheck.length === 0) {
+        const { data: customerAccess } = await supabase
+          .from("customers")
+          .select("id")
+          .eq("client_id", clientId)
+          .or(`seller_id.eq.${user.id},assigned_to.eq.${user.id}`)
+          .limit(1);
+        
+        if ((!cycleAccess || cycleAccess.length === 0) && (!customerAccess || customerAccess.length === 0)) {
           setClient(null);
           setIsLoading(false);
           return;
