@@ -87,16 +87,19 @@ const LinkClientModal = ({
 
       if (buyerError) throw buyerError;
 
-      // Link customer to both client and buyer
-      const { error: linkError } = await supabase
-        .from("customers")
-        .update({ 
-          client_id: clientId,
-          buyer_id: newBuyer.id 
-        })
-        .eq("id", customerId);
+      // Link customer to both client and buyer using edge function
+      const { data: linkData, error: linkError } = await supabase.functions.invoke(
+        "link-customer-client",
+        {
+          body: {
+            customerId,
+            clientId,
+            buyerId: newBuyer.id,
+          },
+        }
+      );
 
-      if (linkError) throw linkError;
+      if (linkError || linkData?.error) throw new Error(linkData?.error || linkError?.message);
 
       toast.success("Cliente vinculado com sucesso!");
       onSuccess();
@@ -151,16 +154,19 @@ const LinkClientModal = ({
 
       if (buyerError) throw buyerError;
 
-      // Link customer to both client and buyer
-      const { error: linkError } = await supabase
-        .from("customers")
-        .update({ 
-          client_id: newClient.id,
-          buyer_id: newBuyer.id 
-        })
-        .eq("id", customerId);
+      // Link customer to both client and buyer using edge function
+      const { data: linkData, error: linkError } = await supabase.functions.invoke(
+        "link-customer-client",
+        {
+          body: {
+            customerId,
+            clientId: newClient.id,
+            buyerId: newBuyer.id,
+          },
+        }
+      );
 
-      if (linkError) throw linkError;
+      if (linkError || linkData?.error) throw new Error(linkData?.error || linkError?.message);
 
       toast.success("Empresa criada e vinculada com sucesso!");
       onSuccess();
