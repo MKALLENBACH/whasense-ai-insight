@@ -145,15 +145,41 @@ const Client360Page = () => {
       }
       setClient(clientData);
 
-      // Fetch buyers
-      const { data: buyersData, error: buyersError } = await supabase
-        .from("buyers")
-        .select("*")
-        .eq("client_id", clientId)
-        .order("created_at", { ascending: false });
-
-      if (buyersError) throw buyersError;
-      setBuyers(buyersData || []);
+      // Fetch buyers - for sellers, filter only buyers they have customers assigned to
+      let buyersData: Buyer[] = [];
+      if (isSeller) {
+        // Get buyer_ids from customers assigned to this seller
+        const { data: customerBuyers } = await supabase
+          .from("customers")
+          .select("buyer_id")
+          .eq("client_id", clientId)
+          .eq("assigned_to", user.id)
+          .not("buyer_id", "is", null);
+        
+        const buyerIds = customerBuyers?.map(c => c.buyer_id).filter(Boolean) || [];
+        
+        if (buyerIds.length > 0) {
+          const { data, error } = await supabase
+            .from("buyers")
+            .select("*")
+            .in("id", buyerIds)
+            .order("created_at", { ascending: false });
+          
+          if (error) throw error;
+          buyersData = data || [];
+        }
+      } else {
+        // Managers see all buyers
+        const { data, error } = await supabase
+          .from("buyers")
+          .select("*")
+          .eq("client_id", clientId)
+          .order("created_at", { ascending: false });
+        
+        if (error) throw error;
+        buyersData = data || [];
+      }
+      setBuyers(buyersData);
 
       // Fetch cycles for this client (filtered by seller if not manager)
       let cyclesQuery = supabase
