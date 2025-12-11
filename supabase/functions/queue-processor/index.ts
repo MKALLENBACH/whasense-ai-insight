@@ -38,7 +38,18 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { companyId, batchSize = BATCH_SIZE } = await req.json().catch(() => ({}));
+    // Authorization: Require internal cron secret for background jobs
+    const cronSecret = Deno.env.get('INTERNAL_CRON_SECRET');
+    const body = await req.json().catch(() => ({}));
+    const { companyId, batchSize = BATCH_SIZE, secret } = body;
+    
+    if (cronSecret && secret !== cronSecret) {
+      console.warn('Unauthorized queue-processor attempt');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Get pending items, prioritized by priority and created_at
     let query = supabase

@@ -15,11 +15,22 @@ serve(async (req) => {
   }
 
   try {
+    // Authorization: Require internal cron secret for background jobs
+    const cronSecret = Deno.env.get('INTERNAL_CRON_SECRET');
+    const body = await req.json().catch(() => ({}));
+    
+    if (cronSecret && body.secret !== cronSecret) {
+      console.warn('Unauthorized auto-simulate attempt');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const body = await req.json().catch(() => ({}));
     const maxSimulations = body.maxSimulations || 3;
     const minDelayMs = body.minDelayMs || 20000;
     const maxDelayMs = body.maxDelayMs || 60000;

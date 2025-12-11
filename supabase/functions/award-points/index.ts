@@ -20,11 +20,22 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Authorization: Require internal cron secret for internal service calls
+    const cronSecret = Deno.env.get('INTERNAL_CRON_SECRET');
+    const body = await req.json();
+    const { event_type, vendor_id, company_id, sale_id, secret } = body;
+    
+    if (cronSecret && secret !== cronSecret) {
+      console.warn('Unauthorized award-points attempt');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const { event_type, vendor_id, company_id, sale_id } = await req.json();
 
     console.log(`Awarding points for ${event_type} to vendor ${vendor_id}`);
 
