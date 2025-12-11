@@ -207,10 +207,16 @@ const SellerPerformancePage = () => {
 
   const fetchPoints = async () => {
     if (!user?.id) return;
+    
+    // Pontos são mensais - zeram dia 01 de cada mês às 00:01
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 1, 0);
+    
     const { data: pointsData } = await supabase
       .from("gamification_points")
       .select("points")
-      .eq("vendor_id", user.id);
+      .eq("vendor_id", user.id)
+      .gte("created_at", monthStart.toISOString());
     const total = (pointsData || []).reduce((acc, p) => acc + p.points, 0);
     setTotalPoints(total);
 
@@ -218,6 +224,7 @@ const SellerPerformancePage = () => {
       .from("gamification_points")
       .select("*")
       .eq("vendor_id", user.id)
+      .gte("created_at", monthStart.toISOString())
       .order("created_at", { ascending: false })
       .limit(10);
     setPointsHistory((historyData || []) as PointsHistory[]);
@@ -337,10 +344,13 @@ const SellerPerformancePage = () => {
             <h1 className="text-2xl font-bold text-foreground">Minha Performance</h1>
             <p className="text-muted-foreground">Acompanhe suas metas e conquistas</p>
           </div>
-          <div className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground px-4 py-2 rounded-lg">
-            <Star className="h-5 w-5" />
-            <span className="font-bold text-lg">{totalPoints}</span>
-            <span className="text-sm opacity-80">pontos</span>
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground px-4 py-2 rounded-lg">
+              <Star className="h-5 w-5" />
+              <span className="font-bold text-lg">{totalPoints}</span>
+              <span className="text-sm opacity-80">pontos</span>
+            </div>
+            <span className="text-xs text-muted-foreground mt-1">Pontos do mês • Zera dia 01</span>
           </div>
         </div>
 
