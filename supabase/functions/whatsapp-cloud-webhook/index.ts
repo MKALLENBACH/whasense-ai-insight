@@ -6,36 +6,53 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/**
+ * WhatsApp Cloud API Webhook - Global Webhook for Whasense SaaS
+ * 
+ * This is the SINGLE webhook for ALL companies using Whasense.
+ * It routes messages to the correct company based on WABA ID or Phone Number ID.
+ * 
+ * Flow:
+ * 1. Receives all WhatsApp events from Meta
+ * 2. Identifies which company owns the number (via waba_id or phone_number_id)
+ * 3. Creates/updates customer (lead) in that company
+ * 4. Saves the message
+ * 5. If lead is assigned to a seller, triggers AI analysis
+ * 6. If lead is unassigned, it goes to "Inbox Pai" for seller pickup
+ */
+
 serve(async (req) => {
   const url = new URL(req.url);
 
-  // Handle webhook verification (GET request from Meta)
+  // ========================================
+  // WEBHOOK VERIFICATION (GET) - Meta validation
+  // ========================================
   if (req.method === 'GET') {
     const mode = url.searchParams.get('hub.mode');
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge');
 
-    console.log('[WHATSAPP-CLOUD-WEBHOOK] Verification request:', { mode, token });
+    console.log('[WEBHOOK] Verification request:', { mode, token: token?.substring(0, 10) + '...' });
 
     if (mode === 'subscribe' && token && challenge) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      // Find company with this verification token
+      // Find ANY company with this verification token
       const { data: settings } = await supabase
         .from('company_whatsapp_settings')
-        .select('id')
+        .select('id, company_id')
         .eq('verification_token', token)
         .maybeSingle();
 
       if (settings) {
-        console.log('[WHATSAPP-CLOUD-WEBHOOK] Verification successful');
+        console.log('[WEBHOOK] Verification SUCCESS for company:', settings.company_id);
         return new Response(challenge, { status: 200 });
       }
     }
 
-    console.log('[WHATSAPP-CLOUD-WEBHOOK] Verification failed');
+    console.log('[WEBHOOK] Verification FAILED - invalid token');
     return new Response('Forbidden', { status: 403 });
   }
 
@@ -43,7 +60,9 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Handle incoming webhook (POST request from Meta)
+  // ========================================
+  // PROCESS WEBHOOK EVENTS (POST)
+  // ========================================
   if (req.method === 'POST') {
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -51,49 +70,76 @@ serve(async (req) => {
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
       const body = await req.json();
-      console.log('[WHATSAPP-CLOUD-WEBHOOK] Received:', JSON.stringify(body));
+      console.log('[WEBHOOK] Received event:', JSON.stringify(body).substring(0, 500));
 
-      // Process each entry
+      // Process each entry from Meta
       for (const entry of body.entry || []) {
+        const wabaId = entry.id; // WABA ID comes at entry level
+        
         for (const change of entry.changes || []) {
           if (change.field !== 'messages') continue;
 
           const value = change.value;
           const phoneNumberId = value?.metadata?.phone_number_id;
 
-          if (!phoneNumberId) {
-            console.log('[WHATSAPP-CLOUD-WEBHOOK] No phone_number_id in webhook');
+          if (!phoneNumberId && !wabaId) {
+            console.log('[WEBHOOK] No phone_number_id or waba_id in webhook');
             continue;
           }
 
-          // Find company by phone_number_id in company_whatsapp_settings
-          const { data: companySettings, error: settingsError } = await supabase
-            .from('company_whatsapp_settings')
-            .select('company_id, id')
-            .eq('phone_number_id', phoneNumberId)
-            .maybeSingle();
+          // ========================================
+          // ROUTE TO CORRECT COMPANY
+          // Try to find company by phone_number_id first, then by waba_id
+          // ========================================
+          let companySettings = null;
+          
+          if (phoneNumberId) {
+            const { data } = await supabase
+              .from('company_whatsapp_settings')
+              .select('company_id, id, status')
+              .eq('phone_number_id', phoneNumberId)
+              .eq('status', 'connected')
+              .maybeSingle();
+            companySettings = data;
+          }
+          
+          if (!companySettings && wabaId) {
+            const { data } = await supabase
+              .from('company_whatsapp_settings')
+              .select('company_id, id, status')
+              .eq('waba_id', wabaId)
+              .eq('status', 'connected')
+              .maybeSingle();
+            companySettings = data;
+          }
 
-          if (settingsError || !companySettings) {
-            console.log('[WHATSAPP-CLOUD-WEBHOOK] No company settings found for phone:', phoneNumberId);
+          if (!companySettings) {
+            console.log('[WEBHOOK] No company found for phone:', phoneNumberId, 'waba:', wabaId);
             continue;
           }
 
           const companyId = companySettings.company_id;
+          console.log('[WEBHOOK] Routing to company:', companyId);
 
-          // Update last_check
+          // Update last_check timestamp
           await supabase
             .from('company_whatsapp_settings')
-            .update({ last_check: new Date().toISOString() })
+            .update({ 
+              last_check: new Date().toISOString(),
+              last_error: null 
+            })
             .eq('id', companySettings.id);
 
-          // Process messages
+          // ========================================
+          // PROCESS INCOMING MESSAGES
+          // ========================================
           for (const message of value.messages || []) {
             const contactPhone = message.from;
             const messageId = message.id;
             const timestamp = message.timestamp;
             const messageType = message.type;
 
-            console.log('[WHATSAPP-CLOUD-WEBHOOK] Processing message:', { 
+            console.log('[WEBHOOK] Processing message:', { 
               from: contactPhone, 
               type: messageType, 
               company: companyId 
@@ -105,32 +151,52 @@ serve(async (req) => {
             let attachmentUrl = null;
             let attachmentName = null;
 
-            if (messageType === 'text') {
-              content = message.text?.body || '';
-            } else if (messageType === 'image') {
-              content = message.image?.caption || '[Imagem]';
-              attachmentType = 'image';
-            } else if (messageType === 'audio') {
-              content = '[Áudio]';
-              attachmentType = 'audio';
-            } else if (messageType === 'video') {
-              content = message.video?.caption || '[Vídeo]';
-              attachmentType = 'video';
-            } else if (messageType === 'document') {
-              content = message.document?.filename || '[Documento]';
-              attachmentType = 'document';
-              attachmentName = message.document?.filename;
-            } else if (messageType === 'sticker') {
-              content = '[Sticker]';
-            } else if (messageType === 'location') {
-              content = `[Localização: ${message.location?.latitude}, ${message.location?.longitude}]`;
-            } else if (messageType === 'contacts') {
-              content = '[Contato compartilhado]';
-            } else {
-              content = `[${messageType}]`;
+            switch (messageType) {
+              case 'text':
+                content = message.text?.body || '';
+                break;
+              case 'image':
+                content = message.image?.caption || '[Imagem]';
+                attachmentType = 'image';
+                // Media URL needs to be fetched separately from Meta API
+                break;
+              case 'audio':
+                content = '[Áudio]';
+                attachmentType = 'audio';
+                break;
+              case 'video':
+                content = message.video?.caption || '[Vídeo]';
+                attachmentType = 'video';
+                break;
+              case 'document':
+                content = message.document?.filename || '[Documento]';
+                attachmentType = 'document';
+                attachmentName = message.document?.filename;
+                break;
+              case 'sticker':
+                content = '[Sticker]';
+                break;
+              case 'location':
+                content = `[Localização: ${message.location?.latitude}, ${message.location?.longitude}]`;
+                break;
+              case 'contacts':
+                content = '[Contato compartilhado]';
+                break;
+              case 'button':
+                content = message.button?.text || '[Botão]';
+                break;
+              case 'interactive':
+                content = message.interactive?.button_reply?.title || 
+                         message.interactive?.list_reply?.title || 
+                         '[Interativo]';
+                break;
+              default:
+                content = `[${messageType}]`;
             }
 
-            // Find existing customer by phone + company_id
+            // ========================================
+            // FIND OR CREATE CUSTOMER (LEAD)
+            // ========================================
             let customerId: string;
             let assignedSellerId: string | null = null;
             
@@ -144,8 +210,9 @@ serve(async (req) => {
             if (existingCustomer) {
               customerId = existingCustomer.id;
               assignedSellerId = existingCustomer.assigned_to || existingCustomer.seller_id;
+              console.log('[WEBHOOK] Found existing customer:', customerId, 'assigned:', assignedSellerId);
             } else {
-              // Create new customer WITHOUT seller assignment (goes to Inbox Pai)
+              // Create new lead WITHOUT seller assignment (goes to Inbox Pai)
               const { data: newCustomer, error: customerError } = await supabase
                 .from('customers')
                 .insert({
@@ -161,14 +228,17 @@ serve(async (req) => {
                 .single();
 
               if (customerError) {
-                console.error('[WHATSAPP-CLOUD-WEBHOOK] Customer creation error:', customerError);
+                console.error('[WEBHOOK] Customer creation error:', customerError);
                 continue;
               }
               customerId = newCustomer.id;
               assignedSellerId = null;
+              console.log('[WEBHOOK] Created new lead (Inbox Pai):', customerId);
             }
 
-            // Get or create active cycle
+            // ========================================
+            // GET OR CREATE SALE CYCLE
+            // ========================================
             let cycleId: string;
             const { data: existingCycle } = await supabase
               .from('sale_cycles')
@@ -183,11 +253,11 @@ serve(async (req) => {
                 assignedSellerId = existingCycle.seller_id;
               }
             } else {
-              // Create cycle - if no seller assigned, we need a placeholder seller_id
-              // Get any manager from the company as fallback
+              // Create cycle - need a placeholder seller_id for unassigned leads
               let fallbackSellerId = assignedSellerId;
               
               if (!fallbackSellerId) {
+                // Get any manager from the company as placeholder
                 const { data: anyManager } = await supabase
                   .from('profiles')
                   .select('user_id')
@@ -199,7 +269,7 @@ serve(async (req) => {
               }
 
               if (!fallbackSellerId) {
-                console.error('[WHATSAPP-CLOUD-WEBHOOK] No user found in company for cycle creation');
+                console.error('[WEBHOOK] No user found in company for cycle creation');
                 continue;
               }
 
@@ -215,16 +285,18 @@ serve(async (req) => {
                 .single();
 
               if (cycleError) {
-                console.error('[WHATSAPP-CLOUD-WEBHOOK] Cycle creation error:', cycleError);
+                console.error('[WEBHOOK] Cycle creation error:', cycleError);
                 continue;
               }
               cycleId = newCycle.id;
             }
 
-            // Save message - need a seller_id for the messages table
+            // ========================================
+            // SAVE MESSAGE
+            // ========================================
             let messageSellerId = assignedSellerId;
             if (!messageSellerId) {
-              // Get any user from company as placeholder
+              // Get any user from company as placeholder for unassigned leads
               const { data: anyUser } = await supabase
                 .from('profiles')
                 .select('user_id')
@@ -235,7 +307,7 @@ serve(async (req) => {
             }
 
             if (!messageSellerId) {
-              console.error('[WHATSAPP-CLOUD-WEBHOOK] No user found for message seller_id');
+              console.error('[WEBHOOK] No user found for message seller_id');
               continue;
             }
 
@@ -256,23 +328,24 @@ serve(async (req) => {
               .single();
 
             if (messageError) {
-              console.error('[WHATSAPP-CLOUD-WEBHOOK] Message save error:', messageError);
+              console.error('[WEBHOOK] Message save error:', messageError);
               continue;
             }
 
-            console.log('[WHATSAPP-CLOUD-WEBHOOK] Message saved:', savedMessage.id);
+            console.log('[WEBHOOK] Message saved:', savedMessage.id);
 
-            // Check if customer is assigned - only run AI if assigned
+            // ========================================
+            // AI ANALYSIS (only for assigned leads)
+            // ========================================
             const { data: customerCheck } = await supabase
               .from('customers')
               .select('assigned_to')
               .eq('id', customerId)
               .single();
 
-            // Only trigger AI analysis if lead is assigned to a seller
             if (customerCheck?.assigned_to) {
               try {
-                console.log('[WHATSAPP-CLOUD-WEBHOOK] Triggering AI for assigned lead');
+                console.log('[WEBHOOK] Triggering AI for assigned lead');
                 await fetch(`${supabaseUrl}/functions/v1/analyze-message`, {
                   method: 'POST',
                   headers: {
@@ -285,26 +358,30 @@ serve(async (req) => {
                   }),
                 });
               } catch (analyzeError) {
-                console.error('[WHATSAPP-CLOUD-WEBHOOK] AI analysis error:', analyzeError);
+                console.error('[WEBHOOK] AI analysis error:', analyzeError);
               }
             } else {
-              console.log('[WHATSAPP-CLOUD-WEBHOOK] Skipping AI - lead not assigned (Inbox Pai)');
+              console.log('[WEBHOOK] Lead in Inbox Pai - AI deferred until assignment');
             }
           }
 
-          // Process status updates (delivery, read receipts)
+          // ========================================
+          // PROCESS STATUS UPDATES (delivery, read receipts)
+          // ========================================
           for (const status of value.statuses || []) {
-            console.log('[WHATSAPP-CLOUD-WEBHOOK] Status update:', status);
+            console.log('[WEBHOOK] Status update:', status.status, 'for:', status.recipient_id);
+            // TODO: Update message delivery/read status in database
           }
         }
       }
 
+      // Always return 200 to Meta to acknowledge receipt
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
 
     } catch (error: unknown) {
-      console.error('[WHATSAPP-CLOUD-WEBHOOK] Error:', error);
+      console.error('[WEBHOOK] Error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       // Always return 200 to prevent Meta from retrying
       return new Response(JSON.stringify({ error: errorMessage }), {
