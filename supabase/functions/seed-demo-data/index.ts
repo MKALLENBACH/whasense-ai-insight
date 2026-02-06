@@ -15,77 +15,230 @@ const DEMO_USERS = [
   { email: "vendedor2@exercit.com", name: "Pedro Vendedor", role: "seller" as const },
 ];
 
-// 10 clientes com perfis variados e objetivos fitness diferentes
+// 20 clientes com perfis variados e objetivos fitness diferentes
 const DEMO_CUSTOMERS = [
-  { 
-    name: "Rafael Mendes", 
-    phone: "+5511999101001", 
-    objective: "ganho_massa",
-    profile: "iniciante_inseguro",
-    initialMessage: "Oi, estou começando na academia agora e não sei qual whey comprar. Vocês podem me ajudar?" 
+  { name: "Rafael Mendes", phone: "+5511999101001", objective: "ganho_massa", profile: "iniciante" },
+  { name: "Juliana Costa", phone: "+5511999102002", objective: "emagrecimento", profile: "motivada" },
+  { name: "Fernando Silva", phone: "+5511999103003", objective: "performance", profile: "tecnico" },
+  { name: "Mariana Santos", phone: "+5511999104004", objective: "home_gym", profile: "pressa" },
+  { name: "Bruno Oliveira", phone: "+5511999105005", objective: "suplementacao", profile: "economico" },
+  { name: "Camila Rodrigues", phone: "+5511999106006", objective: "roupas", profile: "pesquisando" },
+  { name: "Lucas Ferreira", phone: "+5511999107007", objective: "ganho_massa", profile: "super_quente" },
+  { name: "Patricia Almeida", phone: "+5511999108008", objective: "recuperacao", profile: "desconfiada" },
+  { name: "Diego Martins", phone: "+5511999109009", objective: "equipamentos", profile: "indeciso" },
+  { name: "Amanda Lima", phone: "+5511999110010", objective: "pre_treino", profile: "recorrente" },
+  { name: "Thiago Souza", phone: "+5511999111011", objective: "ganho_massa", profile: "tecnico" },
+  { name: "Beatriz Fernandes", phone: "+5511999112012", objective: "emagrecimento", profile: "motivada" },
+  { name: "Ricardo Gomes", phone: "+5511999113013", objective: "performance", profile: "super_quente" },
+  { name: "Larissa Pereira", phone: "+5511999114014", objective: "roupas", profile: "pesquisando" },
+  { name: "Gustavo Carvalho", phone: "+5511999115015", objective: "suplementacao", profile: "economico" },
+  { name: "Fernanda Ribeiro", phone: "+5511999116016", objective: "home_gym", profile: "pressa" },
+  { name: "Anderson Castro", phone: "+5511999117017", objective: "recuperacao", profile: "desconfiada" },
+  { name: "Carolina Nascimento", phone: "+5511999118018", objective: "pre_treino", profile: "recorrente" },
+  { name: "Marcelo Barbosa", phone: "+5511999119019", objective: "ganho_massa", profile: "iniciante" },
+  { name: "Aline Moreira", phone: "+5511999120020", objective: "emagrecimento", profile: "indeciso" },
+];
+
+// Conversas realistas de academia
+const CONVERSATION_TEMPLATES = [
+  // Lead QUENTE - Ganho de Massa (vai ganhar)
+  {
+    status: 'won',
+    temperature: 'hot',
+    sentiment: 'positivo',
+    messages: [
+      { direction: 'incoming', content: "Oi! Preciso de whey e creatina para ganhar massa muscular. Vocês tem?" },
+      { direction: 'outgoing', content: "Olá! Temos sim! Temos o combo perfeito: Whey Isolado 900g + Creatina Creapure 300g. É o mais vendido para quem quer ganho de massa! 💪" },
+      { direction: 'incoming', content: "Qual o preço do combo?" },
+      { direction: 'outgoing', content: "O combo sai por R$189,90 com frete grátis! Parcela em até 3x sem juros. Posso separar pra você?" },
+      { direction: 'incoming', content: "Fechado! Como faço pra pagar?" },
+      { direction: 'outgoing', content: "Perfeito! Vou te enviar o link de pagamento agora. Qual seu endereço completo para entrega?" },
+    ]
   },
-  { 
-    name: "Juliana Costa", 
-    phone: "+5511999102002", 
-    objective: "emagrecimento",
-    profile: "cliente_motivada",
-    initialMessage: "Boa tarde! Quero emagrecer e vi que vocês vendem termogênicos. Qual o melhor pra queimar gordura?" 
+  // Lead QUENTE - Emagrecimento (vai ganhar)
+  {
+    status: 'won',
+    temperature: 'hot',
+    sentiment: 'positivo',
+    messages: [
+      { direction: 'incoming', content: "Boa tarde! Quero começar a tomar termogênico. Qual vocês recomendam?" },
+      { direction: 'outgoing', content: "Boa tarde! Para emagrecimento, nosso campeão de vendas é o Lipo 6 Black Ultra Concentrate. Acelera o metabolismo e dá energia pro treino! 🔥" },
+      { direction: 'incoming', content: "Esse é bom mesmo? Já vi em outras lojas" },
+      { direction: 'outgoing', content: "É excelente! E aqui você leva por R$149,90 com brinde de coqueteleira. Garantia de produto original!" },
+      { direction: 'incoming', content: "Manda o link que vou comprar agora" },
+    ]
   },
-  { 
-    name: "Fernando Silva", 
-    phone: "+5511999103003", 
-    objective: "performance",
-    profile: "cliente_tecnico",
-    initialMessage: "E aí! Preciso de creatina monohidratada creapure, vocês tem? Qual a pureza?" 
+  // Lead MORNO - Objeção de preço
+  {
+    status: 'in_progress',
+    temperature: 'warm',
+    sentiment: 'neutro',
+    objection: 'preco',
+    messages: [
+      { direction: 'incoming', content: "Oi, quero ver os preços de whey protein" },
+      { direction: 'outgoing', content: "Olá! Temos várias opções de whey. Concentrado a partir de R$89,90 e Isolado a partir de R$159,90. Qual seu objetivo?" },
+      { direction: 'incoming', content: "Quero o isolado, mas tá caro né... vou pesquisar mais" },
+      { direction: 'outgoing', content: "Entendo! Mas olha, estamos com promoção de 10% de desconto para primeira compra. Fica R$143,90 com frete grátis! Quer aproveitar?" },
+    ]
   },
-  { 
-    name: "Mariana Santos", 
-    phone: "+5511999104004", 
-    objective: "home_gym",
-    profile: "cliente_com_pressa",
-    initialMessage: "Oi, preciso montar uma academia em casa urgente. Quanto custa um kit com halteres e barra?" 
+  // Lead MORNO - Dúvida técnica
+  {
+    status: 'in_progress',
+    temperature: 'warm',
+    sentiment: 'neutro',
+    messages: [
+      { direction: 'incoming', content: "Qual a diferença entre creatina mono e creapure?" },
+      { direction: 'outgoing', content: "Ótima pergunta! A Creapure é uma creatina alemã com 99.9% de pureza, certificada. A mono comum tem em média 95% de pureza. Para resultados melhores, recomendo Creapure!" },
+      { direction: 'incoming', content: "E quanto custa cada uma?" },
+      { direction: 'outgoing', content: "Creatina comum 300g: R$79,90 / Creapure 300g: R$119,90. A diferença de R$40 vale muito pela qualidade e absorção!" },
+      { direction: 'incoming', content: "Vou pensar e te aviso" },
+    ]
   },
-  { 
-    name: "Bruno Oliveira", 
-    phone: "+5511999105005", 
-    objective: "suplementacao_completa",
-    profile: "cliente_economico",
-    initialMessage: "Opa, to procurando um combo de suplementos bom e barato. Whey + creatina, tem desconto?" 
+  // Lead FRIO - Só pesquisando
+  {
+    status: 'pending',
+    temperature: 'cold',
+    sentiment: 'neutro',
+    messages: [
+      { direction: 'incoming', content: "Vocês tem legging de academia?" },
+      { direction: 'outgoing', content: "Temos sim! Vários modelos a partir de R$89,90. Posso te mandar o catálogo?" },
+    ]
   },
-  { 
-    name: "Camila Rodrigues", 
-    phone: "+5511999106006", 
-    objective: "roupas_fitness",
-    profile: "cliente_pesquisando",
-    initialMessage: "Oi! Vocês vendem leggings de academia? Queria ver os modelos e preços" 
+  // Lead FRIO - Sem resposta
+  {
+    status: 'pending',
+    temperature: 'cold',
+    sentiment: 'neutro',
+    messages: [
+      { direction: 'incoming', content: "Boa noite, quanto é o haltere de 10kg?" },
+      { direction: 'outgoing', content: "Boa noite! O par de halteres de 10kg sai por R$189,90. Temos também kit completo com vários pesos. Quer que eu te mande as opções?" },
+    ]
   },
-  { 
-    name: "Lucas Ferreira", 
-    phone: "+5511999107007", 
-    objective: "ganho_massa",
-    profile: "cliente_super_quente",
-    initialMessage: "Fala! To precisando de hipercalórico e BCAA pra ontem. Vocês entregam rápido?" 
+  // Lead PERDIDO - Preço
+  {
+    status: 'lost',
+    temperature: 'cold',
+    sentiment: 'negativo',
+    objection: 'preco',
+    lostReason: 'Encontrou preço menor no concorrente',
+    messages: [
+      { direction: 'incoming', content: "Quanto custa o BCAA 2:1:1?" },
+      { direction: 'outgoing', content: "O BCAA 2:1:1 com 120 cápsulas sai por R$89,90!" },
+      { direction: 'incoming', content: "Achei mais barato em outra loja, R$69. Obrigado" },
+      { direction: 'outgoing', content: "Entendo! Mas aqui você tem garantia de produto original e frete grátis. Consigo fazer por R$79,90, o que acha?" },
+      { direction: 'incoming', content: "Não, valeu. Já comprei na outra" },
+    ]
   },
-  { 
-    name: "Patricia Almeida", 
-    phone: "+5511999108008", 
-    objective: "recuperacao",
-    profile: "cliente_desconfiada",
-    initialMessage: "Boa noite. Vi uns preços de colágeno aqui mas não sei se é original. Vocês são loja autorizada?" 
+  // Lead PERDIDO - Desconfiança
+  {
+    status: 'lost',
+    temperature: 'cold',
+    sentiment: 'negativo',
+    objection: 'confianca',
+    lostReason: 'Cliente não confiou na loja',
+    messages: [
+      { direction: 'incoming', content: "Vocês são loja autorizada? Tenho medo de comprar produto falso" },
+      { direction: 'outgoing', content: "Somos sim! Trabalhamos apenas com produtos originais, temos CNPJ e nota fiscal. Posso te mostrar nosso certificado de distribuidor autorizado!" },
+      { direction: 'incoming', content: "Não sei, vou comprar na loja física mesmo. Mais seguro" },
+    ]
   },
-  { 
-    name: "Diego Martins", 
-    phone: "+5511999109009", 
-    objective: "equipamentos",
-    profile: "cliente_indeciso",
-    initialMessage: "Oi, to na dúvida entre comprar elásticos de resistência ou halteres ajustáveis. O que vocês recomendam?" 
+  // Lead QUENTE - Equipamentos
+  {
+    status: 'won',
+    temperature: 'hot',
+    sentiment: 'positivo',
+    messages: [
+      { direction: 'incoming', content: "Preciso montar uma academia em casa URGENTE. O que vocês tem?" },
+      { direction: 'outgoing', content: "Perfeito! Temos kits completos para home gym! Kit Iniciante (halteres + barra + anilhas): R$899 / Kit Intermediário com banco: R$1.499. Entrega em 3 dias!" },
+      { direction: 'incoming', content: "Quero o intermediário! Aceita cartão?" },
+      { direction: 'outgoing', content: "Aceita sim! Parcela em até 10x. Vou te passar o link agora!" },
+      { direction: 'incoming', content: "Manda!" },
+    ]
   },
-  { 
-    name: "Amanda Lima", 
-    phone: "+5511999110010", 
-    objective: "pre_treino",
-    profile: "cliente_recorrente",
-    initialMessage: "Oi pessoal! Comprei o C4 de vocês mês passado e amei. Tem alguma novidade de pré-treino?" 
+  // Lead MORNO - Pré-treino
+  {
+    status: 'in_progress',
+    temperature: 'warm',
+    sentiment: 'positivo',
+    messages: [
+      { direction: 'incoming', content: "Oi! Comprei o C4 de vocês mês passado e amei! Tem algum pré-treino novo?" },
+      { direction: 'outgoing', content: "Que bom que gostou! Chegou o C4 Ultimate, versão mais forte. E também o Insane Labz que tá fazendo sucesso! Quer experimentar?" },
+      { direction: 'incoming', content: "Me conta mais sobre o Insane" },
+      { direction: 'outgoing', content: "O Insane Labz é pra quem quer treino intenso! Tem 350mg de cafeína, foco extremo. R$169,90 o pote. Nossos clientes estão adorando!" },
+    ]
+  },
+  // Lead QUENTE - Combo grande
+  {
+    status: 'won',
+    temperature: 'hot',
+    sentiment: 'positivo',
+    messages: [
+      { direction: 'incoming', content: "Opa! Preciso de whey, creatina, pré-treino e BCAA. Tem desconto no combo?" },
+      { direction: 'outgoing', content: "Eaí! Temos o Super Combo Hipertrofia com tudo isso por R$449,90 (economia de R$120)! É o mais completo! 💪" },
+      { direction: 'incoming', content: "Caramba, bom preço! Vocês entregam rápido?" },
+      { direction: 'outgoing', content: "Entregamos em 2-3 dias úteis! E rastreio por WhatsApp. Quer fechar?" },
+      { direction: 'incoming', content: "Bora! Me manda o pix" },
+    ]
+  },
+  // Lead PERDIDO - Demora
+  {
+    status: 'lost',
+    temperature: 'warm',
+    sentiment: 'negativo',
+    objection: 'demora',
+    lostReason: 'Prazo de entrega não atendeu',
+    messages: [
+      { direction: 'incoming', content: "Qual o prazo de entrega pra Manaus?" },
+      { direction: 'outgoing', content: "Para Manaus o prazo é de 10-15 dias úteis por transportadora." },
+      { direction: 'incoming', content: "Muito tempo, preciso pra semana que vem. Vou ver outro lugar, obrigado" },
+    ]
+  },
+  // Lead EM PROGRESSO - Colágeno
+  {
+    status: 'in_progress',
+    temperature: 'warm',
+    sentiment: 'positivo',
+    messages: [
+      { direction: 'incoming', content: "Boa noite! Quero começar a tomar colágeno. Qual marca é boa?" },
+      { direction: 'outgoing', content: "Boa noite! Recomendo o Colágeno Verisol, que é específico para pele. Temos sachês (R$89,90/30 dias) ou cápsulas (R$69,90/60 caps). Qual prefere?" },
+      { direction: 'incoming', content: "Prefiro sachê. Tem sabor?" },
+      { direction: 'outgoing', content: "Tem sim! Morango, limão e natural. O de morango é o mais vendido! Posso separar pra você?" },
+    ]
+  },
+  // Lead QUENTE - Roupas
+  {
+    status: 'won',
+    temperature: 'hot',
+    sentiment: 'positivo',
+    messages: [
+      { direction: 'incoming', content: "Oi! Vi no insta de vocês umas leggings muito lindas! Ainda tem?" },
+      { direction: 'outgoing', content: "Oi! Temos sim! A coleção nova está incrível. Legging de compressão R$129,90, Top esportivo R$69,90. Qual tamanho você usa?" },
+      { direction: 'incoming', content: "M nos dois! Quero a legging preta e o top rosa" },
+      { direction: 'outgoing', content: "Ótima escolha! Kit legging + top fica R$179,90 com 10% de desconto. Posso enviar link?" },
+      { direction: 'incoming', content: "Manda sim! Vou pagar agora" },
+    ]
+  },
+  // Lead PENDENTE - Hipercalórico
+  {
+    status: 'pending',
+    temperature: 'warm',
+    sentiment: 'neutro',
+    messages: [
+      { direction: 'incoming', content: "Bom dia! Sou muito magro e quero ganhar peso. O que vocês indicam?" },
+      { direction: 'outgoing', content: "Bom dia! Para ganho de peso, recomendo Hipercalórico + Creatina. O Mass Titanium tem 1500 calorias por dose! Combo sai R$199,90. Quer saber mais?" },
+    ]
+  },
+  // Lead EM PROGRESSO - Glutamina
+  {
+    status: 'in_progress',
+    temperature: 'warm',
+    sentiment: 'positivo',
+    messages: [
+      { direction: 'incoming', content: "Glutamina serve pra que exatamente?" },
+      { direction: 'outgoing', content: "A Glutamina ajuda na recuperação muscular e imunidade! Ideal pra quem treina pesado. Temos de 300g por R$89,90. Você treina quantas vezes por semana?" },
+      { direction: 'incoming', content: "Treino 5x por semana, pesado" },
+      { direction: 'outgoing', content: "Então vai te ajudar muito! Toma 5g após o treino. Com esse volume de treino, vai sentir diferença na recuperação. Quer levar?" },
+    ]
   },
 ];
 
@@ -95,10 +248,8 @@ serve(async (req) => {
   }
 
   try {
-    // Authorization: Require admin secret key
     const adminSecret = Deno.env.get('ADMIN_CREATION_SECRET');
     if (!adminSecret) {
-      console.error('ADMIN_CREATION_SECRET not configured');
       return new Response(JSON.stringify({ error: 'Server configuration error' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -107,8 +258,7 @@ serve(async (req) => {
 
     const { secret } = await req.json();
     if (secret !== adminSecret) {
-      console.warn('Unauthorized seed-demo-data attempt');
-      return new Response(JSON.stringify({ error: 'Unauthorized - invalid secret key' }), {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -120,7 +270,14 @@ serve(async (req) => {
 
     const results: string[] = [];
 
-    // 0. Get company first to clean up data
+    // 1. Get Free plan for trial
+    const { data: freePlan } = await supabase
+      .from('plans')
+      .select('id')
+      .eq('name', 'Free')
+      .maybeSingle();
+
+    // 2. Clean up existing demo data
     const { data: existingCompany } = await supabase
       .from('companies')
       .select('id')
@@ -128,19 +285,9 @@ serve(async (req) => {
       .maybeSingle();
 
     if (existingCompany) {
-      // Clean up ALL existing data for this company
       console.log('Cleaning up existing data for company:', existingCompany.id);
       
-      // Delete insights (depends on messages)
-      await supabase.from('insights').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      
-      // Delete alerts
-      await supabase.from('alerts').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      
-      // Delete sales
-      await supabase.from('sales').delete().eq('company_id', existingCompany.id);
-      
-      // Get customers for this company
+      // Delete in order of dependencies
       const { data: customers } = await supabase
         .from('customers')
         .select('id')
@@ -149,63 +296,85 @@ serve(async (req) => {
       if (customers && customers.length > 0) {
         const customerIds = customers.map(c => c.id);
         
-        // Delete messages for these customers
+        // Delete insights via messages
+        const { data: messages } = await supabase
+          .from('messages')
+          .select('id')
+          .in('customer_id', customerIds);
+        
+        if (messages && messages.length > 0) {
+          await supabase.from('insights').delete().in('message_id', messages.map(m => m.id));
+        }
+        
         await supabase.from('messages').delete().in('customer_id', customerIds);
-        
-        // Delete sale_cycles for these customers
+        await supabase.from('alerts').delete().in('customer_id', customerIds);
         await supabase.from('sale_cycles').delete().in('customer_id', customerIds);
-        
-        // Delete customers
+        await supabase.from('sales').delete().in('customer_id', customerIds);
         await supabase.from('customers').delete().eq('company_id', existingCompany.id);
       }
       
       results.push(`🧹 Dados existentes limpos`);
     }
 
-    // 1. Create or get company
+    // 3. Create or update company with Free trial
     let companyId: string;
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + 7);
+    
     if (existingCompany) {
       companyId = existingCompany.id;
-      results.push(`✅ Empresa "${DEMO_COMPANY_NAME}" já existe: ${companyId}`);
+      await supabase
+        .from('companies')
+        .update({
+          segment: "Fitness e Suplementação",
+          description: "Loja especializada em suplementos, equipamentos e roupas fitness",
+          plan_id: freePlan?.id || null,
+          is_active: true,
+          free_start_date: new Date().toISOString().split('T')[0],
+          free_end_date: trialEndDate.toISOString().split('T')[0],
+        })
+        .eq('id', companyId);
+      results.push(`✅ Empresa "${DEMO_COMPANY_NAME}" atualizada com trial`);
     } else {
       const { data: newCompany, error: companyError } = await supabase
         .from('companies')
         .insert({ 
           name: DEMO_COMPANY_NAME,
           segment: "Fitness e Suplementação",
-          description: "Loja especializada em suplementos, equipamentos e roupas fitness"
+          description: "Loja especializada em suplementos, equipamentos e roupas fitness",
+          plan_id: freePlan?.id || null,
+          is_active: true,
+          free_start_date: new Date().toISOString().split('T')[0],
+          free_end_date: trialEndDate.toISOString().split('T')[0],
         })
         .select('id')
         .single();
 
       if (companyError) throw companyError;
       companyId = newCompany.id;
-      results.push(`✅ Empresa "${DEMO_COMPANY_NAME}" criada: ${companyId}`);
+      results.push(`✅ Empresa "${DEMO_COMPANY_NAME}" criada com trial de 7 dias`);
     }
 
-    // 2. Create users
+    // 4. Create users
     const userIds: { [email: string]: string } = {};
     const sellerIds: string[] = [];
 
     for (const user of DEMO_USERS) {
-      // Check if user exists
       const { data: existingUsers } = await supabase.auth.admin.listUsers();
       const existingUser = existingUsers?.users?.find(u => u.email === user.email);
 
       if (existingUser) {
         userIds[user.email] = existingUser.id;
         if (user.role === 'seller') sellerIds.push(existingUser.id);
-        results.push(`✅ Usuário "${user.email}" já existe`);
         
-        // Ensure profile has company
         await supabase
           .from('profiles')
-          .update({ company_id: companyId, name: user.name })
+          .update({ company_id: companyId, name: user.name, is_active: true })
           .eq('user_id', existingUser.id);
+        results.push(`✅ Usuário "${user.email}" atualizado`);
         continue;
       }
 
-      // Create user
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: user.email,
         password: DEMO_PASSWORD,
@@ -222,26 +391,21 @@ serve(async (req) => {
       userIds[user.email] = userId;
       if (user.role === 'seller') sellerIds.push(userId);
 
-      // Update profile with company
       await supabase
         .from('profiles')
-        .update({ company_id: companyId, name: user.name })
+        .update({ company_id: companyId, name: user.name, is_active: true })
         .eq('user_id', userId);
 
-      // Create role
       await supabase
         .from('user_roles')
-        .upsert({
-          user_id: userId,
-          role: user.role,
-        }, { onConflict: 'user_id' });
+        .upsert({ user_id: userId, role: user.role }, { onConflict: 'user_id' });
 
       results.push(`✅ Usuário "${user.email}" criado (${user.role})`);
     }
 
-    // 3. Create WhatsApp sessions for sellers
+    // 5. Create WhatsApp sessions for sellers
     for (const sellerId of sellerIds) {
-      const { error: sessionError } = await supabase
+      await supabase
         .from('whatsapp_sessions')
         .upsert({
           seller_id: sellerId,
@@ -250,141 +414,177 @@ serve(async (req) => {
           phone_number: '+5511999' + Math.floor(Math.random() * 900000 + 100000),
           last_connected_at: new Date().toISOString(),
         }, { onConflict: 'seller_id' });
-
-      if (!sessionError) {
-        results.push(`✅ Sessão WhatsApp ativa para vendedor`);
-      }
     }
+    results.push(`✅ Sessões WhatsApp criadas`);
 
-    // 4. Create demo customers with cycles and initial messages
-    let customerCount = 0;
+    // 6. Create customers and conversations
+    let customersCreated = 0;
+    let cyclesCreated = 0;
+    let messagesCreated = 0;
+    let insightsCreated = 0;
+    let salesCreated = 0;
+    let alertsCreated = 0;
+
     for (let i = 0; i < DEMO_CUSTOMERS.length; i++) {
       const customer = DEMO_CUSTOMERS[i];
-      // Distribute customers between sellers
       const sellerId = sellerIds[i % sellerIds.length];
-
-      // Check if customer already exists by phone
-      const { data: existingCustomer } = await supabase
+      const conversation = CONVERSATION_TEMPLATES[i % CONVERSATION_TEMPLATES.length];
+      
+      // Create customer
+      const { data: newCustomer, error: customerError } = await supabase
         .from('customers')
+        .insert({
+          name: customer.name,
+          phone: customer.phone,
+          seller_id: sellerId,
+          assigned_to: sellerId,
+          company_id: companyId,
+          lead_status: conversation.status,
+        })
         .select('id')
-        .eq('phone', customer.phone)
-        .maybeSingle();
+        .single();
 
-      let customerId: string;
-      if (existingCustomer) {
-        customerId = existingCustomer.id;
-        results.push(`⏭️ Cliente "${customer.name}" já existe`);
-      } else {
-        const { data: newCustomer, error: customerError } = await supabase
-          .from('customers')
-          .insert({
-            name: customer.name,
-            phone: customer.phone,
-            seller_id: sellerId,
-            company_id: companyId,
-            lead_status: 'pending',
-          })
-          .select('id')
-          .single();
+      if (customerError) {
+        console.error('Error creating customer:', customerError);
+        continue;
+      }
+      customersCreated++;
 
-        if (customerError) {
-          results.push(`❌ Erro ao criar cliente "${customer.name}": ${customerError.message}`);
-          continue;
-        }
-        customerId = newCustomer.id;
-        customerCount++;
+      // Create sale cycle
+      const cycleCreatedAt = new Date();
+      cycleCreatedAt.setDate(cycleCreatedAt.getDate() - Math.floor(Math.random() * 30));
+      
+      const { data: cycle, error: cycleError } = await supabase
+        .from('sale_cycles')
+        .insert({
+          customer_id: newCustomer.id,
+          seller_id: sellerId,
+          status: conversation.status,
+          created_at: cycleCreatedAt.toISOString(),
+          closed_at: ['won', 'lost'].includes(conversation.status) ? new Date().toISOString() : null,
+          lost_reason: conversation.lostReason || null,
+          last_activity_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
 
-        // Create a sale cycle for this customer
-        const { data: cycle, error: cycleError } = await supabase
-          .from('sale_cycles')
-          .insert({
-            customer_id: customerId,
-            seller_id: sellerId,
-            status: 'pending',
-          })
-          .select('id')
-          .single();
+      if (cycleError) {
+        console.error('Error creating cycle:', cycleError);
+        continue;
+      }
+      cyclesCreated++;
 
-        if (cycleError) {
-          console.error('Error creating cycle:', cycleError);
-          continue;
-        }
+      // Create messages
+      for (let j = 0; j < conversation.messages.length; j++) {
+        const msg = conversation.messages[j];
+        const msgTimestamp = new Date(cycleCreatedAt);
+        msgTimestamp.setMinutes(msgTimestamp.getMinutes() + (j * 5));
 
-        // Create initial message from customer
-        const { data: message, error: messageError } = await supabase
+        const { data: message, error: msgError } = await supabase
           .from('messages')
           .insert({
-            customer_id: customerId,
+            customer_id: newCustomer.id,
             seller_id: sellerId,
-            content: customer.initialMessage,
-            direction: 'incoming',
-            timestamp: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+            content: msg.content,
+            direction: msg.direction,
+            timestamp: msgTimestamp.toISOString(),
             cycle_id: cycle.id,
           })
           .select('id')
           .single();
 
-        if (messageError) {
-          console.error('Error creating message:', messageError);
+        if (msgError) {
+          console.error('Error creating message:', msgError);
           continue;
         }
+        messagesCreated++;
 
-        // Trigger analysis for this message
-        try {
-          await fetch(`${supabaseUrl}/functions/v1/analyze-message`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify({
-              message: customer.initialMessage,
+        // Create insight for incoming messages
+        if (msg.direction === 'incoming') {
+          const { error: insightError } = await supabase
+            .from('insights')
+            .insert({
               message_id: message.id,
-              cycleMessages: [{ from: 'client', text: customer.initialMessage }],
-            }),
-          });
-        } catch (e) {
-          console.error('Failed to analyze initial message:', e);
+              temperature: conversation.temperature as 'hot' | 'warm' | 'cold',
+              sentiment: conversation.sentiment || 'neutro',
+              objection: conversation.objection || null,
+              suggestion: getSuggestion(conversation.temperature, conversation.objection),
+              intention: getIntention(conversation.status),
+              insight_type: 'message_analysis',
+            });
+
+          if (!insightError) insightsCreated++;
         }
-
-        results.push(`✅ Cliente "${customer.name}" criado (${customer.objective})`);
       }
-    }
 
-    // 5. Create some alerts for demo
-    if (customerCount > 0) {
-      const { data: customers } = await supabase
-        .from('customers')
-        .select('id, seller_id')
-        .eq('company_id', companyId)
-        .limit(5);
+      // Create sales record for won/lost
+      if (['won', 'lost'].includes(conversation.status)) {
+        const saleDate = new Date();
+        saleDate.setDate(saleDate.getDate() - Math.floor(Math.random() * 30));
+        
+        const { error: saleError } = await supabase
+          .from('sales')
+          .insert({
+            customer_id: newCustomer.id,
+            seller_id: sellerId,
+            company_id: companyId,
+            status: conversation.status as 'won' | 'lost',
+            reason: conversation.lostReason || null,
+            created_at: saleDate.toISOString(),
+          });
 
-      for (const cust of customers || []) {
-        await supabase
+        if (!saleError) salesCreated++;
+      }
+
+      // Create alerts for pending/in_progress
+      if (['pending', 'in_progress'].includes(conversation.status)) {
+        const alertType = conversation.temperature === 'hot' ? 'hot_lead' : 
+                         conversation.objection ? 'open_objection' : 'waiting_response';
+        const severity = conversation.temperature === 'hot' ? 'critical' : 
+                        conversation.objection ? 'warning' : 'info';
+        
+        const { error: alertError } = await supabase
           .from('alerts')
-          .upsert({
-            customer_id: cust.id,
-            seller_id: cust.seller_id,
-            alert_type: ['hot_lead', 'waiting_response', 'open_objection'][Math.floor(Math.random() * 3)],
-            severity: ['info', 'warning', 'critical'][Math.floor(Math.random() * 3)],
-            message: ['Lead quente! Responda rápido', 'Cliente aguardando resposta', 'Objeção de preço detectada'][Math.floor(Math.random() * 3)],
-          }, { onConflict: 'customer_id,alert_type' });
+          .insert({
+            customer_id: newCustomer.id,
+            seller_id: sellerId,
+            cycle_id: cycle.id,
+            alert_type: alertType,
+            severity: severity,
+            message: getAlertMessage(alertType, customer.name),
+          });
+
+        if (!alertError) alertsCreated++;
       }
-      results.push(`✅ Alertas de demo criados`);
     }
+
+    results.push(`✅ ${customersCreated} clientes criados`);
+    results.push(`✅ ${cyclesCreated} ciclos de venda criados`);
+    results.push(`✅ ${messagesCreated} mensagens criadas`);
+    results.push(`✅ ${insightsCreated} insights de IA criados`);
+    results.push(`✅ ${salesCreated} registros de venda criados`);
+    results.push(`✅ ${alertsCreated} alertas criados`);
 
     return new Response(JSON.stringify({
       success: true,
       results,
-      customerCount,
-      demoUsers: DEMO_USERS.map(u => ({ email: u.email, role: u.role })),
+      summary: {
+        customers: customersCreated,
+        cycles: cyclesCreated,
+        messages: messagesCreated,
+        insights: insightsCreated,
+        sales: salesCreated,
+        alerts: alertsCreated,
+      },
+      credentials: {
+        manager: { email: "gestor@exercit.com", password: "123456" },
+        seller1: { email: "vendedor1@exercit.com", password: "123456" },
+        seller2: { email: "vendedor2@exercit.com", password: "123456" },
+      },
       instructions: [
-        "1. Faça login como vendedor para ver as conversas",
-        "2. Clique em 'Simular Cliente' para gerar respostas automáticas",
-        "3. A IA analisará cada mensagem e sugerirá respostas",
-        "4. Os clientes têm perfis variados (iniciante, técnico, quente, econômico...)",
-        "5. Teste registrar vendas ganhas ou perdidas para ver os ciclos",
-        "Nota: Use a senha padrão configurada no ambiente"
+        "1. Faça login como gestor para ver o dashboard completo",
+        "2. Faça login como vendedor para ver as conversas",
+        "3. O trial de 7 dias está ativo com todas as funcionalidades",
       ]
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -398,3 +598,42 @@ serve(async (req) => {
     });
   }
 });
+
+function getSuggestion(temperature: string, objection?: string): string {
+  if (objection === 'preco') {
+    return "Ofereça desconto ou destaque o custo-benefício e qualidade do produto";
+  }
+  if (objection === 'confianca') {
+    return "Mostre certificados, avaliações de clientes e garantias";
+  }
+  if (objection === 'demora') {
+    return "Verifique opções de envio expresso ou retirada";
+  }
+  if (temperature === 'hot') {
+    return "Cliente pronto para comprar! Facilite o fechamento com link de pagamento";
+  }
+  if (temperature === 'warm') {
+    return "Mantenha contato e ofereça informações adicionais sobre o produto";
+  }
+  return "Faça follow-up amigável para reengajar o cliente";
+}
+
+function getIntention(status: string): string {
+  if (status === 'won') return 'compra_confirmada';
+  if (status === 'lost') return 'desistencia';
+  if (status === 'in_progress') return 'considerando';
+  return 'pesquisa_inicial';
+}
+
+function getAlertMessage(alertType: string, customerName: string): string {
+  switch (alertType) {
+    case 'hot_lead':
+      return `🔥 Lead quente! ${customerName} está pronto para comprar`;
+    case 'open_objection':
+      return `⚠️ ${customerName} tem objeção aberta - resolver rapidamente`;
+    case 'waiting_response':
+      return `⏰ ${customerName} aguardando resposta`;
+    default:
+      return `Atenção necessária para ${customerName}`;
+  }
+}
