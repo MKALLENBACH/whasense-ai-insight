@@ -75,7 +75,7 @@ export const useConversations = ({ accessToken, sellerId }: UseConversationsProp
 
   // Realtime subscriptions with debounce
   useEffect(() => {
-    let debounceTimer: NodeJS.Timeout | null = null;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     
     const debouncedFetch = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
