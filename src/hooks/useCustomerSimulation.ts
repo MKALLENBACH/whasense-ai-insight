@@ -18,7 +18,7 @@ interface Message {
 export function useCustomerSimulation(options: SimulationOptions) {
   const { customerId, sellerId, enabled, minDelay = 5000, maxDelay = 15000 } = options;
   const [isSimulating, setIsSimulating] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const conversationHistoryRef = useRef<Message[]>([]);
 
   const updateHistory = useCallback((messages: Message[]) => {
